@@ -17,4 +17,4 @@ export const SESSION_FORMAT_VERSION = 1 as const;
 /**
  * Turn markdown trace format version (renderer must match).
  */
-export const TRACE_FORMAT_VERSION = 1 as const;
+export const TRACE_FORMAT_VERSION = 2 as const;

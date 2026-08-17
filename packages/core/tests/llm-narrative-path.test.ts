@@ -71,7 +71,7 @@ describe("llm narrative path", () => {
     expect(userMsg).toContain("Служебная памятка рассказчику");
 
     const md = created.value.memoryTraceSink.last()?.markdown ?? "";
-    expect(md).toContain("#### Prompts");
+    expect(md).toContain("#### LLM transcript");
     expect(md).toContain('role="system"');
     expect(md).toContain("интерактивной книги");
     expect(md).toContain("#### Raw model output");
@@ -122,7 +122,7 @@ describe("llm narrative path", () => {
     expect(trace?.markdown).toContain("outcome: **rejected**");
     expect(trace?.markdown).toContain("ROLLBACK");
     // Prompts still captured when the LLM call was built before upstream failure.
-    expect(trace?.markdown).toContain("#### Prompts");
+    expect(trace?.markdown).toContain("#### LLM transcript");
     expect(trace?.markdown).toContain('role="system"');
     expect(trace?.markdown).toContain("интерактивной книги");
   });

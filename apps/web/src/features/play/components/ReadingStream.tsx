@@ -28,7 +28,7 @@ export function ReadingStream({
     <div
       ref={scrollerRef}
       onScroll={onScroll}
-      className="flex-1 space-y-7 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8"
+      className="flex-1 space-y-8 overflow-y-auto px-4 py-6 sm:px-8 sm:py-9"
     >
       {!hydrated ? (
         <p className="py-16 text-center text-sm text-zinc-500">
@@ -50,7 +50,7 @@ export function ReadingStream({
       )}
 
       {showTyping ? (
-        <div className="mx-auto flex w-full max-w-[42rem] justify-start">
+        <div className="mx-auto flex w-full max-w-[40rem] justify-start">
           <div className="inline-flex items-center gap-2.5 rounded-full border border-white/[0.06] bg-white/[0.03] px-3.5 py-2 text-sm text-zinc-400">
             <span className="inline-flex gap-1">
               <span className="typing-dot" />

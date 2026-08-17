@@ -23,10 +23,12 @@ import type { z } from "zod";
 
 import type { ContributionIndex } from "../registry/contribution-index.ts";
 import type { Clock } from "../util/clock.ts";
+import { buildLlmAuditMeta } from "./llm-audit-meta.ts";
 import {
   createDefaultMockAgentScript,
   type MockAgentScript,
 } from "./mock-agent-script.ts";
+import { buildNarrativeWriteMessages } from "./prompts/narrative-write.ts";
 import { StandardTaskLlmAdapter } from "./standard-task-llm-adapter.ts";
 import { narrativeProseDelta } from "./stream-prose.ts";
 import { runToolCallingTask } from "./tool-loop.ts";
@@ -62,6 +64,8 @@ export interface ToolInvokeRecord {
   readonly result?: JsonObject;
   readonly error?: string;
   readonly durationMs: number;
+  /** Agent task that triggered the tool, when known. */
+  readonly parentTaskId?: string;
 }
 
 /**
@@ -89,6 +93,8 @@ export class AgentOrchestrator {
   private lastToolCalls: ToolInvokeRecord[] = [];
   /** Active turn context for repair-hint providers (set by pipeline). */
   private activeCtx: TurnContext | null = null;
+  /** Task currently executing (for tool parentTaskId attribution). */
+  private activeTaskId: string | null = null;
 
   /**
    * @param options - orchestrator dependencies
@@ -157,6 +163,7 @@ export class AgentOrchestrator {
   beginTurn(ctx?: TurnContext): void {
     this.lastToolCalls = [];
     this.activeCtx = ctx ?? null;
+    this.activeTaskId = null;
   }
 
   /**
@@ -295,6 +302,7 @@ export class AgentOrchestrator {
           args: parsedArgs.data,
           error: invoked.error.message,
           durationMs: this.clock.nowMs() - started,
+          ...(this.activeTaskId ? { parentTaskId: this.activeTaskId } : {}),
         });
         return invoked;
       }
@@ -316,6 +324,7 @@ export class AgentOrchestrator {
         args: parsedArgs.data,
         result: parsedResult.data,
         durationMs: this.clock.nowMs() - started,
+        ...(this.activeTaskId ? { parentTaskId: this.activeTaskId } : {}),
       });
       return ok(parsedResult.data);
     } catch (error) {
@@ -396,6 +405,7 @@ export class AgentOrchestrator {
       return denied;
     }
 
+    this.activeTaskId = task.taskId;
     try {
       const raw = await this.invoke(task);
       if (!raw.ok) {
@@ -469,6 +479,8 @@ export class AgentOrchestrator {
       };
       this.logAgentFinished(task, thrown, started);
       return thrown;
+    } finally {
+      this.activeTaskId = null;
     }
   }
 
@@ -530,7 +542,7 @@ export class AgentOrchestrator {
         if (result.ok && this.streaming) {
           await this.emitMockStream(task, result.data);
         }
-        return result;
+        return this.withMockAuditMeta(task, result);
       }
       if (this.llmAdapter?.supports(task.type)) {
         return await this.llmAdapter.execute(
@@ -573,7 +585,8 @@ export class AgentOrchestrator {
 
     const mock = this.mockScript.get(task.type);
     if (mock) {
-      return await mock(task);
+      const result = await mock(task);
+      return this.withMockAuditMeta(task, result);
     }
 
     return {
@@ -733,6 +746,57 @@ export class AgentOrchestrator {
     }
   }
 
+  /**
+   * Attaches synthetic LLM audit meta for mock handlers so traces still show
+   * the prompts that would have been sent on the real LLM path.
+   */
+  private withMockAuditMeta(task: AgentTask, result: AgentResult): AgentResult {
+    if (result.rawMeta?.llmMessages) {
+      return result;
+    }
+    const messages = this.buildMockAuditMessages(task);
+    if (!messages || messages.length === 0) {
+      return result;
+    }
+    const rawModelOutput = result.ok
+      ? JSON.stringify(result.data)
+      : undefined;
+    const audit = buildLlmAuditMeta({
+      messages,
+      ...(rawModelOutput !== undefined ? { rawModelOutput } : {}),
+      model: "mock",
+    });
+    return {
+      ...result,
+      rawMeta: {
+        ...audit,
+        ...(result.rawMeta ?? {}),
+      },
+    };
+  }
+
+  private buildMockAuditMessages(
+    task: AgentTask,
+  ): import("@rpengineext/contracts").LlmMessage[] | null {
+    if (task.type === STANDARD_AGENT_TASK_TYPES.narrativeWrite) {
+      return buildNarrativeWriteMessages(task);
+    }
+    const def = this.index.agentTaskTypes.get(task.type)?.value;
+    if (def?.buildMessages) {
+      try {
+        return [...def.buildMessages(task)];
+      } catch {
+        return null;
+      }
+    }
+    return [
+      {
+        role: "user",
+        content: JSON.stringify({ taskType: task.type, input: task.input }),
+      },
+    ];
+  }
+
   private toolFail(
     toolId: string,
     callId: string,
@@ -746,6 +810,7 @@ export class AgentOrchestrator {
       args,
       error: fail.message,
       durationMs: this.clock.nowMs() - started,
+      ...(this.activeTaskId ? { parentTaskId: this.activeTaskId } : {}),
     });
     return err(fail);
   }

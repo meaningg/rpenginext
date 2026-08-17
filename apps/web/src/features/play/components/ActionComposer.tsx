@@ -23,7 +23,7 @@ export function ActionComposer({
 }) {
   return (
     <div className="shrink-0 border-t border-white/[0.06] bg-[#0a0a0c]/92 px-3 py-3 backdrop-blur-md sm:px-6 sm:py-4">
-      <div className="mx-auto flex max-w-[42rem] items-end gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-2 transition focus-within:border-orange-400/35 focus-within:ring-2 focus-within:ring-orange-500/15">
+      <div className="mx-auto flex max-w-[40rem] items-end gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-2 transition focus-within:border-orange-400/35 focus-within:ring-2 focus-within:ring-orange-500/15">
         <textarea
           ref={inputRef}
           value={value}

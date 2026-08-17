@@ -196,6 +196,19 @@ describe("character module integration", () => {
     const passage = await session.value.getPassage();
     expect(passage.ok).toBe(true);
     if (!passage.ok) return;
+    // Single player dossier: outfit_sync attaches under ## Follow-ups (no 2nd file).
+    const files = [...created.value.memoryTraceSink.files.keys()];
+    expect(files.length).toBe(1);
+    const md = created.value.memoryTraceSink.last()?.markdown ?? "";
+    expect(md).toContain("## Follow-ups");
+    expect(md).toContain("character.outfit_sync");
+    expect(md).toContain("character.update_outfit");
+    expect(md).toContain("#### Arguments");
+    expect(md).toContain("crimson cloak over dark clothes");
+    expect(md).toContain("#### Result");
+    expect(md).toContain("#### LLM transcript");
+    expect(md).toContain('role="system"');
+
     expect(passage.value?.prose).toBe(
       "You put on a crimson cloak over your clothes.",
     );

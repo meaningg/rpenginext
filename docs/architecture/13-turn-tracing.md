@@ -190,31 +190,45 @@ No module can erase core sections.
 
 ## Agents
 ### Agent task `...` (`narrative.write`)
+- status / requester / model / usage / durationMs
 #### Input
 ```json
-...
+// compact when LLM transcript present (history/sections omitted with pointers)
 ```
-#### Output
+#### LLM transcript
+##### [0] role="system"
+...
+##### [n] role="assistant" toolCalls=1
+###### tool_call `id` `name`
 ```json
-...
+args
 ```
-#### Repairs
-...
+#### Raw model output
+#### Output
 
 ## Tool calls
-...
+### `tool.name` (`callId`) — **ok**
+- parentTaskId / durationMs
+#### Arguments
+#### Result
 
 ## Commands
 ...
 
 ## State diff
-...
+// path-oriented; arrays of id'd objects are item-wise (+/-/~), not full dumps
 
 ## Narrative
-...
+### Prose
+### Brief
 
 ## Passage
 ...
+
+## Follow-ups
+### System turn `trn_...` (`character.outfit_sync`) — **committed**
+// scheduled system turns attach here — same file, no second dossier
+#### Agents / Tool calls / Commands / State diff
 
 ## Persistence
 ...
@@ -227,6 +241,14 @@ No module can erase core sections.
 ```
 
 Stable H2 titles are part of the contract for external grepping.
+
+### One dossier per player action
+
+Player turns own the trace file. Follow-up **system** turns scheduled after a
+successful player commit (e.g. `character.outfit_sync`) **attach** into the same
+markdown under `## Follow-ups` and rewrite that file. They do **not** create a
+second `{turnIndex}_{turnId}_*.md`. Host-initiated standalone `submitSystemTurn`
+still gets its own root dossier when there is no parent to attach to.
 
 ## 7. Privacy, secrets, size limits
 

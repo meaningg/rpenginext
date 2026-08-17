@@ -35,7 +35,10 @@ import {
 
 import type { AgentOrchestrator } from "../agents/agent-orchestrator.ts";
 import {
+  extractLlmDurationMs,
   extractLlmMessages,
+  extractLlmModel,
+  extractLlmRepaired,
   extractRawModelOutput,
 } from "../agents/llm-audit-meta.ts";
 import {
@@ -49,6 +52,7 @@ import type { ContributionIndex } from "../registry/contribution-index.ts";
 import type { StateKernel } from "../state/state-kernel.ts";
 import type {
   TraceAgentRecord,
+  TraceToolRecord,
   TurnTracer,
 } from "../tracing/turn-tracer.ts";
 import type { Clock } from "../util/clock.ts";
@@ -172,12 +176,14 @@ export class TurnPipeline {
    * @param action - player action
    * @param turnId - preallocated turn id
    * @param kind - turn kind
+   * @param options - optional trace attach (system follow-ups merge into parent dossier)
    */
   async run(
     session: SessionTurnState,
     action: PlayerAction,
     turnId: string,
     kind: TurnKind = "player",
+    options: { readonly attachTraceToParent?: boolean } = {},
   ): Promise<TurnResult> {
     const startedAt = this.clock.nowMs();
     this.log.info(
@@ -270,15 +276,9 @@ export class TurnPipeline {
           };
         }
         const result = await this.orchestrator.execute(task);
-        this.tracer.recordAgent(
-          this.toTraceAgentRecord(task, result),
-        );
+        this.tracer.recordAgent(this.toTraceAgentRecord(task, result));
         for (const tool of this.orchestrator.drainToolCalls()) {
-          this.tracer.recordTool({
-            toolName: tool.toolName,
-            callId: tool.callId,
-            error: tool.error,
-          });
+          this.tracer.recordTool(this.toTraceToolRecord(tool));
         }
         return result;
       },
@@ -291,14 +291,39 @@ export class TurnPipeline {
 
     this.orchestrator.beginTurn(ctx);
 
-    this.tracer.open({
-      turnId,
-      sessionId: session.sessionId,
-      turnKind: kind,
-      stateRevisionBefore: s0.meta.revision,
-      enabledModules: session.enabledModules,
-      rawInput: action,
-    });
+    const attachTrace =
+      options.attachTraceToParent === true && kind === "system";
+    if (attachTrace) {
+      const reason =
+        typeof action.text === "string" && action.text.trim().length > 0
+          ? action.text.trim()
+          : "system";
+      const attached = this.tracer.openFollowUp({
+        turnId,
+        turnKind: kind,
+        reason,
+        stateRevisionBefore: s0.meta.revision,
+      });
+      if (!attached) {
+        this.tracer.open({
+          turnId,
+          sessionId: session.sessionId,
+          turnKind: kind,
+          stateRevisionBefore: s0.meta.revision,
+          enabledModules: session.enabledModules,
+          rawInput: action,
+        });
+      }
+    } else {
+      this.tracer.open({
+        turnId,
+        sessionId: session.sessionId,
+        turnKind: kind,
+        stateRevisionBefore: s0.meta.revision,
+        enabledModules: session.enabledModules,
+        rawInput: action,
+      });
+    }
 
     this.events.publish({
       type: "turn.started",
@@ -634,11 +659,7 @@ export class TurnPipeline {
       }
     }
     for (const tool of this.orchestrator.drainToolCalls()) {
-      this.tracer.recordTool({
-        toolName: tool.toolName,
-        callId: tool.callId,
-        error: tool.error,
-      });
+      this.tracer.recordTool(this.toTraceToolRecord(tool));
     }
     return ok(undefined);
   }
@@ -2113,6 +2134,9 @@ export class TurnPipeline {
     const rawModelOutput = this.config.tracing.includeRawModelOutput
       ? extractRawModelOutput(rawMeta)
       : undefined;
+    const model = extractLlmModel(rawMeta);
+    const durationMs = extractLlmDurationMs(rawMeta);
+    const repaired = extractLlmRepaired(rawMeta);
     return {
       taskId: task.taskId,
       type: task.type,
@@ -2123,6 +2147,30 @@ export class TurnPipeline {
       error: result.ok ? undefined : result.error.message,
       ...(prompts ? { prompts } : {}),
       ...(rawModelOutput !== undefined ? { rawModelOutput } : {}),
+      ...(model ? { model } : {}),
+      ...(result.ok && result.usage ? { usage: result.usage } : {}),
+      ...(durationMs !== undefined ? { durationMs } : {}),
+      ...(repaired ? { repaired: true } : {}),
+    };
+  }
+
+  private toTraceToolRecord(tool: {
+    toolName: string;
+    callId: string;
+    args: JsonObject;
+    result?: JsonObject;
+    error?: string;
+    durationMs: number;
+    parentTaskId?: string;
+  }): TraceToolRecord {
+    return {
+      toolName: tool.toolName,
+      callId: tool.callId,
+      args: tool.args,
+      ...(tool.result !== undefined ? { result: tool.result } : {}),
+      ...(tool.error !== undefined ? { error: tool.error } : {}),
+      durationMs: tool.durationMs,
+      ...(tool.parentTaskId ? { parentTaskId: tool.parentTaskId } : {}),
     };
   }
 }

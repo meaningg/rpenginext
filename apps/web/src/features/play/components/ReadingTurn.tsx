@@ -1,7 +1,10 @@
 import type { ChatMessage } from "../../../shared/lib/chat-transcript.ts";
 import { COPY } from "../../../shared/config/copy.ts";
 import { cn } from "../../../shared/lib/cn.ts";
-import { splitNarrativeParagraphs } from "../lib/passage.ts";
+import {
+  parseNarrativeBlocks,
+  type NarrativeSpan,
+} from "../lib/passage.ts";
 
 /**
  * One turn in the immersive reading stream.
@@ -18,7 +21,7 @@ export function ReadingTurn({
       <div
         id={`turn-${message.id}`}
         className={cn(
-          "mx-auto w-full max-w-[42rem] rounded-xl px-1 py-1 transition-colors",
+          "mx-auto w-full max-w-[40rem] rounded-xl px-1 py-1 transition-colors",
           highlighted && "message-highlight",
         )}
       >
@@ -27,24 +30,25 @@ export function ReadingTurn({
             {COPY.play.you}
           </span>
         </div>
-        <p className="player-action mt-1 text-right whitespace-pre-wrap text-zinc-300">
+        <p className="player-action mt-1 text-right whitespace-pre-wrap">
           {message.content}
         </p>
       </div>
     );
   }
 
-  const paragraphs = splitNarrativeParagraphs(message.content);
+  const blocks = parseNarrativeBlocks(message.content);
 
   return (
     <article
       id={`turn-${message.id}`}
+      lang="ru"
       className={cn(
-        "mx-auto w-full max-w-[42rem] rounded-xl px-1 py-1 transition-colors",
+        "mx-auto w-full max-w-[40rem] rounded-xl px-1 py-1 transition-colors",
         highlighted && "message-highlight",
       )}
     >
-      <div className="mb-2.5 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-600">
+      <div className="mb-3 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-600">
         <span className="inline-block h-1 w-1 rounded-full bg-orange-400/80" />
         {COPY.play.narrator}
         {message.streaming ? (
@@ -54,23 +58,46 @@ export function ReadingTurn({
         ) : null}
       </div>
       <div className="narrative-prose">
-        {paragraphs.map((paragraph, index) => {
-          const isLast = index === paragraphs.length - 1;
+        {blocks.map((block, index) => {
+          const isLast = index === blocks.length - 1;
           return (
-            <p key={`${message.id}-p-${index}`}>
-              {paragraph}
+            <p
+              key={`${message.id}-b-${index}`}
+              className={cn(
+                "narrative-block",
+                block.role === "speech"
+                  ? "narrative-block--speech"
+                  : "narrative-block--narration",
+              )}
+            >
+              {block.spans.map((span, spanIndex) => (
+                <NarrativeSpanView
+                  key={`${message.id}-b-${index}-s-${spanIndex}`}
+                  span={span}
+                />
+              ))}
               {message.streaming && isLast ? (
                 <span className="stream-cursor" aria-hidden />
               ) : null}
             </p>
           );
         })}
-        {message.streaming && paragraphs.length === 0 ? (
-          <p>
+        {message.streaming && blocks.length === 0 ? (
+          <p className="narrative-block narrative-block--narration">
             <span className="stream-cursor" aria-hidden />
           </p>
         ) : null}
       </div>
     </article>
   );
+}
+
+function NarrativeSpanView({ span }: { readonly span: NarrativeSpan }) {
+  if (span.kind === "speech") {
+    return <span className="narrative-speech">{span.text}</span>;
+  }
+  if (span.kind === "emphasis") {
+    return <em className="narrative-emphasis">{span.text}</em>;
+  }
+  return <>{span.text}</>;
 }

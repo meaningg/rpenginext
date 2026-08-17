@@ -769,6 +769,7 @@ export class SessionRuntime implements Engine {
         },
         createTurnId(),
         "system",
+        { attachTraceToParent: true },
       );
       if (result.status === "rejected") {
         this.log.warn(
@@ -828,6 +829,7 @@ export class SessionRuntime implements Engine {
               },
               turnId,
               "system",
+              { attachTraceToParent: true },
             );
             this.events.publish({
               type: "background.job.finished",
