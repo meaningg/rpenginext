@@ -8,11 +8,6 @@
 
 > Истина мира принадлежит core. AI предлагает. Commit атомарный.
 
-## Status
-
-Сейчас: **Phase 3 — persistence + real narrative path**.  
-`bun:sqlite` saves, Responses API `LlmPort`, filesystem turn traces, CLI book loop.  
-Next: Phase 4 — hardening (replay tool, migrations, richer CLI UX).
 
 ## Documentation (source of truth)
 
