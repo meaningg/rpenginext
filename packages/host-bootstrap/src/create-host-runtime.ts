@@ -24,6 +24,8 @@ import {
   type SessionRuntime,
 } from "@rpengineext/core";
 import { createLogger, type Logger } from "@rpengineext/logger";
+import { createCharacterModule } from "@rpengineext/module-character";
+import { createWorldCanonModule } from "@rpengineext/module-world-canon";
 import { createWorkingMemoryModule } from "@rpengineext/module-working-memory";
 import { SqlitePersistence } from "@rpengineext/persistence-sqlite";
 
@@ -123,6 +125,8 @@ export async function createHostRuntime(
 
   const modules: Module[] = [
     createWorkingMemoryModule({ windowPairs: hostEnv.workingMemoryWindow }),
+    createWorldCanonModule(),
+    createCharacterModule(),
     ...(options.extraModules ?? []),
   ];
 

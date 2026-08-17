@@ -48,6 +48,8 @@ export interface EngineConfig {
      * for standard tasks and emit non-authoritative `llm.stream.delta` events.
      */
     readonly streaming: boolean;
+    /** Max model→tool→model rounds for generic tool-calling tasks. */
+    readonly maxToolRounds: number;
   };
   readonly persistence: {
     readonly policy: "per_turn" | "manual";

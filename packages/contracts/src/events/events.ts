@@ -93,6 +93,21 @@ export type EngineEvent =
       readonly sessionId: string;
       readonly passage: Passage;
       readonly at: string;
+    }
+  | {
+      readonly type: "background.job.started";
+      readonly sessionId: string;
+      readonly reason: string;
+      readonly turnId: string;
+      readonly at: string;
+    }
+  | {
+      readonly type: "background.job.finished";
+      readonly sessionId: string;
+      readonly reason: string;
+      readonly turnId: string;
+      readonly ok: boolean;
+      readonly at: string;
     };
 
 export type EngineEventType = EngineEvent["type"];

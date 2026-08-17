@@ -105,4 +105,53 @@ describe("narrative.write history messages", () => {
     expect(messages).toHaveLength(2);
     expect(messages.map((m) => m.role)).toEqual(["system", "user"]);
   });
+
+  test("lifts system prompt fragments into system and strips them from brief", () => {
+    const task = {
+      taskId: "task_frag",
+      type: "narrative.write",
+      turnId: "trn_frag",
+      input: {
+        brief: {
+          playerAction: { kind: "free_text", text: "look" },
+          promptFragments: [
+            {
+              id: "system:world_canon.text",
+              text: "WORLD CANON\nMagic is rare.",
+            },
+            {
+              id: "system:character.profile",
+              text: "PLAYER CHARACTER\nName: Alex",
+            },
+            {
+              id: "narrate:hint",
+              text: "Keep it short.",
+            },
+          ],
+        },
+        locale: "en",
+      },
+      constraints: {
+        timeoutMs: 1000,
+        maxRepairAttempts: 0,
+        optional: false,
+      },
+      requester: { kind: "core", id: "test" },
+    } as AgentTask;
+
+    const messages = buildNarrativeWriteMessages(task);
+    const system = messages[0]?.content ?? "";
+    expect(system).toContain("WORLD CANON");
+    expect(system).toContain("Magic is rare.");
+    expect(system).toContain("PLAYER CHARACTER");
+    expect(system).toContain("Name: Alex");
+
+    const user = messages[1]?.content ?? "";
+    expect(user).toContain("narrate:hint");
+    expect(user).toContain("Keep it short.");
+    expect(user).not.toContain("system:world_canon.text");
+    expect(user).not.toContain("system:character.profile");
+    expect(user).not.toContain("Magic is rare.");
+    expect(user).not.toContain("PLAYER CHARACTER");
+  });
 });

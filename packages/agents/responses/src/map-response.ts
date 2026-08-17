@@ -2,13 +2,16 @@ import {
   failure,
   ok,
   type Failure,
+  type JsonObject,
   type LlmCompletionResponse,
+  type LlmFinishReason,
+  type LlmToolCall,
   type Result,
   type TokenUsage,
 } from "@rpengineext/contracts";
 
 /**
- * Extracts assistant text + usage from a Responses API JSON payload.
+ * Extracts assistant text + tool calls + usage from a Responses API JSON payload.
  *
  * @param payload - parsed JSON body
  */
@@ -45,15 +48,20 @@ export function mapResponsesPayloadToCompletion(
     text = extractOutputText(root.output);
   }
 
-  if (!text) {
-    return errParse("responses payload contained no output text", root);
+  const toolCalls = extractToolCalls(root.output);
+  if (!text && toolCalls.length === 0) {
+    return errParse("responses payload contained no output text or tool calls", root);
   }
 
   const usage = mapUsage(root.usage);
+  const finishReason: LlmFinishReason =
+    toolCalls.length > 0 ? "tool_calls" : text ? "stop" : "unknown";
 
   return ok({
     text,
     ...(usage ? { usage } : {}),
+    ...(toolCalls.length > 0 ? { toolCalls } : {}),
+    finishReason,
     raw: payload,
   });
 }
@@ -83,6 +91,47 @@ function extractOutputText(output: unknown): string {
     }
   }
   return chunks.join("");
+}
+
+function extractToolCalls(output: unknown): LlmToolCall[] {
+  if (!Array.isArray(output)) {
+    return [];
+  }
+  const calls: LlmToolCall[] = [];
+  for (const item of output) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    if (row.type !== "function_call") continue;
+    const name = typeof row.name === "string" ? row.name : "";
+    const callId =
+      typeof row.call_id === "string"
+        ? row.call_id
+        : typeof row.id === "string"
+          ? row.id
+          : `call_${calls.length + 1}`;
+    if (!name) continue;
+    const args = parseArgs(row.arguments);
+    calls.push({ id: callId, name, args });
+  }
+  return calls;
+}
+
+function parseArgs(raw: unknown): JsonObject {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    return raw as JsonObject;
+  }
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return {};
+  }
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value as JsonObject;
+    }
+    return {};
+  } catch {
+    return {};
+  }
 }
 
 function mapUsage(usage: unknown): TokenUsage | undefined {

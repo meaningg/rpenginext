@@ -31,6 +31,13 @@ export function buildLlmAuditMeta(input: {
     };
     if (m.name !== undefined) row.name = m.name;
     if (m.toolCallId !== undefined) row.toolCallId = m.toolCallId;
+    if (m.toolCalls && m.toolCalls.length > 0) {
+      row.toolCalls = m.toolCalls.map((call) => ({
+        id: call.id,
+        name: call.name,
+        args: call.args,
+      }));
+    }
     return row;
   });
 

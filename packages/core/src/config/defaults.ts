@@ -37,6 +37,7 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
     temperature: 0.7,
     enableActionInterpret: false,
     streaming: true,
+    maxToolRounds: 4,
   },
   persistence: {
     policy: "per_turn",

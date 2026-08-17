@@ -98,7 +98,12 @@ export function createDefaultMockAgentScript(): MockAgentScript {
           extras: { interpretedFrom: text },
         },
       };
-    });
+    })
+    .on("character.outfit_sync", (task) => ({
+      ok: true,
+      taskId: task.taskId,
+      data: { changed: false },
+    }));
 }
 
 /**

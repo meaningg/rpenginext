@@ -11,7 +11,9 @@
         "@rpengineext/core": "workspace:*",
         "@rpengineext/host-bootstrap": "workspace:*",
         "@rpengineext/logger": "workspace:*",
+        "@rpengineext/module-character": "workspace:*",
         "@rpengineext/module-working-memory": "workspace:*",
+        "@rpengineext/module-world-canon": "workspace:*",
         "@rpengineext/persistence-sqlite": "workspace:*",
       },
       "devDependencies": {
@@ -129,7 +131,9 @@
         "@rpengineext/contracts": "workspace:*",
         "@rpengineext/core": "workspace:*",
         "@rpengineext/logger": "workspace:*",
+        "@rpengineext/module-character": "workspace:*",
         "@rpengineext/module-working-memory": "workspace:*",
+        "@rpengineext/module-world-canon": "workspace:*",
         "@rpengineext/persistence-sqlite": "workspace:*",
       },
       "devDependencies": {
@@ -149,8 +153,36 @@
         "typescript": "^5",
       },
     },
+    "packages/modules/character": {
+      "name": "@rpengineext/module-character",
+      "version": "0.1.0",
+      "dependencies": {
+        "@rpengineext/contracts": "workspace:*",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@rpengineext/core": "workspace:*",
+        "@rpengineext/logger": "workspace:*",
+        "@types/bun": "latest",
+        "typescript": "^5",
+      },
+    },
     "packages/modules/working-memory": {
       "name": "@rpengineext/module-working-memory",
+      "version": "0.1.0",
+      "dependencies": {
+        "@rpengineext/contracts": "workspace:*",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@rpengineext/core": "workspace:*",
+        "@rpengineext/logger": "workspace:*",
+        "@types/bun": "latest",
+        "typescript": "^5",
+      },
+    },
+    "packages/modules/world-canon": {
+      "name": "@rpengineext/module-world-canon",
       "version": "0.1.0",
       "dependencies": {
         "@rpengineext/contracts": "workspace:*",
@@ -348,7 +380,11 @@
 
     "@rpengineext/logger": ["@rpengineext/logger@workspace:packages/logger"],
 
+    "@rpengineext/module-character": ["@rpengineext/module-character@workspace:packages/modules/character"],
+
     "@rpengineext/module-working-memory": ["@rpengineext/module-working-memory@workspace:packages/modules/working-memory"],
+
+    "@rpengineext/module-world-canon": ["@rpengineext/module-world-canon@workspace:packages/modules/world-canon"],
 
     "@rpengineext/persistence-sqlite": ["@rpengineext/persistence-sqlite@workspace:packages/persistence/sqlite"],
 

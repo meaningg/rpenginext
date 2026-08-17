@@ -199,7 +199,12 @@ export interface SalienceProvider {
 
 export interface AgentTaskContributor {
   contribute: PortHandler<
-    { stage: string; intent?: ActionIntent },
+    {
+      stage: string;
+      intent?: ActionIntent;
+      turnKind?: TurnKind;
+      rawAction?: PlayerAction;
+    },
     { tasks: AgentTask[] }
   >;
 }
@@ -344,7 +349,7 @@ export interface LocalizationContributor {
 
 export interface SessionBootstrap {
   bootstrap: PortHandler<
-    { isNewGame: boolean },
+    { isNewGame: boolean; meta: JsonObject; seed?: string },
     { commands: StateCommand[] }
   >;
 }
@@ -372,10 +377,28 @@ export interface AfterCommitHook {
   >;
 }
 
+/**
+ * When to run a scheduled system turn relative to the player response.
+ * - inline: drain before returning the player TurnResult (legacy default)
+ * - background: return player result first; run when the session is free
+ */
+export type SystemTurnScheduleMode = "inline" | "background";
+
 export interface SystemTurnScheduler {
   schedule: PortHandler<
-    Record<string, never>,
-    { requests: { reason: string; payload?: JsonObject }[] }
+    {
+      passage: Passage;
+      acceptedCommands: readonly StateCommand[];
+      rawAction: PlayerAction;
+      turnKind: TurnKind;
+    },
+    {
+      requests: {
+        reason: string;
+        payload?: JsonObject;
+        mode?: SystemTurnScheduleMode;
+      }[];
+    }
   >;
 }
 

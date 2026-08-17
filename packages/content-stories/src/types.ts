@@ -22,6 +22,24 @@ export const StoryTemplateSchema = z
       .optional(),
     sessionMeta: JsonObjectSchema.default({}),
     narrativeStyle: JsonObjectSchema.optional(),
+    /**
+     * Optional player character seed for `@rpengineext/module-character`.
+     * Host copies this onto session.meta.character at startSession.
+     */
+    character: z
+      .object({
+        name: z.string().min(1),
+        appearance: z.string().min(1),
+        features: z.string().min(1),
+        outfit: z.string().min(1),
+      })
+      .strict()
+      .optional(),
+    /**
+     * Optional immutable world-canon text for `@rpengineext/module-world-canon`.
+     * Host copies this onto session.meta.worldCanon at startSession.
+     */
+    worldCanon: z.string().min(1).max(32_000).optional(),
     modules: z
       .object({
         workingMemoryWindow: z.number().int().positive().optional(),

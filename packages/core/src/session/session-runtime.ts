@@ -62,6 +62,14 @@ export interface SessionRuntimeOptions {
 /**
  * Host-facing session coordinator implementing Engine/Session contracts.
  */
+type LiveSession = SessionTurnState & {
+  busy: boolean;
+  /** True while a background system-turn pump is active for this session. */
+  backgroundPumping: boolean;
+  /** In-flight pump promise (dedupes concurrent kicks). */
+  backgroundPumpPromise?: Promise<void>;
+};
+
 export class SessionRuntime implements Engine {
   private readonly log: TurnLogger;
   private readonly clock: Clock;
@@ -72,10 +80,7 @@ export class SessionRuntime implements Engine {
   private readonly persistence: PersistencePort;
   private readonly events: EventBus;
   private readonly pipeline: TurnPipeline;
-  private readonly sessions = new Map<
-    string,
-    SessionTurnState & { busy: boolean }
-  >();
+  private readonly sessions = new Map<string, LiveSession>();
   private readonly index: ContributionIndex;
   private readonly hostSurface: HostSurface;
 
@@ -151,7 +156,7 @@ export class SessionRuntime implements Engine {
       version: m.module.manifest.version,
     }));
 
-    const sessionState: SessionTurnState & { busy: boolean } = {
+    const sessionState: LiveSession = {
       sessionId,
       kernel,
       lastPassage: null,
@@ -163,6 +168,7 @@ export class SessionRuntime implements Engine {
       pendingSystemTurns: [],
       meta: spec.meta ? { ...spec.meta } : {},
       busy: false,
+      backgroundPumping: false,
     };
 
     const bootCommands: StateCommand[] = [];
@@ -186,7 +192,14 @@ export class SessionRuntime implements Engine {
     });
 
     for (const owned of this.index.sessionBootstraps) {
-      const result = await owned.value.bootstrap({ isNewGame: true }, bootCtx);
+      const result = await owned.value.bootstrap(
+        {
+          isNewGame: true,
+          meta: (spec.meta ?? {}) as JsonObject,
+          seed: spec.seed,
+        },
+        bootCtx,
+      );
       if (!result.ok) return result;
       bootCommands.push(...result.value.commands);
     }
@@ -261,7 +274,7 @@ export class SessionRuntime implements Engine {
     const seed =
       typeof snapshot.meta?.seed === "string" ? snapshot.meta.seed : undefined;
 
-    const sessionState: SessionTurnState & { busy: boolean } = {
+    const sessionState: LiveSession = {
       sessionId,
       kernel,
       lastPassage: snapshot.lastPassageId
@@ -275,6 +288,7 @@ export class SessionRuntime implements Engine {
       pendingSystemTurns: [],
       meta: snapshot.meta ? { ...snapshot.meta } : {},
       busy: false,
+      backgroundPumping: false,
     };
 
     // Restore idempotency map from snapshot turnIds + passages
@@ -368,7 +382,9 @@ export class SessionRuntime implements Engine {
       }
     }
 
-    if (session.busy) {
+    // Wait for in-flight player/system/background work (serial session).
+    const idle = await this.waitForSessionIdle(session);
+    if (!idle.ok) {
       const turnId = createTurnId();
       return {
         status: "rejected",
@@ -377,7 +393,7 @@ export class SessionRuntime implements Engine {
         failure: {
           turnId,
           code: "INTERNAL",
-          message: "SESSION_BUSY: another turn is in progress",
+          message: idle.error.message,
           stage: "begin",
         },
         warnings: [],
@@ -392,14 +408,24 @@ export class SessionRuntime implements Engine {
         this.rememberIdempotency(session, action.clientActionId, result);
       }
 
-      // Drain scheduled system turns after successful player turn
+      // Inline system turns block the response; background ones run after return.
       if (result.status === "committed") {
-        await this.drainSystemTurns(session);
+        await this.drainInlineSystemTurns(session);
       }
 
       return result;
     } finally {
+      const hasBackground = session.pendingSystemTurns.some(
+        (item) => item.mode === "background",
+      );
+      // Claim background before releasing busy so the next player action waits.
+      if (hasBackground) {
+        session.backgroundPumping = true;
+      }
       session.busy = false;
+      if (hasBackground) {
+        void this.pumpBackgroundJobs(session);
+      }
     }
   }
 
@@ -679,21 +705,58 @@ export class SessionRuntime implements Engine {
     }
   }
 
-  private async drainSystemTurns(
-    session: SessionTurnState & { busy: boolean },
-  ): Promise<void> {
-    // busy already true from player turn; run nested without releasing lock.
-    // Snapshot the queue so system turns cannot re-enqueue infinitely in one drain.
+  /**
+   * Waits until the session has no busy turn and no pending/running background jobs.
+   */
+  private async waitForSessionIdle(
+    session: LiveSession,
+    timeoutMs = 120_000,
+  ): Promise<Result<void, Failure>> {
+    // Wall clock: test clocks may be frozen and must not break idle waits.
+    const started = Date.now();
+    while (
+      session.busy ||
+      session.backgroundPumping ||
+      session.pendingSystemTurns.some((item) => item.mode === "background")
+    ) {
+      if (Date.now() - started > timeoutMs) {
+        return err(
+          failure(
+            "INTERNAL",
+            "SESSION_BUSY: timed out waiting for background work",
+          ),
+        );
+      }
+      await sleep(5);
+    }
+    return ok(undefined);
+  }
+
+  /**
+   * Drains inline system turns while the player turn still holds busy.
+   * Leaves background jobs in the queue for {@link pumpBackgroundJobs}.
+   */
+  private async drainInlineSystemTurns(session: LiveSession): Promise<void> {
     const batch = session.pendingSystemTurns.splice(
       0,
       session.pendingSystemTurns.length,
     );
+    const inline: PendingSystemTurn[] = [];
+    const background: PendingSystemTurn[] = [];
+    for (const item of batch) {
+      if (item.mode === "background") {
+        background.push(item);
+      } else {
+        inline.push(item);
+      }
+    }
+    session.pendingSystemTurns.push(...background);
+
     const max = 16;
     let n = 0;
-    for (const next of batch) {
+    for (const next of inline) {
       if (n >= max) {
-        // put remainder back
-        session.pendingSystemTurns.unshift(...batch.slice(n));
+        session.pendingSystemTurns.unshift(...inline.slice(n));
         break;
       }
       n += 1;
@@ -710,11 +773,88 @@ export class SessionRuntime implements Engine {
       if (result.status === "rejected") {
         this.log.warn(
           { reason: next.reason, failure: result.failure },
-          "scheduled system turn rejected",
+          "scheduled inline system turn rejected",
         );
         break;
       }
     }
+  }
+
+  /**
+   * Runs background system turns after the player TurnResult is returned.
+   * Holds session busy per job so the next player action waits.
+   */
+  private pumpBackgroundJobs(session: LiveSession): Promise<void> {
+    if (session.backgroundPumpPromise) {
+      return session.backgroundPumpPromise;
+    }
+    session.backgroundPumping = true;
+    const run = (async () => {
+      try {
+        const max = 16;
+        let n = 0;
+        while (n < max) {
+          const index = session.pendingSystemTurns.findIndex(
+            (item) => item.mode === "background",
+          );
+          if (index < 0) {
+            break;
+          }
+          const [next] = session.pendingSystemTurns.splice(index, 1);
+          if (!next) {
+            break;
+          }
+          n += 1;
+
+          while (session.busy) {
+            await sleep(5);
+          }
+          session.busy = true;
+          const turnId = createTurnId();
+          this.events.publish({
+            type: "background.job.started",
+            sessionId: session.sessionId,
+            reason: next.reason,
+            turnId,
+            at: this.clock.nowIso(),
+          });
+          try {
+            const result = await this.pipeline.run(
+              session,
+              {
+                kind: "system",
+                text: next.reason,
+                payload: next.payload,
+              },
+              turnId,
+              "system",
+            );
+            this.events.publish({
+              type: "background.job.finished",
+              sessionId: session.sessionId,
+              reason: next.reason,
+              turnId,
+              ok: result.status === "committed",
+              at: this.clock.nowIso(),
+            });
+            if (result.status === "rejected") {
+              this.log.warn(
+                { reason: next.reason, failure: result.failure },
+                "background system turn rejected",
+              );
+              break;
+            }
+          } finally {
+            session.busy = false;
+          }
+        }
+      } finally {
+        session.backgroundPumping = false;
+        session.backgroundPumpPromise = undefined;
+      }
+    })();
+    session.backgroundPumpPromise = run;
+    return run;
   }
 
   private asSessionHandle(sessionId: string): Session {
@@ -729,3 +869,7 @@ export class SessionRuntime implements Engine {
 }
 
 export type { Module, ModuleFactory };
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

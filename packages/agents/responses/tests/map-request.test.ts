@@ -51,4 +51,60 @@ describe("mapCompletionToResponsesBody", () => {
     if (!Array.isArray(body.input)) return;
     expect(body.input).toHaveLength(3);
   });
+
+  test("maps tools and skips json_object format when tools present", () => {
+    const body = mapCompletionToResponsesBody({
+      model: "m",
+      messages: [{ role: "user", content: "use tool" }],
+      responseFormat: "json",
+      tools: [
+        {
+          name: "echo",
+          description: "echo",
+          parameters: { type: "object", properties: { q: { type: "string" } } },
+        },
+      ],
+      toolChoice: "auto",
+    });
+    expect(body.tools?.[0]?.name).toBe("echo");
+    expect(body.tool_choice).toBe("auto");
+    expect(body.text).toBeUndefined();
+  });
+
+  test("maps tool results to function_call_output items", () => {
+    const body = mapCompletionToResponsesBody({
+      model: "m",
+      messages: [
+        { role: "user", content: "go" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "call_1", name: "echo", args: { q: "hi" } }],
+        },
+        {
+          role: "tool",
+          toolCallId: "call_1",
+          name: "echo",
+          content: '{"ok":true}',
+        },
+      ],
+      tools: [
+        {
+          name: "echo",
+          description: "echo",
+          parameters: { type: "object" },
+        },
+      ],
+    });
+    expect(Array.isArray(body.input)).toBe(true);
+    if (!Array.isArray(body.input)) return;
+    expect(body.input.some((item) => "type" in item && item.type === "function_call")).toBe(
+      true,
+    );
+    expect(
+      body.input.some(
+        (item) => "type" in item && item.type === "function_call_output",
+      ),
+    ).toBe(true);
+  });
 });

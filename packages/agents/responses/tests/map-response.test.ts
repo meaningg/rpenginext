@@ -37,4 +37,24 @@ describe("mapResponsesPayloadToCompletion", () => {
     });
     expect(mapped.ok).toBe(false);
   });
+
+  test("extracts function_call tool calls without text", () => {
+    const mapped = mapResponsesPayloadToCompletion({
+      status: "completed",
+      output: [
+        {
+          type: "function_call",
+          call_id: "call_abc",
+          name: "character.update_outfit",
+          arguments: '{"outfit":"red coat"}',
+        },
+      ],
+    });
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    expect(mapped.value.text).toBe("");
+    expect(mapped.value.toolCalls?.[0]?.name).toBe("character.update_outfit");
+    expect(mapped.value.toolCalls?.[0]?.args).toEqual({ outfit: "red coat" });
+    expect(mapped.value.finishReason).toBe("tool_calls");
+  });
 });

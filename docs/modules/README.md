@@ -33,6 +33,13 @@ You register handlers inside fixed stages:
 
 World changes = **commands only**. Turns are **full-atomic**.
 
+## Official product modules (this monorepo)
+
+| Package | Role |
+|---------|------|
+| `@rpengineext/module-working-memory` | last-N chat history for `narrative.write` |
+| `@rpengineext/module-character` | PC seed from story JSON, narrative injection, background outfit tool-agent |
+
 ## Quick checklist
 
 - [ ] Unique `id`, semver, `engines.core` / `engines.contracts`

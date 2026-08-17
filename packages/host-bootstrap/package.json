@@ -18,6 +18,8 @@
     "@rpengineext/core": "workspace:*",
     "@rpengineext/logger": "workspace:*",
     "@rpengineext/module-working-memory": "workspace:*",
+    "@rpengineext/module-character": "workspace:*",
+    "@rpengineext/module-world-canon": "workspace:*",
     "@rpengineext/persistence-sqlite": "workspace:*"
   },
   "devDependencies": {

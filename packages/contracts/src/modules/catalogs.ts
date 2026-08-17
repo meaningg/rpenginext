@@ -4,7 +4,8 @@ import type { Result, Failure } from "../result.ts";
 import type { JsonObject } from "../json.ts";
 import type { StateCommand } from "../state/commands.ts";
 import type { WorldState } from "../state/world-state.ts";
-import type { AgentTaskConstraints } from "../agents/task.ts";
+import type { AgentTask, AgentTaskConstraints } from "../agents/task.ts";
+import type { LlmMessage } from "../agents/llm-port.ts";
 
 /**
  * Layer A — catalog registration definitions.
@@ -58,6 +59,11 @@ export interface AgentTaskTypeDefinition {
   readonly outputSchema: z.ZodType<JsonObject>;
   readonly defaultConstraints?: Partial<AgentTaskConstraints>;
   readonly description?: string;
+  /**
+   * Optional LLM message builder for generic / tool-calling tasks.
+   * When present, core can run the task via LlmPort without a dedicated adapter.
+   */
+  readonly buildMessages?: (task: AgentTask) => readonly LlmMessage[];
 }
 
 export interface AgentToolDefinition {
@@ -66,6 +72,10 @@ export interface AgentToolDefinition {
   readonly argsSchema: z.ZodType<JsonObject>;
   readonly resultSchema: z.ZodType<JsonObject>;
   readonly permission?: string;
+  /**
+   * JSON Schema for LLM tool parameters. When omitted, a permissive object schema is used.
+   */
+  readonly parametersJsonSchema?: JsonObject;
 }
 
 export interface ActionTypeDefinition {

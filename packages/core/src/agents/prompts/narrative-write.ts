@@ -3,6 +3,9 @@ import type { AgentTask, JsonObject, LlmMessage } from "@rpengineext/contracts";
 /**
  * Builds chat messages for `narrative.write` LLM calls.
  *
+ * System-slot prompt fragments from modules (id prefix `system:`) are appended
+ * to the system message and stripped from the user brief to avoid duplication.
+ *
  * @param task - agent task (input: brief/style/locale/history)
  */
 export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
@@ -15,6 +18,7 @@ export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
       : "en";
   const history = normalizeHistory(input.history);
   const playerAction = resolvePlayerAction(input, brief);
+  const { systemFragmentTexts, briefForUser } = splitSystemPromptFragments(brief);
 
   const languageRule = [
     `Locale: ${locale}.`,
@@ -23,14 +27,14 @@ export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
     "JSON keys stay in English; only string values shown to the player are localized.",
   ].join(" ");
 
-  const system = [
+  const systemCore = [
     "You are the game master (GM) for a turn-based interactive role-playing story.",
     "Narrate the immediate, coherent outcome of the player's CURRENT action only.",
     "The current action is brief.playerAction (and restated above the task JSON when present).",
     "Prior user/assistant messages are earlier turns for continuity ONLY — never treat them as the action you must resolve now.",
     "Do not ignore the current action. Do not invent an unrelated random scene.",
     "Honor continuity: location, characters, tone, and open threads from history and brief.",
-    "Do not invent world facts, items, locations, or NPC knowledge beyond the brief and established history.",
+    "Do not invent world facts, items, locations, or NPC knowledge beyond the brief, system canon/character blocks, and established history.",
     "Do not include secrets that the brief marks as forbidden.",
     "The player replies with free text on every turn.",
     "Output MUST be a single JSON object (no markdown fences) with this shape:",
@@ -39,11 +43,16 @@ export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
     "prose is player-facing story text only.",
   ].join("\n");
 
+  const system =
+    systemFragmentTexts.length > 0
+      ? [systemCore, ...systemFragmentTexts].join("\n\n")
+      : systemCore;
+
   const userPayload = {
     taskType: "narrative.write",
     turnId: task.turnId,
     playerAction,
-    brief,
+    brief: briefForUser,
     style,
     locale,
   };
@@ -92,6 +101,49 @@ export function buildNarrativeWriteRepairMessages(
       content: lines.join("\n"),
     },
   ];
+}
+
+/**
+ * Lifts `system:*` prompt fragments into system message texts and returns a brief
+ * copy without those fragments (other slots stay in the user payload).
+ *
+ * @param brief - narrative brief object
+ */
+export function splitSystemPromptFragments(brief: JsonObject): {
+  systemFragmentTexts: string[];
+  briefForUser: JsonObject;
+} {
+  const raw = brief.promptFragments;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return { systemFragmentTexts: [], briefForUser: brief };
+  }
+
+  const systemFragmentTexts: string[] = [];
+  const remaining: JsonObject[] = [];
+
+  for (const item of raw) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const frag = item as JsonObject;
+    const id = typeof frag.id === "string" ? frag.id : "";
+    const text = typeof frag.text === "string" ? frag.text.trim() : "";
+    if (id.startsWith("system:") && text.length > 0) {
+      systemFragmentTexts.push(text);
+      continue;
+    }
+    remaining.push(frag);
+  }
+
+  if (remaining.length === raw.length) {
+    return { systemFragmentTexts, briefForUser: brief };
+  }
+
+  const { promptFragments: _removed, ...rest } = brief;
+  void _removed;
+  const briefForUser: JsonObject =
+    remaining.length === 0
+      ? { ...rest }
+      : { ...rest, promptFragments: remaining };
+  return { systemFragmentTexts, briefForUser };
 }
 
 function resolvePlayerAction(

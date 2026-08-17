@@ -117,6 +117,8 @@ export class SessionService {
           ? { locale: normalizeLocale(template.locale) }
           : {}),
         narrativeStyle: template.narrativeStyle ?? {},
+        ...(template.character ? { character: template.character } : {}),
+        ...(template.worldCanon ? { worldCanon: template.worldCanon } : {}),
       },
     });
     if (!started.ok) return started;

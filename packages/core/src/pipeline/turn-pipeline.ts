@@ -64,6 +64,8 @@ export interface PendingSystemTurn {
   readonly reason: string;
   readonly payload?: JsonObject;
   readonly requestedByModuleId?: string;
+  /** inline = drain before player response; background = after return */
+  readonly mode: "inline" | "background";
 }
 
 export interface SessionTurnState {
@@ -964,7 +966,12 @@ export class TurnPipeline {
 
     for (const owned of this.index.agentTaskContributors) {
       const result = await owned.value.contribute(
-        { stage: "plan", intent },
+        {
+          stage: "plan",
+          intent,
+          turnKind: scratch.kind,
+          rawAction: scratch.rawAction,
+        },
         this.moduleCtx(owned.moduleId, ctx),
       );
       if (!result.ok) return result;
@@ -1196,12 +1203,30 @@ export class TurnPipeline {
       return ok(undefined);
     }
 
+    // System turns are maintenance (memory/tools/state) — no player-facing LLM prose.
+    if (scratch.kind === "system") {
+      const reason = scratch.rawAction.text?.trim() || "system";
+      scratch.narrativeProse = `(system) ${reason}`;
+      scratch.narrativeBrief = {
+        system: true,
+        reason,
+        payload: (scratch.rawAction.payload ?? {}) as JsonObject,
+      };
+      this.tracer.recordNarrative(scratch.narrativeBrief, scratch.narrativeProse);
+      return ok(undefined);
+    }
+
     const intent = scratch.intent!;
 
     // Narrate-stage agent contributions (NPC voice, etc.) before narrative.write.
     for (const owned of this.index.agentTaskContributors) {
       const result = await owned.value.contribute(
-        { stage: "narrate", intent },
+        {
+          stage: "narrate",
+          intent,
+          turnKind: scratch.kind,
+          rawAction: scratch.rawAction,
+        },
         this.moduleCtx(owned.moduleId, ctx),
       );
       if (!result.ok) return result;
@@ -1710,11 +1735,16 @@ export class TurnPipeline {
     }
 
     // Only player turns may schedule follow-up system turns (prevents drain loops).
-    if (scratch.kind === "player") {
+    if (scratch.kind === "player" && scratch.passage) {
       for (const owned of this.index.systemTurnSchedulers) {
         try {
           const scheduled = await owned.value.schedule(
-            {},
+            {
+              passage: scratch.passage,
+              acceptedCommands: scratch.acceptedCommands,
+              rawAction: scratch.rawAction,
+              turnKind: scratch.kind,
+            },
             this.moduleCtx(owned.moduleId, ctx),
           );
           if (scheduled.ok) {
@@ -1723,6 +1753,7 @@ export class TurnPipeline {
                 reason: request.reason,
                 payload: request.payload,
                 requestedByModuleId: owned.moduleId,
+                mode: request.mode === "background" ? "background" : "inline",
               });
             }
           }

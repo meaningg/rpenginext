@@ -1,4 +1,11 @@
-import type { LlmCompletionRequest, LlmMessage } from "@rpengineext/contracts";
+import type {
+  JsonObject,
+  LlmCompletionRequest,
+  LlmMessage,
+  LlmToolCall,
+  LlmToolChoice,
+  LlmToolDefinition,
+} from "@rpengineext/contracts";
 
 /**
  * Wire body for POST /v1/responses (stateless).
@@ -14,11 +21,37 @@ export interface ResponsesRequestBody {
   readonly text?: {
     readonly format: { readonly type: "json_object" | "text" };
   };
+  readonly tools?: ResponsesFunctionTool[];
+  readonly tool_choice?:
+    | "auto"
+    | "none"
+    | "required"
+    | { readonly type: "function"; readonly name: string };
 }
 
-export interface ResponsesInputItem {
-  readonly role: "user" | "assistant" | "system";
-  readonly content: string;
+export type ResponsesInputItem =
+  | {
+      readonly role: "user" | "assistant" | "system";
+      readonly content: string;
+    }
+  | {
+      readonly type: "function_call";
+      readonly call_id: string;
+      readonly name: string;
+      readonly arguments: string;
+    }
+  | {
+      readonly type: "function_call_output";
+      readonly call_id: string;
+      readonly output: string;
+    };
+
+export interface ResponsesFunctionTool {
+  readonly type: "function";
+  readonly name: string;
+  readonly description?: string;
+  readonly parameters: JsonObject;
+  readonly strict?: boolean;
 }
 
 export interface MapRequestOptions {
@@ -39,6 +72,7 @@ export function mapCompletionToResponsesBody(
   options: MapRequestOptions = { preferJsonObjectFormat: true },
 ): ResponsesRequestBody {
   const { instructions, input } = splitMessages(request.messages);
+  const hasTools = (request.tools?.length ?? 0) > 0;
 
   const body: ResponsesRequestBody = {
     model: request.model,
@@ -52,9 +86,20 @@ export function mapCompletionToResponsesBody(
     ...(request.maxTokens !== undefined
       ? { max_output_tokens: request.maxTokens }
       : {}),
+    ...(hasTools
+      ? {
+          tools: (request.tools ?? []).map(mapTool),
+          tool_choice: mapToolChoice(request.toolChoice),
+        }
+      : {}),
   };
 
-  if (request.responseFormat === "json" && options.preferJsonObjectFormat) {
+  // json_object format conflicts with tool calls on many gateways — skip when tools present.
+  if (
+    request.responseFormat === "json" &&
+    options.preferJsonObjectFormat &&
+    !hasTools
+  ) {
     return {
       ...body,
       text: { format: { type: "json_object" } },
@@ -78,6 +123,25 @@ export function mapCompletionToResponsesBodyWithoutJsonFormat(
   });
 }
 
+function mapTool(tool: LlmToolDefinition): ResponsesFunctionTool {
+  return {
+    type: "function",
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters,
+    ...(tool.strict !== undefined ? { strict: tool.strict } : { strict: true }),
+  };
+}
+
+function mapToolChoice(
+  choice: LlmToolChoice | undefined,
+): ResponsesRequestBody["tool_choice"] {
+  if (!choice || choice === "auto") return "auto";
+  if (choice === "none") return "none";
+  if (choice === "required") return "required";
+  return { type: "function", name: choice.name };
+}
+
 function splitMessages(messages: readonly LlmMessage[]): {
   instructions: string | undefined;
   input: string | ResponsesInputItem[];
@@ -92,9 +156,22 @@ function splitMessages(messages: readonly LlmMessage[]): {
     }
     if (message.role === "tool") {
       rest.push({
-        role: "user",
-        content: `[tool${message.toolCallId ? ` ${message.toolCallId}` : ""}] ${message.content}`,
+        type: "function_call_output",
+        call_id: message.toolCallId ?? "call_unknown",
+        output: message.content,
       });
+      continue;
+    }
+    if (message.role === "assistant" && message.toolCalls?.length) {
+      if (message.content.trim().length > 0) {
+        rest.push({
+          role: "assistant",
+          content: message.content,
+        });
+      }
+      for (const call of message.toolCalls) {
+        rest.push(mapToolCallItem(call));
+      }
       continue;
     }
     rest.push({
@@ -109,8 +186,17 @@ function splitMessages(messages: readonly LlmMessage[]): {
   if (rest.length === 0) {
     return { instructions, input: "" };
   }
-  if (rest.length === 1 && rest[0]?.role === "user") {
+  if (rest.length === 1 && "role" in rest[0]! && rest[0]?.role === "user") {
     return { instructions, input: rest[0].content };
   }
   return { instructions, input: rest };
+}
+
+function mapToolCallItem(call: LlmToolCall): ResponsesInputItem {
+  return {
+    type: "function_call",
+    call_id: call.id,
+    name: call.name,
+    arguments: JSON.stringify(call.args ?? {}),
+  };
 }

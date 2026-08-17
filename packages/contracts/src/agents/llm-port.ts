@@ -3,6 +3,26 @@ import type { JsonObject } from "../json.ts";
 import type { TokenUsage } from "./task.ts";
 
 /**
+ * Provider-agnostic tool definition for LLM function calling.
+ */
+export interface LlmToolDefinition {
+  readonly name: string;
+  readonly description: string;
+  /** JSON Schema object for tool arguments. */
+  readonly parameters: JsonObject;
+  readonly strict?: boolean;
+}
+
+/**
+ * A single tool invocation requested by the model.
+ */
+export interface LlmToolCall {
+  readonly id: string;
+  readonly name: string;
+  readonly args: JsonObject;
+}
+
+/**
  * Low-level chat message for provider adapters.
  */
 export interface LlmMessage {
@@ -10,7 +30,18 @@ export interface LlmMessage {
   readonly content: string;
   readonly name?: string;
   readonly toolCallId?: string;
+  /** Present on assistant messages when the model requests tools. */
+  readonly toolCalls?: readonly LlmToolCall[];
 }
+
+/**
+ * How the model should choose tools for a completion.
+ */
+export type LlmToolChoice =
+  | "auto"
+  | "none"
+  | "required"
+  | { readonly name: string };
 
 /**
  * Provider-agnostic completion request.
@@ -23,15 +54,29 @@ export interface LlmCompletionRequest {
   readonly timeoutMs?: number;
   readonly responseFormat?: "text" | "json";
   readonly metadata?: JsonObject;
+  /** Tools available for this call (function calling). */
+  readonly tools?: readonly LlmToolDefinition[];
+  readonly toolChoice?: LlmToolChoice;
 }
+
+/**
+ * Why the model stopped generating.
+ */
+export type LlmFinishReason = "stop" | "tool_calls" | "length" | "unknown";
 
 /**
  * Provider-agnostic completion response.
  */
 export interface LlmCompletionResponse {
+  /**
+   * Assistant text content. May be empty when the model only requested tools.
+   */
   readonly text: string;
   readonly usage?: TokenUsage;
   readonly raw?: unknown;
+  /** Tool calls requested by the model (may be empty/undefined). */
+  readonly toolCalls?: readonly LlmToolCall[];
+  readonly finishReason?: LlmFinishReason;
 }
 
 /**

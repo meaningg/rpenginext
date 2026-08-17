@@ -29,6 +29,7 @@ import {
 } from "./mock-agent-script.ts";
 import { StandardTaskLlmAdapter } from "./standard-task-llm-adapter.ts";
 import { narrativeProseDelta } from "./stream-prose.ts";
+import { runToolCallingTask } from "./tool-loop.ts";
 
 export type AgentsRuntimeMode = "mock" | "llm";
 
@@ -81,8 +82,10 @@ export class AgentOrchestrator {
     moduleId: string,
   ) => readonly PermissionToken[];
   private readonly streaming: boolean;
-    /** Raw narrative.write stream buffers keyed by taskId (for prose extraction). */
-    private readonly narrativeStreamBuffers = new Map<string, string>();
+  private readonly defaultModel: string;
+  private readonly defaultTemperature?: number;
+  /** Raw narrative.write stream buffers keyed by taskId (for prose extraction). */
+  private readonly narrativeStreamBuffers = new Map<string, string>();
   private lastToolCalls: ToolInvokeRecord[] = [];
   /** Active turn context for repair-hint providers (set by pipeline). */
   private activeCtx: TurnContext | null = null;
@@ -102,10 +105,12 @@ export class AgentOrchestrator {
     this.maxParallelPerTurn = Math.max(1, options.maxParallelPerTurn ?? 4);
     this.getModulePermissions = options.getModulePermissions;
     this.streaming = options.streaming ?? true;
+    this.defaultModel = options.defaultModel?.trim() || "unspecified";
+    this.defaultTemperature = options.defaultTemperature;
     this.llmAdapter = options.llm
       ? new StandardTaskLlmAdapter({
           llm: options.llm,
-          model: options.defaultModel?.trim() || "unspecified",
+          model: this.defaultModel,
           log: this.log,
           defaultTemperature: options.defaultTemperature,
         })
@@ -497,6 +502,11 @@ export class AgentOrchestrator {
       );
     }
 
+    const toolTask = await this.tryToolCallingTask(task);
+    if (toolTask) {
+      return toolTask;
+    }
+
     if (!this.llm) {
       return {
         ok: false,
@@ -520,6 +530,62 @@ export class AgentOrchestrator {
         code: "NO_ADAPTER",
         message: `no LLM adapter for task type ${task.type}`,
       },
+    };
+  }
+
+  /**
+   * Generic tool-calling path for registered task types with buildMessages.
+   */
+  private async tryToolCallingTask(task: AgentTask): Promise<AgentResult | null> {
+    if (!this.llm || !this.activeCtx) {
+      return null;
+    }
+    const def = this.index.agentTaskTypes.get(task.type)?.value;
+    if (!def?.buildMessages) {
+      return null;
+    }
+
+    const toolIds = task.constraints.tools ?? [];
+    const tools = toolIds.map((id) => this.toLlmToolDefinition(id)).filter(
+      (item): item is NonNullable<typeof item> => item !== null,
+    );
+
+    const prepared = withDefaultRepairs(task, this.maxRepairAttempts);
+    return runToolCallingTask({
+      llm: this.llm,
+      model: this.defaultModel,
+      task: prepared,
+      messages: def.buildMessages(prepared),
+      tools,
+      invokeTool: (toolId, args, ctx, allowlist) =>
+        this.invokeTool(toolId, args, ctx, allowlist),
+      ctx: this.activeCtx,
+      log: this.log,
+      defaultTemperature: this.defaultTemperature,
+      maxToolRounds: prepared.constraints.maxToolRounds,
+      validateOutput: (data) => this.validateOutput(prepared, data),
+      getRepairHints: async (taskType, schemaError) => {
+        if (!this.activeCtx) return [];
+        return this.collectRepairHints(taskType, schemaError, this.activeCtx);
+      },
+    });
+  }
+
+  private toLlmToolDefinition(
+    toolId: string,
+  ): import("@rpengineext/contracts").LlmToolDefinition | null {
+    const owned = this.index.agentTools.get(toolId);
+    if (!owned) return null;
+    const def = owned.value;
+    return {
+      name: def.id,
+      description: def.description,
+      parameters:
+        def.parametersJsonSchema ??
+        ({
+          type: "object",
+          additionalProperties: true,
+        } as import("@rpengineext/contracts").JsonObject),
     };
   }
 

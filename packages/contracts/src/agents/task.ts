@@ -16,6 +16,8 @@ export const AgentTaskConstraintsSchema = z.object({
   maxRepairAttempts: z.number().int().nonnegative(),
   temperature: z.number().min(0).max(2).optional(),
   tools: z.array(z.string().min(1)).optional(),
+  /** Max model→tool→model rounds for tool-calling tasks. */
+  maxToolRounds: z.number().int().positive().optional(),
   optional: z.boolean().default(false),
 });
 

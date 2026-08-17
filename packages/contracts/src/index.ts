@@ -197,6 +197,7 @@ export {
   type OnTurnRejected,
   type AfterCommitHook,
   type SystemTurnScheduler,
+  type SystemTurnScheduleMode,
   type HelpProvider,
   type DebugDumper,
   type CliCommandProvider,
@@ -277,6 +278,10 @@ export {
 
 export type {
   LlmMessage,
+  LlmToolDefinition,
+  LlmToolCall,
+  LlmToolChoice,
+  LlmFinishReason,
   LlmCompletionRequest,
   LlmCompletionResponse,
   LlmStreamHandlers,
