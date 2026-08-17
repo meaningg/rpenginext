@@ -16,7 +16,14 @@ export const CreateSessionBodySchema = z
   })
   .strict();
 
+export const PatchSessionBodySchema = z
+  .object({
+    title: z.string().min(1).max(120),
+  })
+  .strict();
+
 export const SubmitActionBodySchema = PlayerActionSchema;
 
 export type CreatePlayerBody = z.infer<typeof CreatePlayerBodySchema>;
 export type CreateSessionBody = z.infer<typeof CreateSessionBodySchema>;
+export type PatchSessionBody = z.infer<typeof PatchSessionBodySchema>;

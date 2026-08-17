@@ -54,6 +54,16 @@ export function saveTranscript(
 }
 
 /**
+ * Removes a stored transcript for a session.
+ *
+ * @param sessionId - session key
+ */
+export function clearTranscript(sessionId: string): void {
+  if (!sessionId || typeof localStorage === "undefined") return;
+  localStorage.removeItem(TRANSCRIPT_PREFIX + sessionId);
+}
+
+/**
  * Creates a chat message id.
  */
 export function createMessageId(prefix = "msg"): string {

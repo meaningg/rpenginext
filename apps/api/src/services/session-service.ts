@@ -230,6 +230,80 @@ export class SessionService {
   }
 
   /**
+   * Renames a session owned by the player.
+   *
+   * @param player - owner
+   * @param sessionId - session id
+   * @param title - new title
+   */
+  async rename(
+    player: HostPlayer,
+    sessionId: string,
+    title: string,
+  ): Promise<Result<HostSessionRow, Failure>> {
+    const owned = this.hostDb.getSession(sessionId);
+    if (!owned.ok) return owned;
+    if (!owned.value) {
+      return err(failure("NOT_FOUND", `session not found: ${sessionId}`));
+    }
+    if (owned.value.playerId !== player.playerId) {
+      return err(failure("PERMISSION_DENIED", "session is owned by another player"));
+    }
+
+    const nextTitle = title.trim();
+    if (!nextTitle) {
+      return err(failure("VALIDATION", "title must not be empty"));
+    }
+
+    const updated = this.hostDb.updateSessionTitle(sessionId, nextTitle);
+    if (!updated.ok) return updated;
+    if (!updated.value) {
+      return err(failure("NOT_FOUND", `session not found: ${sessionId}`));
+    }
+    return ok(updated.value);
+  }
+
+  /**
+   * Detaches and stops a session owned by the player.
+   *
+   * @param player - owner
+   * @param sessionId - session id
+   */
+  async delete(
+    player: HostPlayer,
+    sessionId: string,
+  ): Promise<Result<{ sessionId: string }, Failure>> {
+    const owned = this.hostDb.getSession(sessionId);
+    if (!owned.ok) return owned;
+    if (!owned.value) {
+      return err(failure("NOT_FOUND", `session not found: ${sessionId}`));
+    }
+    if (owned.value.playerId !== player.playerId) {
+      return err(failure("PERMISSION_DENIED", "session is owned by another player"));
+    }
+
+    const removed = this.hostDb.deleteSession(sessionId);
+    if (!removed.ok) return removed;
+    if (!removed.value) {
+      return err(failure("NOT_FOUND", `session not found: ${sessionId}`));
+    }
+
+    this.attached.delete(sessionId);
+    const stopped = await this.engine.stopSession(sessionId);
+    if (!stopped.ok) {
+      // Already unloaded is fine after host unbind.
+      if (!stopped.error.message.toLowerCase().includes("not found")) {
+        this.log.warn(
+          { err: stopped.error, sessionId },
+          "engine stop after delete failed",
+        );
+      }
+    }
+
+    return ok({ sessionId });
+  }
+
+  /**
    * Submit action with ownership.
    */
   async submitAction(

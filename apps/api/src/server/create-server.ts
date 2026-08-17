@@ -6,6 +6,7 @@ import type { Logger } from "@rpengineext/logger";
 import {
   CreatePlayerBodySchema,
   CreateSessionBodySchema,
+  PatchSessionBodySchema,
   SubmitActionBodySchema,
 } from "../dto/schemas.ts";
 import { requireAuth } from "../middleware/auth.ts";
@@ -178,6 +179,35 @@ export function createApiServer(deps: ApiServerDeps) {
           return jsonError(view.error, statusForFailure(view.error));
         }
         return Response.json({ session: view.value });
+      }
+
+      if (request.method === "PATCH" && rest === "") {
+        const body = await readJson(request);
+        if (!body.ok) return body.response;
+        const parsed = PatchSessionBodySchema.safeParse(body.value);
+        if (!parsed.success) {
+          return jsonError(
+            { code: "SCHEMA_INVALID", message: "invalid patch session body" },
+            400,
+          );
+        }
+        const renamed = await sessions.rename(
+          player,
+          sessionId,
+          parsed.data.title,
+        );
+        if (!renamed.ok) {
+          return jsonError(renamed.error, statusForFailure(renamed.error));
+        }
+        return Response.json({ session: renamed.value });
+      }
+
+      if (request.method === "DELETE" && rest === "") {
+        const deleted = await sessions.delete(player, sessionId);
+        if (!deleted.ok) {
+          return jsonError(deleted.error, statusForFailure(deleted.error));
+        }
+        return Response.json(deleted.value);
       }
 
       if (request.method === "GET" && rest === "/passage") {

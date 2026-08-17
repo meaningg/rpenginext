@@ -53,7 +53,10 @@ export function withCors(response: Response, origin: string): Response {
   const headers = new Headers(response.headers);
   headers.set("Access-Control-Allow-Origin", origin);
   headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Player-Id");
-  headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  headers.set(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PATCH, DELETE, OPTIONS",
+  );
   headers.set("Access-Control-Expose-Headers", "Content-Type");
   return new Response(response.body, {
     status: response.status,

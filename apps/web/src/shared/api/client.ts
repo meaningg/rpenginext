@@ -85,8 +85,13 @@ export function savePlayer(player: PlayerCredentials): void {
   localStorage.setItem(PLAYER_KEY, JSON.stringify(player));
 }
 
+/**
+ * Ensures a local player identity exists.
+ *
+ * @param displayName - name used on first registration
+ */
 export async function ensurePlayer(
-  displayName = "Reader",
+  displayName = "Читатель",
 ): Promise<PlayerCredentials> {
   const existing = loadPlayer();
   if (existing) return existing;
@@ -109,12 +114,35 @@ export async function ensurePlayer(
   return player;
 }
 
+/**
+ * Lists story templates.
+ */
 export async function listTemplates(): Promise<StoryTemplateSummary[]> {
   const response = await fetch("/v1/templates");
   const data = await parseJson<{ templates: StoryTemplateSummary[] }>(response);
   return data.templates;
 }
 
+/**
+ * Loads one story template by id.
+ *
+ * @param templateId - template id
+ */
+export async function getTemplate(
+  templateId: string,
+): Promise<StoryTemplateSummary> {
+  const response = await fetch(
+    `/v1/templates/${encodeURIComponent(templateId)}`,
+  );
+  const data = await parseJson<{ template: StoryTemplateSummary }>(response);
+  return data.template;
+}
+
+/**
+ * Lists sessions for the player.
+ *
+ * @param player - credentials
+ */
 export async function listSessions(
   player: PlayerCredentials,
 ): Promise<SessionSummary[]> {
@@ -125,6 +153,13 @@ export async function listSessions(
   return data.sessions;
 }
 
+/**
+ * Creates a session from a template.
+ *
+ * @param player - credentials
+ * @param templateId - story template
+ * @param title - optional session title
+ */
 export async function createSession(
   player: PlayerCredentials,
   templateId: string,
@@ -138,6 +173,12 @@ export async function createSession(
   return parseJson(response);
 }
 
+/**
+ * Loads a session view.
+ *
+ * @param player - credentials
+ * @param sessionId - session id
+ */
 export async function getSession(
   player: PlayerCredentials,
   sessionId: string,
@@ -149,6 +190,52 @@ export async function getSession(
   return data.session;
 }
 
+/**
+ * Renames a session.
+ *
+ * @param player - credentials
+ * @param sessionId - session id
+ * @param title - new title
+ */
+export async function renameSession(
+  player: PlayerCredentials,
+  sessionId: string,
+  title: string,
+): Promise<SessionSummary> {
+  const response = await fetch(`/v1/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "PATCH",
+    headers: authHeaders(player),
+    body: JSON.stringify({ title }),
+  });
+  const data = await parseJson<{ session: SessionSummary }>(response);
+  return data.session;
+}
+
+/**
+ * Deletes a session ownership binding.
+ *
+ * @param player - credentials
+ * @param sessionId - session id
+ */
+export async function deleteSession(
+  player: PlayerCredentials,
+  sessionId: string,
+): Promise<void> {
+  const response = await fetch(`/v1/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+    headers: authHeaders(player),
+  });
+  await parseJson<{ sessionId: string }>(response);
+}
+
+/**
+ * Submits a free-text player action.
+ *
+ * @param player - credentials
+ * @param sessionId - session id
+ * @param body - action payload
+ * @param wait - wait for turn completion
+ */
 export async function submitAction(
   player: PlayerCredentials,
   sessionId: string,
@@ -173,6 +260,12 @@ export async function submitAction(
   return parseJson(response);
 }
 
+/**
+ * Explicitly saves a session.
+ *
+ * @param player - credentials
+ * @param sessionId - session id
+ */
 export async function saveSession(
   player: PlayerCredentials,
   sessionId: string,
@@ -192,6 +285,11 @@ export async function saveSession(
  *
  * Stream deltas yield a paint frame between events so the chat UI can
  * render progressive prose even when the proxy delivers a burst of chunks.
+ *
+ * @param player - credentials
+ * @param sessionId - session id
+ * @param onEvent - event handler
+ * @param onError - optional error handler
  */
 export function openSessionEvents(
   player: PlayerCredentials,
@@ -199,7 +297,6 @@ export function openSessionEvents(
   onEvent: (eventName: string, data: unknown) => void,
   onError?: (error: Event) => void,
 ): () => void {
-  // EventSource cannot set custom headers; use fetch stream instead.
   const controller = new AbortController();
   void (async () => {
     try {
@@ -212,7 +309,6 @@ export function openSessionEvents(
             Accept: "text/event-stream",
           },
           signal: controller.signal,
-          // Avoid any intermediate caching of the event stream.
           cache: "no-store",
         },
       );
@@ -237,7 +333,6 @@ export function openSessionEvents(
             if (line.startsWith("event:")) {
               eventName = line.slice(6).trim();
             } else if (line.startsWith("data:")) {
-              // Keep payload as-is (only strip the single leading space after "data:").
               const payload = line.startsWith("data: ")
                 ? line.slice(6)
                 : line.slice(5);
@@ -250,7 +345,6 @@ export function openSessionEvents(
           } catch {
             onEvent(eventName, dataLine);
           }
-          // Allow React to commit streaming tokens between bursted SSE events.
           if (
             eventName === "llm.stream.delta" ||
             eventName === "turn.stage" ||

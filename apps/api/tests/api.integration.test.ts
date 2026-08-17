@@ -61,5 +61,52 @@ describe("API integration", () => {
     };
     expect(turn.status).toBe("committed");
     expect(turn.passage?.prose?.length).toBeGreaterThan(0);
+
+    const renameRes = await fetch(
+      `${baseUrl}/v1/sessions/${sessionBody.session.sessionId}`,
+      {
+        method: "PATCH",
+        headers: player.headers,
+        body: JSON.stringify({ title: "Renamed session" }),
+      },
+    );
+    expect(renameRes.ok).toBe(true);
+    const renamedBody = (await renameRes.json()) as {
+      session: { title: string; sessionId: string };
+    };
+    expect(renamedBody.session.title).toBe("Renamed session");
+
+    const listBeforeDelete = await fetch(`${baseUrl}/v1/sessions`, {
+      headers: player.headers,
+    });
+    const listBeforeBody = (await listBeforeDelete.json()) as {
+      sessions: Array<{ sessionId: string }>;
+    };
+    expect(
+      listBeforeBody.sessions.some(
+        (s) => s.sessionId === sessionBody.session.sessionId,
+      ),
+    ).toBe(true);
+
+    const deleteRes = await fetch(
+      `${baseUrl}/v1/sessions/${sessionBody.session.sessionId}`,
+      {
+        method: "DELETE",
+        headers: player.headers,
+      },
+    );
+    expect(deleteRes.ok).toBe(true);
+
+    const listAfterDelete = await fetch(`${baseUrl}/v1/sessions`, {
+      headers: player.headers,
+    });
+    const listAfterBody = (await listAfterDelete.json()) as {
+      sessions: Array<{ sessionId: string }>;
+    };
+    expect(
+      listAfterBody.sessions.some(
+        (s) => s.sessionId === sessionBody.session.sessionId,
+      ),
+    ).toBe(false);
   });
 });

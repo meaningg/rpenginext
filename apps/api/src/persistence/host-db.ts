@@ -311,6 +311,56 @@ export class HostDb {
   }
 
   /**
+   * Renames a session and bumps updated_at.
+   *
+   * @param sessionId - session id
+   * @param title - new display title
+   */
+  updateSessionTitle(
+    sessionId: string,
+    title: string,
+  ): Result<HostSessionRow | null, Failure> {
+    try {
+      const now = new Date().toISOString();
+      this.db
+        .query(
+          `UPDATE player_sessions
+           SET title = ?, updated_at = ?
+           WHERE session_id = ?`,
+        )
+        .run(title, now, sessionId);
+      return this.getSession(sessionId);
+    } catch (error) {
+      return err(
+        failure("INTERNAL", "failed to rename session", {
+          details: String(error),
+        }),
+      );
+    }
+  }
+
+  /**
+   * Removes session ownership row.
+   *
+   * @param sessionId - session id
+   * @returns true when a row was deleted
+   */
+  deleteSession(sessionId: string): Result<boolean, Failure> {
+    try {
+      const result = this.db
+        .query(`DELETE FROM player_sessions WHERE session_id = ?`)
+        .run(sessionId);
+      return ok(Number(result.changes) > 0);
+    } catch (error) {
+      return err(
+        failure("INTERNAL", "failed to delete session", {
+          details: String(error),
+        }),
+      );
+    }
+  }
+
+  /**
    * Counts sessions owned by player.
    */
   countSessions(playerId: string): Result<number, Failure> {

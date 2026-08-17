@@ -12,20 +12,15 @@
 
 :root {
   color-scheme: dark;
-  --surface-0: #07070a;
-  --surface-1: #0e0e13;
-  --surface-2: #14141b;
-  --ink: #e8e6e3;
-  --ink-muted: #a8a29e;
-  --ink-faint: #78716c;
-  --accent: #a78bfa;
-  --accent-soft: rgb(167 139 250 / 0.14);
-  --border-soft: rgb(255 255 255 / 0.08);
-  --read-bg: linear-gradient(
-    180deg,
-    rgb(24 24 31 / 0.92) 0%,
-    rgb(16 16 22 / 0.96) 100%
-  );
+  --bg: #0a0a0c;
+  --bg-elevated: #121216;
+  --bg-panel: #0e0e12;
+  --fg: #ececef;
+  --fg-muted: #a1a1aa;
+  --fg-subtle: #71717a;
+  --border: rgb(255 255 255 / 0.08);
+  --accent: #f97316;
+  --read-ink: #e8e4db;
 }
 
 body {
@@ -33,8 +28,8 @@ body {
   min-height: 100dvh;
   font-family: var(--font-sans);
   font-optical-sizing: auto;
-  background: var(--surface-0);
-  color: var(--ink);
+  background: var(--bg);
+  color: var(--fg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -45,15 +40,14 @@ body {
   min-height: 100dvh;
 }
 
-/* Long-form narrative: tuned for calm reading, not chat density */
 .narrative-prose {
   font-family: var(--font-serif);
   font-optical-sizing: auto;
-  font-size: clamp(1.0625rem, 0.95rem + 0.45vw, 1.1875rem);
-  line-height: 1.8;
-  letter-spacing: 0.01em;
+  font-size: clamp(1.0625rem, 0.98rem + 0.35vw, 1.175rem);
+  line-height: 1.78;
+  letter-spacing: 0.005em;
   font-weight: 450;
-  color: #e7e2d9;
+  color: var(--read-ink);
   text-wrap: pretty;
   hyphens: auto;
   -webkit-hyphens: auto;
@@ -64,53 +58,33 @@ body {
 }
 
 .narrative-prose p + p {
-  margin-top: 1.15em;
+  margin-top: 1.05em;
 }
 
-.narrative-prose p:first-child::first-letter {
-  font-weight: 560;
-  color: #f3efe6;
+.player-action {
+  font-family: var(--font-sans);
+  font-size: 0.925rem;
+  line-height: 1.55;
+  color: rgb(212 212 216 / 0.92);
 }
 
-.narrative-panel {
-  background: var(--read-bg);
-  border: 1px solid rgb(255 255 255 / 0.07);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.04),
-    0 18px 50px -28px rgb(0 0 0 / 0.75);
-}
-
-.narrative-panel::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  border-radius: 9999px;
-  background: linear-gradient(
-    180deg,
-    rgb(196 181 253 / 0.85),
-    rgb(167 139 250 / 0.25) 55%,
-    transparent
-  );
-  opacity: 0.9;
-}
-
-.chat-shell {
-  background:
-    radial-gradient(
-      120% 80% at 50% -10%,
-      rgb(124 58 237 / 0.08),
-      transparent 55%
-    ),
-    linear-gradient(180deg, rgb(12 12 16 / 0.88), rgb(9 9 12 / 0.94));
+.stream-cursor {
+  display: inline-block;
+  width: 0.11em;
+  height: 1.05em;
+  margin-left: 0.1em;
+  vertical-align: -0.12em;
+  background: rgb(253 186 116);
+  border-radius: 1px;
+  animation: cursor-blink 1s steps(1, end) infinite;
 }
 
 .typing-dot {
   display: inline-block;
-  height: 0.35rem;
-  width: 0.35rem;
+  height: 0.32rem;
+  width: 0.32rem;
   border-radius: 9999px;
-  background: rgb(196 181 253 / 0.95);
+  background: rgb(253 186 116 / 0.95);
   animation: typing-bounce 1s ease-in-out infinite;
 }
 
@@ -146,21 +120,22 @@ body {
   }
 }
 
-.stream-cursor {
-  display: inline-block;
-  width: 0.12em;
-  height: 1.05em;
-  margin-left: 0.12em;
-  vertical-align: -0.12em;
-  background: rgb(216 180 254);
-  border-radius: 1px;
-  animation: cursor-blink 1s steps(1, end) infinite;
+.message-highlight {
+  animation: message-flash 1.2s ease-out;
 }
 
-/* Subtle scrollbar */
+@keyframes message-flash {
+  0% {
+    background: rgb(249 115 22 / 0.16);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgb(63 63 70 / 0.75) transparent;
+  scrollbar-color: rgb(63 63 70 / 0.7) transparent;
 }
 
 *::-webkit-scrollbar {
