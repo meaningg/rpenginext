@@ -12,12 +12,10 @@
     "hello": "bun run src/main.ts --once hello"
   },
   "dependencies": {
-    "@rpengineext/agents-responses": "workspace:*",
     "@rpengineext/contracts": "workspace:*",
     "@rpengineext/core": "workspace:*",
-    "@rpengineext/logger": "workspace:*",
-    "@rpengineext/module-working-memory": "workspace:*",
-    "@rpengineext/persistence-sqlite": "workspace:*"
+    "@rpengineext/host-bootstrap": "workspace:*",
+    "@rpengineext/logger": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest",

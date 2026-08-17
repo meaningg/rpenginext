@@ -5,6 +5,7 @@ import {
   type EventBusPort,
   type Failure,
   type JsonObject,
+  type LlmMessage,
   type Passage,
   type PlayerAction,
   type Result,
@@ -37,6 +38,10 @@ export interface TraceAgentRecord {
   input: JsonObject;
   output?: JsonObject;
   error?: string;
+  /** Rendered LLM chat messages (system/user/history) when includePrompts. */
+  prompts?: readonly LlmMessage[];
+  /** Raw model text before parse/schema when includeRawModelOutput. */
+  rawModelOutput?: string;
 }
 
 export interface TraceToolRecord {

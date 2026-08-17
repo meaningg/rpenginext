@@ -84,14 +84,7 @@ export function createDefaultMockAgentScript(): MockAgentScript {
     .fixed("narrative.write", {
       prose:
         "Hello turn. The story begins as you take your first step into the interactive book.",
-      choiceDrafts: [
-        {
-          id: "continue",
-          label: "Continue",
-          kind: "default",
-          enabled: true,
-        },
-      ],
+      choiceDrafts: [],
     })
     .on("action.interpret", (task) => {
       const text =

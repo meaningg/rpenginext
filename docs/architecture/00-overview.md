@@ -38,7 +38,7 @@ AI предлагает. Модули помогают и ограничиваю
 Модель ощущений: **turn-based RP book**.
 
 1. Игрок видит **Passage** (страницу): нарратив + статусные подсказки (опционально).
-2. Игрок выбирает **Choice** или вводит **free-text Action**.
+2. Игрок вводит **free-text Action** (меню choices по умолчанию **выключено** — `turn.playerChoicesEnabled: false`).
 3. Движок выполняет **один атомарный Turn**.
 4. Игрок получает новый Passage.
 
@@ -126,9 +126,12 @@ Turn = **full-atomic** транзакция:
 
 ## 7.1 Host & persistence v1
 
-- Host: **CLI**
-- Persistence: **`bun:sqlite`**
+- Hosts: **CLI**, **HTTP API** (`apps/api`), **Web UI** (`apps/web`)
+- Shared wiring: **`packages/host-bootstrap`**
+- Story templates: **`data/stories`** + **`packages/content-stories`**
+- Persistence: **`bun:sqlite`** (engine) + host identity db (`data/host.sqlite`)
 - Turn debug traces: **core** → `.md` dossiers (prompts, tools, state diff, rollback)
+- Progress: observe-only `EventBus` → API SSE (`turn.stage`, agent tasks, draft `llm.stream.delta`)
 - Product domain modules (npc/plot/…): **не в scope**, пока нет отдельной задачи
 
 ## 8. Для кого какая « Tolстая » документация

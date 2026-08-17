@@ -35,10 +35,38 @@ export type EngineEvent =
       readonly at: string;
     }
   | {
+      readonly type: "turn.stage";
+      readonly sessionId: string;
+      readonly turnId: string;
+      readonly stage: string;
+      readonly phase: "started" | "finished";
+      readonly ok?: boolean;
+      readonly at: string;
+    }
+  | {
+      readonly type: "agent.task.started";
+      readonly sessionId?: string;
+      readonly turnId: string;
+      readonly taskId: string;
+      readonly taskType: string;
+      readonly at: string;
+    }
+  | {
       readonly type: "agent.task.finished";
+      readonly sessionId?: string;
+      readonly turnId?: string;
       readonly taskId: string;
       readonly taskType: string;
       readonly ok: boolean;
+      readonly at: string;
+    }
+  | {
+      readonly type: "llm.stream.delta";
+      readonly sessionId?: string;
+      readonly turnId: string;
+      readonly taskId: string;
+      readonly taskType: string;
+      readonly text: string;
       readonly at: string;
     }
   | {

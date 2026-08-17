@@ -1,0 +1,25 @@
+{
+  "name": "@rpengineext/content-stories",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Story template catalog loader for rpengineext hosts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@rpengineext/contracts": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

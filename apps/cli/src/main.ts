@@ -1,27 +1,12 @@
 #!/usr/bin/env bun
 import path from "node:path";
 
-import { createLogger } from "@rpengineext/logger";
-import {
-  createEngine,
-  createDefaultMockAgentScript,
-  FilesystemTraceSink,
-  CORE_VERSION,
-} from "@rpengineext/core";
 import { createFixtureHelloModule } from "@rpengineext/core/testing";
-import { SqlitePersistence } from "@rpengineext/persistence-sqlite";
-import {
-  ResponsesLlmPort,
-  readHostLlmEnv,
-  resolveAgentsMode,
-} from "@rpengineext/agents-responses";
-import {
-  createWorkingMemoryModule,
-  readWorkingMemoryWindowFromEnv,
-} from "@rpengineext/module-working-memory";
+import { CORE_VERSION } from "@rpengineext/core";
+import { createHostRuntime } from "@rpengineext/host-bootstrap";
 
 /**
- * CLI host for Phase 3: sqlite + optional live LLM + fs traces.
+ * CLI host: thin argv layer over shared host-bootstrap.
  *
  * Usage:
  *   bun run apps/cli/src/main.ts --once hello
@@ -48,95 +33,28 @@ async function main(): Promise<void> {
   const sessionIdArg =
     sessionIdx >= 0 ? (args[sessionIdx + 1] ?? undefined) : undefined;
 
-  const dataDir = process.env.RP_DATA_DIR?.trim() || "data";
-  const tracesDir = path.join(dataDir, "traces");
-  const sqlitePath = process.env.RP_SQLITE_PATH?.trim() || undefined;
-
-  const log = createLogger({
-    name: "rpengineext-cli",
-    level:
-      (process.env.RP_LOG_LEVEL as "debug" | "info" | "warn" | "error") ||
-      "info",
-    json: process.env.RP_LOG_JSON === "1",
+  const boot = await createHostRuntime({
+    forceMock,
+    loggerName: "rpengineext-cli",
+    extraModules: useFixture ? [createFixtureHelloModule()] : [],
   });
 
-  const llmEnv = readHostLlmEnv(process.env);
-  const agentsMode = forceMock ? "mock" : resolveAgentsMode(llmEnv);
-  const workingMemoryWindow = readWorkingMemoryWindowFromEnv(process.env);
-
-  if (agentsMode === "llm") {
-    if (!llmEnv.apiKey || !llmEnv.baseUrl || !llmEnv.model) {
-      console.error(
-        "LLM mode requires RP_LLM_API_KEY, RP_LLM_BASE_URL, and RP_LLM_MODEL (or pass --mock).",
-      );
-      process.exitCode = 1;
-      return;
-    }
-  }
-
-  const traceSink = new FilesystemTraceSink(dataDir);
-  const persistence = await SqlitePersistence.open({
-    dataDir,
-    databaseFile: sqlitePath,
-  });
-
-  const llm =
-    agentsMode === "llm" && llmEnv.apiKey && llmEnv.baseUrl
-      ? new ResponsesLlmPort({
-          baseUrl: llmEnv.baseUrl,
-          apiKey: llmEnv.apiKey,
-          defaultModel: llmEnv.model,
-          log,
-        })
-      : undefined;
-
-  const created = await createEngine({
-    deps: {
-      log,
-      persistence,
-      traceSink,
-      llm,
-    },
-    modules: [
-      createWorkingMemoryModule({ windowPairs: workingMemoryWindow }),
-      ...(useFixture ? [createFixtureHelloModule()] : []),
-    ],
-    mockAgentScript:
-      agentsMode === "mock" ? createDefaultMockAgentScript() : undefined,
-    config: {
-      moduleConfig: {
-        working_memory: { windowPairs: workingMemoryWindow },
-      },
-      agents: {
-        mode: agentsMode,
-        defaultModel: llmEnv.model ?? "",
-        defaultTimeoutMs: llmEnv.timeoutMs ?? 60_000,
-        maxRepairAttempts: 2,
-      },
-      tracing: {
-        enabled: true,
-        directory: tracesDir,
-      },
-      persistence: {
-        policy: "per_turn",
-      },
-    },
-  });
-
-  if (!created.ok) {
-    log.error({ err: created.error }, "failed to create engine");
-    console.error(`Engine boot failed: ${created.error.message}`);
+  if (!boot.ok) {
+    console.error(`Engine boot failed: ${boot.error.message}`);
     process.exitCode = 1;
     return;
   }
 
-  const { engine, runtime } = created.value;
+  const { engine, runtime, env, persistence, created, stop } = boot.value;
+  const traceSink = created.traceSink;
+
   console.log(`rpengineext CLI (core ${CORE_VERSION})`);
-  console.log(`agents mode: ${agentsMode}`);
-  console.log(`working memory window: ${workingMemoryWindow} pairs`);
-  console.log(`data dir: ${path.resolve(dataDir)}`);
+  console.log(`agents mode: ${env.agentsMode}`);
+  console.log(`working memory window: ${env.workingMemoryWindow} pairs`);
+  console.log(`data dir: ${path.resolve(env.dataDir)}`);
   console.log(`sqlite: ${persistence.databaseFile}`);
-  console.log(`traces dir: ${path.resolve(tracesDir)}`);
+  console.log(`traces dir: ${path.resolve(env.dataDir, "traces")}`);
+  console.log(`stories: ${path.resolve(env.storiesDir)}`);
 
   const sessionResult = sessionIdArg
     ? await engine.loadSession(sessionIdArg)
@@ -146,6 +64,7 @@ async function main(): Promise<void> {
     console.error(
       `${sessionIdArg ? "loadSession" : "startSession"} failed: ${sessionResult.error.message}`,
     );
+    await stop();
     process.exitCode = 1;
     return;
   }
@@ -162,13 +81,23 @@ async function main(): Promise<void> {
   }
 
   const reportTrace = (): void => {
-    const last = traceSink.last();
+    const last =
+      traceSink &&
+      typeof traceSink === "object" &&
+      "last" in traceSink &&
+      typeof (traceSink as { last: () => unknown }).last === "function"
+        ? (
+            traceSink as {
+              last: () => { path?: string; markdown?: string } | undefined;
+            }
+          ).last()
+        : undefined;
     if (!last) {
       console.log("trace: (not written)");
       return;
     }
-    console.log(`trace: ${last.path}`);
-    if (printTrace) {
+    console.log(`trace: ${last.path ?? "(memory)"}`);
+    if (printTrace && last.markdown) {
       console.log("");
       console.log("— Turn trace —");
       console.log(last.markdown);
@@ -184,13 +113,6 @@ async function main(): Promise<void> {
       console.log("");
       console.log("— Passage —");
       console.log(result.passage.prose);
-      if (result.passage.choices.length > 0) {
-        console.log("");
-        console.log("Choices:");
-        for (const choice of result.passage.choices) {
-          console.log(`  [${choice.id}] ${choice.label}`);
-        }
-      }
       console.log("");
       console.log(
         `committed turn=${result.turnId} revision=${result.revision}`,
@@ -207,8 +129,7 @@ async function main(): Promise<void> {
 
   if (onceText !== null) {
     const code = await runOnce(onceText);
-    await engine.stop();
-    persistence.close();
+    await stop();
     process.exitCode = code;
     return;
   }
@@ -220,8 +141,7 @@ async function main(): Promise<void> {
     const prompt = async (): Promise<void> => {
       const line = await readLine("> ");
       if (line === null || line === "/quit" || line === "/exit") {
-        await engine.stop();
-        persistence.close();
+        await stop();
         return;
       }
       if (line.trim().length === 0) {
@@ -243,7 +163,8 @@ async function main(): Promise<void> {
         return prompt();
       }
       if (line.trim() === "/help" || line.startsWith("/help ")) {
-        const topic = line.trim() === "/help" ? undefined : line.trim().slice(6);
+        const topic =
+          line.trim() === "/help" ? undefined : line.trim().slice(6);
         const state = runtime.getSessionState(session.sessionId);
         if (!state) {
           console.error("no session state");
@@ -264,7 +185,7 @@ async function main(): Promise<void> {
               taskId: task.taskId,
               error: { code: "CLI", message: "no agents in /help" },
             }),
-            log,
+            log: boot.value.log,
             trace: { note: () => undefined },
             extras: {},
           },
@@ -305,10 +226,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  // default: hello once
   const code = await runOnce("hello");
-  await engine.stop();
-  persistence.close();
+  await stop();
   process.exitCode = code;
 }
 

@@ -109,6 +109,27 @@ export function renderTurnTraceMarkdown(
       lines.push(stableJson(trunc(agent.input)));
       lines.push("```");
       lines.push("");
+      if (agent.prompts && agent.prompts.length > 0) {
+        lines.push("#### Prompts");
+        lines.push("");
+        for (let i = 0; i < agent.prompts.length; i++) {
+          const msg = agent.prompts[i]!;
+          lines.push(`##### [${i}] role="${msg.role}"`);
+          lines.push("");
+          lines.push("```");
+          lines.push(String(trunc(msg.content)));
+          lines.push("```");
+          lines.push("");
+        }
+      }
+      if (agent.rawModelOutput !== undefined) {
+        lines.push("#### Raw model output");
+        lines.push("");
+        lines.push("```");
+        lines.push(String(trunc(agent.rawModelOutput)));
+        lines.push("```");
+        lines.push("");
+      }
       lines.push("#### Output");
       lines.push("");
       lines.push("```json");

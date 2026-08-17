@@ -9,20 +9,27 @@
 rpengineext/
   apps/
     cli/                         # player/dev host
+    api/                         # HTTP REST + SSE host
+    web/                         # React + Tailwind UI
   packages/
     contracts/                   # public schemas & ports (semver heart)
     core/                        # stable engine
+    host-bootstrap/              # shared CLI/API composition root
+    content-stories/             # story template catalog loader
     shared/                      # pure helpers
     agents/
-      openai-compatible/         # example adapter
+      responses/                 # Responses API LlmPort
     persistence/
       sqlite/                    # bun:sqlite driver (v1)
     modules/
+      working-memory/
       npc/
       plot-controller/
       fandom-canon/
       summarizer/
     testing/                     # test runtime helpers
+  data/
+    stories/                     # JSON story templates
   docs/
     architecture/                # this set
     adr/
@@ -36,7 +43,10 @@ rpengineext/
 ## 2. Dependency rules
 
 ```text
-apps → core, modules(load), persistence, agents, contracts
+apps/cli, apps/api → host-bootstrap, core, modules(load), persistence, agents, contracts, content-stories
+apps/web → HTTP API only (no core/packages runtime imports)
+host-bootstrap → core, contracts, logger, persistence, agents, modules, content-stories
+content-stories → contracts
 core → contracts, shared
 modules/* → contracts, shared
 agents/* → contracts, shared

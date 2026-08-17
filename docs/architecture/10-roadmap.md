@@ -78,6 +78,9 @@
       AgentTaskContributor@narrate; repair hints → LLM; conflict path match;
       moduleConfig boot validation; memory-kind validate; dead code removed
 - [ ] Richer CLI UX polish (host app; core APIs ready via HostSurface)
+- [x] HTTP API host (`apps/api`) + React web UI (`apps/web`) + shared `host-bootstrap`
+- [x] Story templates catalog (`data/stories` + `content-stories`)
+- [x] SSE turn progress + optional draft LLM stream deltas (non-authoritative until commit)
 - [ ] Content safety hooks (optional, deferred)
 
 **Exit:** core matches normative extension surface + hardening; unit/integration tests green. ✅

@@ -6,6 +6,7 @@ import {
   type LlmCompletionRequest,
   type LlmCompletionResponse,
   type LlmPort,
+  type LlmStreamHandlers,
   type Result,
   type TurnLogger,
 } from "@rpengineext/contracts";
@@ -71,6 +72,36 @@ export class ResponsesLlmPort implements LlmPort {
   async complete(
     request: LlmCompletionRequest,
   ): Promise<Result<LlmCompletionResponse, Failure>> {
+    return this.completeInternal(request, undefined);
+  }
+
+  /**
+   * @inheritdoc
+   */
+  async completeStream(
+    request: LlmCompletionRequest,
+    handlers: LlmStreamHandlers,
+  ): Promise<Result<LlmCompletionResponse, Failure>> {
+    const streamed = await this.completeInternal(request, handlers);
+    if (streamed.ok) {
+      return streamed;
+    }
+    // Fallback: non-stream complete + synthetic deltas for UI continuity.
+    this.log?.warn(
+      { code: streamed.error.code },
+      "stream completion failed; falling back to non-stream",
+    );
+    const fallback = await this.completeInternal(request, undefined);
+    if (fallback.ok) {
+      emitChunked(fallback.value.text, handlers.onDelta);
+    }
+    return fallback;
+  }
+
+  private async completeInternal(
+    request: LlmCompletionRequest,
+    handlers: LlmStreamHandlers | undefined,
+  ): Promise<Result<LlmCompletionResponse, Failure>> {
     const model = request.model || this.defaultModel;
     if (!model) {
       return err(failure("CONFIG_INVALID", "LLM model is required"));
@@ -82,14 +113,19 @@ export class ResponsesLlmPort implements LlmPort {
       wantsJson &&
       this.preferJsonObjectFormat &&
       this.jsonFormatSupported !== false;
+    const stream = handlers !== undefined;
 
     const firstBody = useJsonFormat
       ? mapCompletionToResponsesBody(normalized, {
           preferJsonObjectFormat: true,
+          stream,
         })
-      : mapCompletionToResponsesBodyWithoutJsonFormat(normalized);
+      : {
+          ...mapCompletionToResponsesBodyWithoutJsonFormat(normalized),
+          stream,
+        };
 
-    const first = await this.post(firstBody, request.timeoutMs);
+    const first = await this.post(firstBody, request.timeoutMs, handlers);
     if (first.ok) {
       if (useJsonFormat) {
         this.jsonFormatSupported = true;
@@ -108,8 +144,11 @@ export class ResponsesLlmPort implements LlmPort {
         "responses json_object format rejected; retrying without text.format",
       );
       this.jsonFormatSupported = false;
-      const retryBody = mapCompletionToResponsesBodyWithoutJsonFormat(normalized);
-      return await this.post(retryBody, request.timeoutMs);
+      const retryBody = {
+        ...mapCompletionToResponsesBodyWithoutJsonFormat(normalized),
+        stream,
+      };
+      return await this.post(retryBody, request.timeoutMs, handlers);
     }
 
     return first;
@@ -118,6 +157,7 @@ export class ResponsesLlmPort implements LlmPort {
   private async post(
     body: ResponsesRequestBody,
     timeoutMs?: number,
+    handlers?: LlmStreamHandlers,
   ): Promise<Result<LlmCompletionResponse, Failure>> {
     const url = `${this.baseUrl}/responses`;
     const started = Date.now();
@@ -136,6 +176,7 @@ export class ResponsesLlmPort implements LlmPort {
           headers: {
             Authorization: `Bearer ${this.apiKey}`,
             "Content-Type": "application/json",
+            ...(body.stream ? { Accept: "text/event-stream" } : {}),
           },
           body: JSON.stringify(body),
           signal: controller.signal,
@@ -144,10 +185,9 @@ export class ResponsesLlmPort implements LlmPort {
         if (timer) clearTimeout(timer);
       }
 
-      const rawText = await response.text();
-      const durationMs = Date.now() - started;
-
       if (!response.ok) {
+        const rawText = await response.text();
+        const durationMs = Date.now() - started;
         this.log?.warn(
           {
             status: response.status,
@@ -165,6 +205,27 @@ export class ResponsesLlmPort implements LlmPort {
           }),
         );
       }
+
+      if (body.stream) {
+        const streamed = await readResponsesSse(response, handlers?.onDelta);
+        const durationMs = Date.now() - started;
+        if (!streamed.ok) {
+          return streamed;
+        }
+        this.log?.info(
+          {
+            model: body.model,
+            durationMs,
+            usage: streamed.value.usage,
+            streamed: true,
+          },
+          "responses stream completion ok",
+        );
+        return streamed;
+      }
+
+      const rawText = await response.text();
+      const durationMs = Date.now() - started;
 
       let payload: unknown;
       try {
@@ -205,6 +266,118 @@ export class ResponsesLlmPort implements LlmPort {
         }),
       );
     }
+  }
+}
+
+async function readResponsesSse(
+  response: Response,
+  onDelta?: (text: string) => void,
+): Promise<Result<LlmCompletionResponse, Failure>> {
+  const body = response.body;
+  if (!body) {
+    return err(failure("LLM_PARSE", "LLM stream response has no body"));
+  }
+
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  let usage: LlmCompletionResponse["usage"];
+  let completedPayload: unknown;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n");
+      buffer = parts.pop() ?? "";
+      for (const line of parts) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const data = trimmed.slice(5).trim();
+        if (!data || data === "[DONE]") continue;
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(data);
+        } catch {
+          continue;
+        }
+        if (!parsed || typeof parsed !== "object") continue;
+        const obj = parsed as Record<string, unknown>;
+        const type = typeof obj.type === "string" ? obj.type : "";
+        const delta =
+          typeof obj.delta === "string"
+            ? obj.delta
+            : typeof obj.text === "string"
+              ? obj.text
+              : undefined;
+        if (
+          delta &&
+          (type.includes("delta") ||
+            type.includes("output_text") ||
+            type === "content.delta")
+        ) {
+          text += delta;
+          onDelta?.(delta);
+        }
+        if (type === "response.completed" || type.endsWith(".completed")) {
+          completedPayload = obj.response ?? obj;
+        }
+        if (obj.usage && typeof obj.usage === "object") {
+          const u = obj.usage as Record<string, unknown>;
+          usage = {
+            promptTokens:
+              typeof u.input_tokens === "number"
+                ? u.input_tokens
+                : typeof u.prompt_tokens === "number"
+                  ? u.prompt_tokens
+                  : undefined,
+            completionTokens:
+              typeof u.output_tokens === "number"
+                ? u.output_tokens
+                : typeof u.completion_tokens === "number"
+                  ? u.completion_tokens
+                  : undefined,
+            totalTokens:
+              typeof u.total_tokens === "number" ? u.total_tokens : undefined,
+          };
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (completedPayload) {
+    const mapped = mapResponsesPayloadToCompletion(completedPayload);
+    if (mapped.ok) {
+      if (!text && mapped.value.text) {
+        emitChunked(mapped.value.text, onDelta);
+      }
+      return mapped;
+    }
+  }
+
+  if (!text) {
+    return err(failure("LLM_PARSE", "empty LLM stream"));
+  }
+
+  return ok({
+    text,
+    usage,
+    raw: { streamed: true },
+  });
+}
+
+function emitChunked(
+  text: string,
+  onDelta?: (chunk: string) => void,
+  chunkSize = 48,
+): void {
+  if (!onDelta || !text) return;
+  for (let i = 0; i < text.length; i += chunkSize) {
+    onDelta(text.slice(i, i + chunkSize));
   }
 }
 

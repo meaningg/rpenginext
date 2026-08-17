@@ -1,6 +1,6 @@
 # rpengineext
 
-Движок пошаговой ролевой игры в формате интерактивной книги.
+Движок пошаговой ролевой игры в формате интерактивной книги (**free-text** действия игрока; без меню choices по умолчанию).
 
 - **Core** — стабильное ядро: атомарные ходы, state, pipeline, оркестрация агентов.
 - **Modules** — независимые расширения (NPC, plot, fandom-canon, summarizer, …).
@@ -51,7 +51,8 @@ Player Action
 Working memory (always-on in CLI): env `RP_WORKING_MEMORY_WINDOW` = N **pairs**
 injected into `narrative.write` as chat history; full archive lives in slice `working_memory`.
 
-v1 host: **CLI**. v1 persistence: **bun:sqlite**.  
+v1 hosts: **CLI** + **HTTP API** (`apps/api`) + **Web UI** (`apps/web`).  
+v1 persistence: **bun:sqlite**.  
 v1 debug: core пишет подробные **turn `.md` traces** (state diff, LLM I/O, tool calls).  
 Доменные modules — отдельными задачами.
 
@@ -65,6 +66,13 @@ bun run cli:hello --mock --fixture
 bun run cli:book --mock
 ```
 
+Web UI (two terminals, localhost):
+
+```bash
+bun run api:mock          # http://127.0.0.1:8787
+bun run web               # http://127.0.0.1:5173 (proxies /v1 → API)
+```
+
 Live LLM (after copying `.env.example` → `.env`):
 
 ```bash
@@ -72,6 +80,8 @@ cp .env.example .env
 # set RP_LLM_API_KEY, RP_LLM_BASE_URL, RP_LLM_MODEL
 bun run cli:hello
 bun run cli:book
+bun run api
+bun run web
 # resume: bun run apps/cli/src/main.ts --session <id> --repl
 ```
 
@@ -87,6 +97,10 @@ Stack target: **Bun + TypeScript** monorepo (`packages/*`, `packages/*/*`, `apps
 | [`@rpengineext/persistence-sqlite`](./packages/persistence/sqlite) | ready | bun:sqlite `PersistencePort` + atomic `commitTurn` |
 | [`@rpengineext/agents-responses`](./packages/agents/responses) | ready | Responses API `LlmPort` (`POST /v1/responses`) |
 | [`@rpengineext/cli`](./apps/cli) | ready | hello turn / REPL book loop, save/load |
+| [`@rpengineext/api`](./apps/api) | ready | REST + SSE host, multi-player local sessions |
+| [`@rpengineext/web`](./apps/web) | ready | React + Tailwind book UI |
+| [`@rpengineext/host-bootstrap`](./packages/host-bootstrap) | ready | shared CLI/API engine wiring |
+| [`@rpengineext/content-stories`](./packages/content-stories) | ready | story template catalog (`data/stories`) |
 | [`@rpengineext/module-working-memory`](./packages/modules/working-memory) | ready | last-N chat pairs for narrative + full pair archive in session state |
 | product modules (npc/plot/…) | planned | Phase 5+ separate tasks |
 

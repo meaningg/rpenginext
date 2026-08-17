@@ -33,6 +33,7 @@ describe("llm narrative path", () => {
       ok({
         text: JSON.stringify({
           prose: "The lantern flares. A real LLM path writes this line.",
+          // Even if the model emits drafts, free-text mode strips them from passage.
           choiceDrafts: [{ id: "go", label: "Go on", kind: "default", enabled: true }],
         }),
         usage: { promptTokens: 3, completionTokens: 5, totalTokens: 8 },
@@ -58,9 +59,26 @@ describe("llm narrative path", () => {
     expect(result.status).toBe("committed");
     if (result.status !== "committed") return;
     expect(result.passage.prose).toContain("lantern");
+    expect(result.passage.choices).toEqual([]);
     expect(llm.calls.length).toBeGreaterThanOrEqual(1);
     expect(llm.calls[0]?.model).toBe("fake-model");
     expect(llm.calls[0]?.responseFormat).toBe("json");
+    expect(String(llm.calls[0]?.messages[0]?.content ?? "")).toContain(
+      "game master",
+    );
+    const userMsg = String(
+      llm.calls[0]?.messages[llm.calls[0]!.messages.length - 1]?.content ?? "",
+    );
+    expect(userMsg).toContain("CURRENT PLAYER ACTION");
+    expect(userMsg).toContain("look around");
+    expect(userMsg).toContain('"text": "look around"');
+
+    const md = created.value.memoryTraceSink.last()?.markdown ?? "";
+    expect(md).toContain("#### Prompts");
+    expect(md).toContain('role="system"');
+    expect(md).toContain("game master");
+    expect(md).toContain("#### Raw model output");
+    expect(md).toContain("The lantern flares");
   });
 
   test("LLM failure rolls back authoritative state", async () => {
@@ -106,6 +124,10 @@ describe("llm narrative path", () => {
     const trace = memoryTraceSink.last();
     expect(trace?.markdown).toContain("outcome: **rejected**");
     expect(trace?.markdown).toContain("ROLLBACK");
+    // Prompts still captured when the LLM call was built before upstream failure.
+    expect(trace?.markdown).toContain("#### Prompts");
+    expect(trace?.markdown).toContain('role="system"');
+    expect(trace?.markdown).toContain("game master");
   });
 
   test("invalid JSON then repair succeeds", async () => {

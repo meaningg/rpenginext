@@ -1,13 +1,13 @@
 import type { LlmCompletionRequest, LlmMessage } from "@rpengineext/contracts";
 
 /**
- * Wire body for POST /v1/responses (non-streaming, stateless).
+ * Wire body for POST /v1/responses (stateless).
  */
 export interface ResponsesRequestBody {
   readonly model: string;
   readonly input: string | ResponsesInputItem[];
   readonly instructions?: string;
-  readonly stream: false;
+  readonly stream: boolean;
   readonly store: false;
   readonly temperature?: number;
   readonly max_output_tokens?: number;
@@ -24,6 +24,8 @@ export interface ResponsesInputItem {
 export interface MapRequestOptions {
   /** When true, request JSON object format (may be unsupported by some gateways). */
   readonly preferJsonObjectFormat: boolean;
+  /** When true, request provider SSE streaming. */
+  readonly stream?: boolean;
 }
 
 /**
@@ -41,7 +43,7 @@ export function mapCompletionToResponsesBody(
   const body: ResponsesRequestBody = {
     model: request.model,
     input,
-    stream: false,
+    stream: options.stream === true,
     store: false,
     ...(instructions !== undefined ? { instructions } : {}),
     ...(request.temperature !== undefined

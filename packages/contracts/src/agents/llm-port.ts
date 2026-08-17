@@ -35,6 +35,18 @@ export interface LlmCompletionResponse {
 }
 
 /**
+ * Handlers for optional token/text streaming on {@link LlmPort.completeStream}.
+ */
+export interface LlmStreamHandlers {
+  /**
+   * Called for each incremental text chunk (may be empty; ignore empties).
+   *
+   * @param text - delta text fragment
+   */
+  readonly onDelta: (text: string) => void;
+}
+
+/**
  * Port implemented by `packages/agents/*` adapters. Core depends only on this.
  */
 export interface LlmPort {
@@ -45,5 +57,18 @@ export interface LlmPort {
    */
   complete(
     request: LlmCompletionRequest,
+  ): Promise<Result<LlmCompletionResponse, Failure>>;
+
+  /**
+   * Optional streaming completion. Implementations should still return the full
+   * final text in the Result (same contract as {@link complete}).
+   * Hosts/UI may treat deltas as draft-only until turn commit.
+   *
+   * @param request - provider-agnostic request
+   * @param handlers - stream callbacks
+   */
+  completeStream?(
+    request: LlmCompletionRequest,
+    handlers: LlmStreamHandlers,
   ): Promise<Result<LlmCompletionResponse, Failure>>;
 }

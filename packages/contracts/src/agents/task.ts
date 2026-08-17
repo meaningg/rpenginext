@@ -60,12 +60,15 @@ export const AgentResultSchema = z.discriminatedUnion("ok", [
     taskId: IdStringSchema,
     data: JsonObjectSchema,
     usage: TokenUsageSchema.optional(),
+    /** Adapter audit bag (prompts, raw text, model) — no secrets. */
     rawMeta: JsonObjectSchema.optional(),
   }),
   z.object({
     ok: z.literal(false),
     taskId: IdStringSchema,
     error: AgentErrorSchema,
+    /** Present when the adapter built an LLM request before failing. */
+    rawMeta: JsonObjectSchema.optional(),
   }),
 ]);
 

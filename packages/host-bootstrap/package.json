@@ -1,0 +1,30 @@
+{
+  "name": "@rpengineext/host-bootstrap",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared host composition root for CLI and API",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@rpengineext/agents-responses": "workspace:*",
+    "@rpengineext/content-stories": "workspace:*",
+    "@rpengineext/contracts": "workspace:*",
+    "@rpengineext/core": "workspace:*",
+    "@rpengineext/logger": "workspace:*",
+    "@rpengineext/module-working-memory": "workspace:*",
+    "@rpengineext/persistence-sqlite": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

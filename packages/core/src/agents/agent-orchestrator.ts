@@ -28,6 +28,7 @@ import {
   type MockAgentScript,
 } from "./mock-agent-script.ts";
 import { StandardTaskLlmAdapter } from "./standard-task-llm-adapter.ts";
+import { narrativeProseDelta } from "./stream-prose.ts";
 
 export type AgentsRuntimeMode = "mock" | "llm";
 
@@ -49,6 +50,8 @@ export interface AgentOrchestratorOptions {
   readonly getModulePermissions?: (
     moduleId: string,
   ) => readonly PermissionToken[];
+  /** Prefer LlmPort streaming and emit draft deltas. */
+  readonly streaming?: boolean;
 }
 
 export interface ToolInvokeRecord {
@@ -77,6 +80,9 @@ export class AgentOrchestrator {
   private readonly getModulePermissions?: (
     moduleId: string,
   ) => readonly PermissionToken[];
+  private readonly streaming: boolean;
+    /** Raw narrative.write stream buffers keyed by taskId (for prose extraction). */
+    private readonly narrativeStreamBuffers = new Map<string, string>();
   private lastToolCalls: ToolInvokeRecord[] = [];
   /** Active turn context for repair-hint providers (set by pipeline). */
   private activeCtx: TurnContext | null = null;
@@ -95,6 +101,7 @@ export class AgentOrchestrator {
     this.mode = options.mode ?? (options.llm ? "llm" : "mock");
     this.maxParallelPerTurn = Math.max(1, options.maxParallelPerTurn ?? 4);
     this.getModulePermissions = options.getModulePermissions;
+    this.streaming = options.streaming ?? true;
     this.llmAdapter = options.llm
       ? new StandardTaskLlmAdapter({
           llm: options.llm,
@@ -356,6 +363,7 @@ export class AgentOrchestrator {
       { taskId: task.taskId, type: task.type, mode: this.mode },
       "agent task start",
     );
+    this.emitStarted(task);
 
     if (
       task.requester.kind === "module" &&
@@ -414,6 +422,7 @@ export class AgentOrchestrator {
             message: validated.error.message,
             details: validated.error.details,
           },
+          rawMeta: raw.rawMeta,
         };
       }
 
@@ -450,15 +459,25 @@ export class AgentOrchestrator {
       },
     };
 
+    const streamOpts = {
+      ...repairOpts,
+      streaming: this.streaming,
+      onDelta: (text: string) => this.emitStreamDelta(task, text),
+    };
+
     if (this.mode === "mock") {
       const mock = this.mockScript.get(task.type);
       if (mock) {
-        return await mock(task);
+        const result = await mock(task);
+        if (result.ok && this.streaming) {
+          await this.emitMockStream(task, result.data);
+        }
+        return result;
       }
       if (this.llmAdapter?.supports(task.type)) {
         return await this.llmAdapter.execute(
           withDefaultRepairs(task, this.maxRepairAttempts),
-          repairOpts,
+          streamOpts,
         );
       }
       return {
@@ -474,7 +493,7 @@ export class AgentOrchestrator {
     if (this.llmAdapter?.supports(task.type)) {
       return await this.llmAdapter.execute(
         withDefaultRepairs(task, this.maxRepairAttempts),
-        repairOpts,
+        streamOpts,
       );
     }
 
@@ -524,14 +543,75 @@ export class AgentOrchestrator {
     return ok(parsed.data as JsonObject);
   }
 
+  private emitStarted(task: AgentTask): void {
+    this.events?.publish({
+      type: "agent.task.started",
+      sessionId: this.activeCtx?.sessionId,
+      turnId: task.turnId,
+      taskId: task.taskId,
+      taskType: task.type,
+      at: this.clock.nowIso(),
+    });
+  }
+
   private emitFinished(task: AgentTask, success: boolean): void {
+    this.clearNarrativeStream(task.taskId);
     this.events?.publish({
       type: "agent.task.finished",
+      sessionId: this.activeCtx?.sessionId,
+      turnId: task.turnId,
       taskId: task.taskId,
       taskType: task.type,
       ok: success,
       at: this.clock.nowIso(),
     });
+  }
+
+  /**
+   * Publishes a non-authoritative LLM stream delta for hosts/UI.
+   *
+   * @param task - agent task
+   * @param text - delta fragment
+   */
+  emitStreamDelta(task: AgentTask, text: string): void {
+    if (!text) return;
+
+    let out = text;
+    if (task.type === "narrative.write") {
+      const prev = this.narrativeStreamBuffers.get(task.taskId) ?? "";
+      const { nextRaw, proseDelta } = narrativeProseDelta(prev, text);
+      this.narrativeStreamBuffers.set(task.taskId, nextRaw);
+      if (!proseDelta) return;
+      out = proseDelta;
+    }
+
+    this.events?.publish({
+      type: "llm.stream.delta",
+      sessionId: this.activeCtx?.sessionId,
+      turnId: task.turnId,
+      taskId: task.taskId,
+      taskType: task.type,
+      text: out,
+      at: this.clock.nowIso(),
+    });
+  }
+
+  private clearNarrativeStream(taskId: string): void {
+    this.narrativeStreamBuffers.delete(taskId);
+  }
+
+  private async emitMockStream(
+    task: AgentTask,
+    data: JsonObject,
+  ): Promise<void> {
+    const prose =
+      typeof data.prose === "string" ? data.prose : JSON.stringify(data);
+    const chunkSize = 28;
+    for (let i = 0; i < prose.length; i += chunkSize) {
+      this.emitStreamDelta(task, prose.slice(i, i + chunkSize));
+      // Yield so SSE clients can paint progressive draft text.
+      await sleep(16);
+    }
   }
 
   private toolFail(
@@ -582,3 +662,7 @@ function builtinOutputSchema(
 }
 
 export type { AgentTaskTypeDefinition };
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

@@ -32,12 +32,19 @@ export type NarrativeHistoryMessage = z.infer<
  */
 export const NarrativeWriteInputSchema = z.object({
   brief: JsonObjectSchema,
+  /**
+   * Current-turn player action the GM must resolve now.
+   * Also mirrored under brief.playerAction for prompt builders.
+   */
+  playerAction: JsonObjectSchema.optional(),
   style: JsonObjectSchema.optional(),
   locale: z.string().min(1).optional(),
-  maxChoices: z.number().int().positive().optional(),
+  /** 0 = free-text only (no player choice menu). */
+  maxChoices: z.number().int().nonnegative().optional(),
   /**
    * Prior user/assistant pairs flattened as chat messages.
    * Expected order: user, assistant, user, assistant, …
+   * Does NOT include the current turn action.
    */
   history: z.array(NarrativeHistoryMessageSchema).optional(),
 });

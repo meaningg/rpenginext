@@ -283,6 +283,7 @@ export type {
   LlmMessage,
   LlmCompletionRequest,
   LlmCompletionResponse,
+  LlmStreamHandlers,
   LlmPort,
 } from "./agents/llm-port.ts";
 

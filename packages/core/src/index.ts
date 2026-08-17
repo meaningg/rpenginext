@@ -14,6 +14,11 @@ export type {
 } from "./create-engine.ts";
 export type { EngineConfig } from "./config/types.ts";
 export { DEFAULT_ENGINE_CONFIG, mergeEngineConfig } from "./config/defaults.ts";
+export {
+  DEFAULT_TURN_LOCALE,
+  normalizeLocale,
+  resolveTurnLocale,
+} from "./util/locale.ts";
 export { StateKernel } from "./state/state-kernel.ts";
 export { ModuleRegistry } from "./registry/module-registry.ts";
 export { AgentOrchestrator } from "./agents/agent-orchestrator.ts";

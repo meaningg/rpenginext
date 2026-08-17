@@ -9,6 +9,7 @@ import {
   ok,
   proposePermissionForSlice,
   type ActionIntent,
+  type AgentResult,
   type AgentTask,
   type Choice,
   type EventBusPort,
@@ -32,12 +33,20 @@ import {
 } from "@rpengineext/contracts";
 
 import type { AgentOrchestrator } from "../agents/agent-orchestrator.ts";
+import {
+  extractLlmMessages,
+  extractRawModelOutput,
+} from "../agents/llm-audit-meta.ts";
 import type { EngineConfig } from "../config/types.ts";
 import type { ContributionIndex } from "../registry/contribution-index.ts";
 import type { StateKernel } from "../state/state-kernel.ts";
-import type { TurnTracer } from "../tracing/turn-tracer.ts";
+import type {
+  TraceAgentRecord,
+  TurnTracer,
+} from "../tracing/turn-tracer.ts";
 import type { Clock } from "../util/clock.ts";
 import { createCommandId, createPassageId, createTaskId } from "../util/ids.ts";
+import { resolveTurnLocale } from "../util/locale.ts";
 import { createSeededRng } from "../util/rng.ts";
 import { diffWorldState } from "../util/state-diff.ts";
 import { deepClone } from "../util/clone.ts";
@@ -243,15 +252,9 @@ export class TurnPipeline {
           };
         }
         const result = await this.orchestrator.execute(task);
-        this.tracer.recordAgent({
-          taskId: task.taskId,
-          type: task.type,
-          requester: `${task.requester.kind}:${task.requester.id}`,
-          status: result.ok ? "ok" : "fail",
-          input: task.input,
-          output: result.ok ? result.data : undefined,
-          error: result.ok ? undefined : result.error.message,
-        });
+        this.tracer.recordAgent(
+          this.toTraceAgentRecord(task, result),
+        );
         for (const tool of this.orchestrator.drainToolCalls()) {
           this.tracer.recordTool({
             toolName: tool.toolName,
@@ -384,6 +387,15 @@ export class TurnPipeline {
 
     const isAgentStage = scratch.agentQueueOpen;
 
+    this.events.publish({
+      type: "turn.stage",
+      sessionId: session.sessionId,
+      turnId: scratch.turnId,
+      stage,
+      phase: "started",
+      at: this.clock.nowIso(),
+    });
+
     const run = async (): Promise<Result<void, Failure>> => {
       const before = await this.runInterceptors(stage, "before", scratch, ctx);
       if (!before.ok) return before;
@@ -427,6 +439,15 @@ export class TurnPipeline {
           durationMs,
           notes: timed.error.message,
         });
+        this.events.publish({
+          type: "turn.stage",
+          sessionId: session.sessionId,
+          turnId: scratch.turnId,
+          stage,
+          phase: "finished",
+          ok: false,
+          at: this.clock.nowIso(),
+        });
         return timed;
       }
       if (!timed.value.ok) {
@@ -436,12 +457,30 @@ export class TurnPipeline {
           durationMs,
           notes: timed.value.error.message,
         });
+        this.events.publish({
+          type: "turn.stage",
+          sessionId: session.sessionId,
+          turnId: scratch.turnId,
+          stage,
+          phase: "finished",
+          ok: false,
+          at: this.clock.nowIso(),
+        });
         return timed.value;
       }
       this.tracer.recordStage({
         stage,
         status: "ok",
         durationMs,
+      });
+      this.events.publish({
+        type: "turn.stage",
+        sessionId: session.sessionId,
+        turnId: scratch.turnId,
+        stage,
+        phase: "finished",
+        ok: true,
+        at: this.clock.nowIso(),
       });
       return ok(undefined);
     } finally {
@@ -473,7 +512,7 @@ export class TurnPipeline {
       case "validate_commands":
         return this.stageValidate(session, scratch, ctx);
       case "narrate":
-        return this.stageNarrate(scratch, ctx);
+        return this.stageNarrate(session, scratch, ctx);
       case "present": {
         const presented = await this.stagePresent(scratch, ctx);
         if (!presented.ok) return presented;
@@ -521,15 +560,7 @@ export class TurnPipeline {
     for (let i = 0; i < tasks.length; i++) {
       const task = tasks[i]!;
       const result = results[i]!;
-      this.tracer.recordAgent({
-        taskId: task.taskId,
-        type: task.type,
-        requester: `${task.requester.kind}:${task.requester.id}`,
-        status: result.ok ? "ok" : "fail",
-        input: task.input,
-        output: result.ok ? result.data : undefined,
-        error: result.ok ? undefined : result.error.message,
-      });
+      this.tracer.recordAgent(this.toTraceAgentRecord(task, result));
       if (result.ok) {
         scratch.extras[`agent.${task.type}.${task.taskId}`] = result.data;
       }
@@ -565,6 +596,14 @@ export class TurnPipeline {
     let extras: JsonObject = emptyJsonObject();
 
     if (raw.kind === "choice") {
+      if (!this.config.turn.playerChoicesEnabled) {
+        return err(
+          failure(
+            "INVALID_INPUT",
+            "choice actions are disabled; use free_text only",
+          ),
+        );
+      }
       if (!raw.choiceId) {
         return err(failure("INVALID_INPUT", "choice action requires choiceId"));
       }
@@ -1165,6 +1204,7 @@ export class TurnPipeline {
   }
 
   private async stageNarrate(
+    session: SessionTurnState,
     scratch: TurnScratch,
     ctx: ReturnType<typeof createTurnContext>,
   ): Promise<Result<void, Failure>> {
@@ -1229,10 +1269,12 @@ export class TurnPipeline {
       (a, b) => a.priority - b.priority || a.id.localeCompare(b.id),
     );
 
+    const locale = resolveTurnLocale(session.meta, this.config.turn.locale);
+
     const localeStrings: Record<string, string> = {};
     for (const owned of this.index.localizationContributors) {
       const result = await owned.value.provide(
-        { locale: this.config.turn.locale },
+        { locale },
         this.moduleCtx(owned.moduleId, ctx),
       );
       if (!result.ok) return result;
@@ -1243,7 +1285,26 @@ export class TurnPipeline {
       (scratch.extras["core.resourceCosts"] as Record<string, number> | undefined) ??
       undefined;
 
+    for (const owned of this.index.narrativeContextProviders) {
+      const result = await owned.value.provide(
+        { draft, intent },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
+      if (!result.ok) return result;
+      namespaces[result.value.namespace] = result.value.data;
+    }
+
+    const history = extractNarrativeHistory(namespaces);
+    stripHistoryFromWorkingMemoryNamespace(namespaces);
+
+    const playerAction = buildPlayerActionBrief(
+      scratch.rawAction,
+      scratch.normalized,
+    );
+
     const brief: JsonObject = {
+      /** Current turn input the GM must resolve (not prior history). */
+      playerAction,
       intent: intent as unknown as JsonObject,
       turnId: scratch.turnId,
       core: {
@@ -1260,19 +1321,15 @@ export class TurnPipeline {
       ...(resourceCosts ? { resourceCosts } : {}),
     };
 
-    for (const owned of this.index.narrativeContextProviders) {
-      const result = await owned.value.provide(
-        { draft, intent },
-        this.moduleCtx(owned.moduleId, ctx),
-      );
-      if (!result.ok) return result;
-      namespaces[result.value.namespace] = result.value.data;
-    }
-
-    const history = extractNarrativeHistory(namespaces);
-    stripHistoryFromWorkingMemoryNamespace(namespaces);
-
     const style: JsonObject = {};
+    const metaStyle = session.meta?.narrativeStyle;
+    if (
+      metaStyle &&
+      typeof metaStyle === "object" &&
+      !Array.isArray(metaStyle)
+    ) {
+      Object.assign(style, metaStyle as JsonObject);
+    }
     for (const owned of this.index.narrativeStyleProviders) {
       const result = await owned.value.provide(
         {},
@@ -1288,8 +1345,10 @@ export class TurnPipeline {
       turnId: scratch.turnId,
       input: {
         brief,
+        playerAction,
         style,
-        locale: this.config.turn.locale,
+        locale,
+        maxChoices: this.config.turn.playerChoicesEnabled ? 3 : 0,
         ...(history.length > 0 ? { history } : {}),
       },
       constraints: {
@@ -1331,9 +1390,13 @@ export class TurnPipeline {
 
     scratch.narrativeBrief = brief;
     scratch.narrativeProse = prose;
-    const drafts = result.data.choiceDrafts;
-    if (Array.isArray(drafts)) {
-      scratch.choiceDrafts.push(...(drafts as Choice[]));
+    if (this.config.turn.playerChoicesEnabled) {
+      const drafts = result.data.choiceDrafts;
+      if (Array.isArray(drafts)) {
+        scratch.choiceDrafts.push(...(drafts as Choice[]));
+      }
+    } else {
+      scratch.choiceDrafts = [];
     }
     this.tracer.recordNarrative(brief, prose);
     return ok(undefined);
@@ -1361,39 +1424,42 @@ export class TurnPipeline {
       }
     }
 
-    let choices: Choice[] = [...scratch.choiceDrafts];
-    for (const owned of this.index.choiceContributors) {
-      const result = await owned.value.contribute(
-        { draft, intent },
-        this.moduleCtx(owned.moduleId, ctx),
-      );
-      if (!result.ok) return result;
-      for (const choice of result.value.choices) {
-        if (
-          this.index.choiceKinds.size > 0 &&
-          !this.index.choiceKinds.has(choice.kind)
-        ) {
-          scratch.warnings.push(`choice kind not in catalog: ${choice.kind}`);
+    let choices: Choice[] = [];
+    if (this.config.turn.playerChoicesEnabled) {
+      choices = [...scratch.choiceDrafts];
+      for (const owned of this.index.choiceContributors) {
+        const result = await owned.value.contribute(
+          { draft, intent },
+          this.moduleCtx(owned.moduleId, ctx),
+        );
+        if (!result.ok) return result;
+        for (const choice of result.value.choices) {
+          if (
+            this.index.choiceKinds.size > 0 &&
+            !this.index.choiceKinds.has(choice.kind)
+          ) {
+            scratch.warnings.push(`choice kind not in catalog: ${choice.kind}`);
+          }
+          choices.push(choice);
         }
-        choices.push(choice);
       }
-    }
 
-    for (const owned of this.index.choiceFilters) {
-      const result = await owned.value.filter(
-        { choices, draft },
-        this.moduleCtx(owned.moduleId, ctx),
-      );
-      if (!result.ok) return result;
-      choices = result.value.choices;
-    }
+      for (const owned of this.index.choiceFilters) {
+        const result = await owned.value.filter(
+          { choices, draft },
+          this.moduleCtx(owned.moduleId, ctx),
+        );
+        if (!result.ok) return result;
+        choices = result.value.choices;
+      }
 
-    const seen = new Set<string>();
-    choices = choices.filter((choice) => {
-      if (seen.has(choice.id)) return false;
-      seen.add(choice.id);
-      return true;
-    });
+      const seen = new Set<string>();
+      choices = choices.filter((choice) => {
+        if (seen.has(choice.id)) return false;
+        seen.add(choice.id);
+        return true;
+      });
+    }
 
     if (!prose) {
       return err(failure("PRESENT_FAILED", "passage prose is empty"));
@@ -1961,6 +2027,36 @@ export class TurnPipeline {
       warnings: scratch.warnings,
     };
   }
+
+  /**
+   * Maps an agent result into a tracer record, including LLM prompts when configured.
+   *
+   * @param task - executed agent task
+   * @param result - orchestrator result (may carry adapter audit rawMeta)
+   */
+  private toTraceAgentRecord(
+    task: AgentTask,
+    result: AgentResult,
+  ): TraceAgentRecord {
+    const rawMeta = result.rawMeta;
+    const prompts = this.config.tracing.includePrompts
+      ? extractLlmMessages(rawMeta)
+      : undefined;
+    const rawModelOutput = this.config.tracing.includeRawModelOutput
+      ? extractRawModelOutput(rawMeta)
+      : undefined;
+    return {
+      taskId: task.taskId,
+      type: task.type,
+      requester: `${task.requester.kind}:${task.requester.id}`,
+      status: result.ok ? "ok" : "fail",
+      input: task.input,
+      output: result.ok ? result.data : undefined,
+      error: result.ok ? undefined : result.error.message,
+      ...(prompts ? { prompts } : {}),
+      ...(rawModelOutput !== undefined ? { rawModelOutput } : {}),
+    };
+  }
 }
 
 function toTurnFailure(
@@ -2026,6 +2122,38 @@ function stampTaskRequester(task: AgentTask, moduleId: string): AgentTask {
   return {
     ...task,
     requester: { kind: "module", id: moduleId },
+  };
+}
+
+/**
+ * Builds the current-turn player action slice for narrative brief / GM prompt.
+ *
+ * @param raw - host PlayerAction
+ * @param normalized - post-NORMALIZE action when available
+ */
+function buildPlayerActionBrief(
+  raw: PlayerAction,
+  normalized: NormalizedAction | undefined,
+): JsonObject {
+  const textCandidate =
+    (typeof normalized?.text === "string" && normalized.text.trim()) ||
+    (typeof raw.text === "string" && raw.text.trim()) ||
+    "";
+  const choiceId = normalized?.choiceId ?? raw.choiceId;
+  const actionType = normalized?.actionType ?? raw.kind;
+  return {
+    kind: raw.kind,
+    actionType,
+    ...(textCandidate.length > 0 ? { text: textCandidate } : {}),
+    ...(typeof choiceId === "string" && choiceId.length > 0
+      ? { choiceId }
+      : {}),
+    ...(normalized?.targets && normalized.targets.length > 0
+      ? { targets: [...normalized.targets] }
+      : {}),
+    ...(normalized?.extras && Object.keys(normalized.extras).length > 0
+      ? { extras: normalized.extras }
+      : {}),
   };
 }
 

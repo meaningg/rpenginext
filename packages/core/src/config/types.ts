@@ -23,8 +23,17 @@ export interface EngineConfig {
     readonly defaultTurnKind: "player";
     /** Max retained clientActionId → TurnResult entries per session. */
     readonly idempotencyLimit: number;
-    /** Locale forwarded to localization contributors (present stage). */
+    /**
+     * Fallback locale when session meta has no `locale`.
+     * Forwarded to localization contributors and narrative.write.
+     */
     readonly locale: string;
+    /**
+     * When false (default), player loop is free-text only:
+     * no choice buttons, narrative must not propose choiceDrafts,
+     * `kind: "choice"` actions are rejected.
+     */
+    readonly playerChoicesEnabled: boolean;
   };
   readonly agents: {
     /** mock uses scripts; llm uses LlmPort for standard tasks. */
@@ -40,6 +49,11 @@ export interface EngineConfig {
      * after normalizers/classifiers (doc optional path).
      */
     readonly enableActionInterpret: boolean;
+    /**
+     * When true, prefer {@link import("@rpengineext/contracts").LlmPort.completeStream}
+     * for standard tasks and emit non-authoritative `llm.stream.delta` events.
+     */
+    readonly streaming: boolean;
   };
   readonly persistence: {
     readonly policy: "per_turn" | "manual";

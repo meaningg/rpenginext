@@ -46,6 +46,7 @@ export interface CreateEngineSuccess {
   readonly runtime: SessionRuntime;
   readonly orchestrator: AgentOrchestrator;
   readonly registry: ModuleRegistry;
+  readonly events: EventBus;
   readonly traceSink: MemoryTraceSink | EngineDependencies["traceSink"];
   readonly config: EngineConfig;
 }
@@ -114,6 +115,7 @@ export async function createEngine(
     defaultTemperature: config.agents.temperature,
     maxParallelPerTurn: config.agents.maxParallelPerTurn,
     getModulePermissions: (moduleId) => registry.getModulePermissions(moduleId),
+    streaming: config.agents.streaming,
   });
 
   const tracer = new TurnTracer({
@@ -150,6 +152,7 @@ export async function createEngine(
     runtime,
     orchestrator,
     registry,
+    events,
     traceSink,
     config,
   });

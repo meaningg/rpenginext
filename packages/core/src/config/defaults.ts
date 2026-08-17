@@ -27,6 +27,7 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
     defaultTurnKind: "player",
     idempotencyLimit: 256,
     locale: "en",
+    playerChoicesEnabled: false,
   },
   agents: {
     mode: "mock",
@@ -36,6 +37,7 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
     defaultTimeoutMs: 15_000,
     temperature: 0.7,
     enableActionInterpret: false,
+    streaming: true,
   },
   persistence: {
     policy: "per_turn",

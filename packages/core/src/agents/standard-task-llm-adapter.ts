@@ -16,6 +16,7 @@ import {
 } from "@rpengineext/contracts";
 import type { z } from "zod";
 
+import { buildLlmAuditMeta } from "./llm-audit-meta.ts";
 import {
   buildNarrativeWriteMessages,
   buildNarrativeWriteRepairMessages,
@@ -36,6 +37,14 @@ export interface StandardTaskExecuteOptions {
     taskType: string,
     schemaError: string,
   ) => Promise<readonly string[]>;
+  /**
+   * When true, use LlmPort.completeStream if available.
+   */
+  readonly streaming?: boolean;
+  /**
+   * Called for each stream delta (draft only).
+   */
+  readonly onDelta?: (text: string) => void;
 }
 
 /**
@@ -111,20 +120,31 @@ export class StandardTaskLlmAdapter {
         );
       }
 
-      const completion = await this.llm.complete({
+      const request = {
         model: this.model,
         messages,
         temperature:
           task.constraints.temperature ?? this.defaultTemperature ?? 0.7,
         timeoutMs: task.constraints.timeoutMs,
-        responseFormat: "json",
+        responseFormat: "json" as const,
         metadata: {
           taskId: task.taskId,
           taskType: task.type,
           turnId: task.turnId,
           attempt,
         },
-      });
+      };
+
+      const useStream =
+        options.streaming === true &&
+        typeof this.llm.completeStream === "function" &&
+        attempt === 0;
+
+      const completion = useStream
+        ? await this.llm.completeStream!(request, {
+            onDelta: (text) => options.onDelta?.(text),
+          })
+        : await this.llm.complete(request);
 
       if (!completion.ok) {
         return {
@@ -136,6 +156,12 @@ export class StandardTaskLlmAdapter {
             details: completion.error.details,
             retriable: completion.error.code === "TIMEOUT",
           },
+          rawMeta: buildLlmAuditMeta({
+            messages,
+            model: this.model,
+            attempt,
+            repaired: attempt > 0,
+          }),
         };
       }
 
@@ -166,11 +192,13 @@ export class StandardTaskLlmAdapter {
         taskId: task.taskId,
         data: validated.data as JsonObject,
         usage: completion.value.usage,
-        rawMeta: {
+        rawMeta: buildLlmAuditMeta({
+          messages,
+          rawModelOutput: lastRaw,
           model: this.model,
           attempt,
           repaired: attempt > 0,
-        },
+        }),
       };
     }
 
@@ -182,6 +210,13 @@ export class StandardTaskLlmAdapter {
         message: `LLM output failed schema for ${task.type} after repairs`,
         details: { lastIssues, lastRaw: truncate(lastRaw, 2000) },
       },
+      rawMeta: buildLlmAuditMeta({
+        messages,
+        rawModelOutput: lastRaw,
+        model: this.model,
+        attempt: maxRepairs,
+        repaired: maxRepairs > 0,
+      }),
     };
   }
 
