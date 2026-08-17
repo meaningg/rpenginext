@@ -27,6 +27,10 @@ export interface CreateTestEngineOptions {
   readonly llm?: import("@rpengineext/contracts").LlmPort;
   readonly agentsMode?: "mock" | "llm";
   readonly defaultModel?: string;
+  /** Host moduleConfig sections validated against registerConfigSchema. */
+  readonly moduleConfig?: Readonly<
+    Record<string, import("@rpengineext/contracts").JsonObject>
+  >;
 }
 
 export interface TestEngineBundle extends CreateEngineSuccess {
@@ -69,6 +73,7 @@ export async function createTestEngine(
     mockAgentScript: options.mockAgentScript,
     clock: createFixedClock("2026-01-01T00:00:00.000Z", 1000),
     config: {
+      moduleConfig: options.moduleConfig ?? {},
       agents: {
         mode: options.agentsMode ?? (options.llm ? "llm" : "mock"),
         defaultModel: options.defaultModel ?? "test-model",

@@ -11,7 +11,8 @@
     "test:core": "bun test packages/core",
     "test:persistence": "bun test packages/persistence/sqlite",
     "test:agents-responses": "bun test packages/agents/responses",
-    "typecheck": "bunx tsc --noEmit -p packages/logger/tsconfig.json && bunx tsc --noEmit -p packages/contracts/tsconfig.json && bunx tsc --noEmit -p packages/core/tsconfig.json && bunx tsc --noEmit -p packages/persistence/sqlite/tsconfig.json && bunx tsc --noEmit -p packages/agents/responses/tsconfig.json && bunx tsc --noEmit -p apps/cli/tsconfig.json",
+    "test:working-memory": "bun test packages/modules/working-memory",
+    "typecheck": "bunx tsc --noEmit -p packages/logger/tsconfig.json && bunx tsc --noEmit -p packages/contracts/tsconfig.json && bunx tsc --noEmit -p packages/core/tsconfig.json && bunx tsc --noEmit -p packages/persistence/sqlite/tsconfig.json && bunx tsc --noEmit -p packages/agents/responses/tsconfig.json && bunx tsc --noEmit -p packages/modules/working-memory/tsconfig.json && bunx tsc --noEmit -p apps/cli/tsconfig.json",
     "start": "bun run index.ts",
     "cli": "bun run apps/cli/src/main.ts",
     "cli:hello": "bun run apps/cli/src/main.ts --once hello",
@@ -22,7 +23,8 @@
     "@rpengineext/contracts": "workspace:*",
     "@rpengineext/core": "workspace:*",
     "@rpengineext/persistence-sqlite": "workspace:*",
-    "@rpengineext/agents-responses": "workspace:*"
+    "@rpengineext/agents-responses": "workspace:*",
+    "@rpengineext/module-working-memory": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest"

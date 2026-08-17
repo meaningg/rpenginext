@@ -44,9 +44,12 @@ Host принимает действие игрока → **TurnPipeline** на 
 ```text
 Player Action
     → Normalize → Intent → Guard → Plan → Propose
-    → Validate (draft) → Narrate → Present
+    → Validate (draft) → Narrate → Present (+ materialize)
     → COMMIT (all) | ROLLBACK (all)
 ```
+
+Working memory (always-on in CLI): env `RP_WORKING_MEMORY_WINDOW` = N **pairs**
+injected into `narrative.write` as chat history; full archive lives in slice `working_memory`.
 
 v1 host: **CLI**. v1 persistence: **bun:sqlite**.  
 v1 debug: core пишет подробные **turn `.md` traces** (state diff, LLM I/O, tool calls).  
@@ -84,6 +87,7 @@ Stack target: **Bun + TypeScript** monorepo (`packages/*`, `packages/*/*`, `apps
 | [`@rpengineext/persistence-sqlite`](./packages/persistence/sqlite) | ready | bun:sqlite `PersistencePort` + atomic `commitTurn` |
 | [`@rpengineext/agents-responses`](./packages/agents/responses) | ready | Responses API `LlmPort` (`POST /v1/responses`) |
 | [`@rpengineext/cli`](./apps/cli) | ready | hello turn / REPL book loop, save/load |
+| [`@rpengineext/module-working-memory`](./packages/modules/working-memory) | ready | last-N chat pairs for narrative + full pair archive in session state |
 | product modules (npc/plot/…) | planned | Phase 5+ separate tasks |
 
 ## Contributing modules (later)

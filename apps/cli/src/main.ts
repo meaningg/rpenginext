@@ -15,6 +15,10 @@ import {
   readHostLlmEnv,
   resolveAgentsMode,
 } from "@rpengineext/agents-responses";
+import {
+  createWorkingMemoryModule,
+  readWorkingMemoryWindowFromEnv,
+} from "@rpengineext/module-working-memory";
 
 /**
  * CLI host for Phase 3: sqlite + optional live LLM + fs traces.
@@ -58,6 +62,7 @@ async function main(): Promise<void> {
 
   const llmEnv = readHostLlmEnv(process.env);
   const agentsMode = forceMock ? "mock" : resolveAgentsMode(llmEnv);
+  const workingMemoryWindow = readWorkingMemoryWindowFromEnv(process.env);
 
   if (agentsMode === "llm") {
     if (!llmEnv.apiKey || !llmEnv.baseUrl || !llmEnv.model) {
@@ -92,10 +97,16 @@ async function main(): Promise<void> {
       traceSink,
       llm,
     },
-    modules: useFixture ? [createFixtureHelloModule()] : [],
+    modules: [
+      createWorkingMemoryModule({ windowPairs: workingMemoryWindow }),
+      ...(useFixture ? [createFixtureHelloModule()] : []),
+    ],
     mockAgentScript:
       agentsMode === "mock" ? createDefaultMockAgentScript() : undefined,
     config: {
+      moduleConfig: {
+        working_memory: { windowPairs: workingMemoryWindow },
+      },
       agents: {
         mode: agentsMode,
         defaultModel: llmEnv.model ?? "",
@@ -122,6 +133,7 @@ async function main(): Promise<void> {
   const { engine, runtime } = created.value;
   console.log(`rpengineext CLI (core ${CORE_VERSION})`);
   console.log(`agents mode: ${agentsMode}`);
+  console.log(`working memory window: ${workingMemoryWindow} pairs`);
   console.log(`data dir: ${path.resolve(dataDir)}`);
   console.log(`sqlite: ${persistence.databaseFile}`);
   console.log(`traces dir: ${path.resolve(tracesDir)}`);

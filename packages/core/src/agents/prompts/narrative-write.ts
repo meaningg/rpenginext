@@ -17,10 +17,12 @@ export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
     typeof input.maxChoices === "number" && input.maxChoices > 0
       ? input.maxChoices
       : 3;
+  const history = normalizeHistory(input.history);
 
   const system = [
     "You are the narrative writer for a turn-based interactive storybook engine.",
     "Write the next passage based ONLY on the provided brief and style.",
+    "Prior user/assistant messages (if any) are conversation continuity only.",
     "Do not invent world facts, items, locations, or NPC knowledge beyond the brief.",
     "Do not include secrets that the brief marks as forbidden.",
     "Output MUST be a single JSON object (no markdown fences) with this shape:",
@@ -40,11 +42,30 @@ export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
 
   return [
     { role: "system", content: system },
+    ...history,
     {
       role: "user",
       content: JSON.stringify(userPayload, null, 2),
     },
   ];
+}
+
+function normalizeHistory(raw: unknown): LlmMessage[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const out: LlmMessage[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const role = (item as { role?: unknown }).role;
+    const content = (item as { content?: unknown }).content;
+    if (
+      (role === "user" || role === "assistant") &&
+      typeof content === "string" &&
+      content.length > 0
+    ) {
+      out.push({ role, content });
+    }
+  }
+  return out;
 }
 
 /**

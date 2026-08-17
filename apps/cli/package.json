@@ -16,6 +16,7 @@
     "@rpengineext/contracts": "workspace:*",
     "@rpengineext/core": "workspace:*",
     "@rpengineext/logger": "workspace:*",
+    "@rpengineext/module-working-memory": "workspace:*",
     "@rpengineext/persistence-sqlite": "workspace:*"
   },
   "devDependencies": {

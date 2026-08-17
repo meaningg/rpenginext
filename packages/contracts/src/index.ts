@@ -187,6 +187,7 @@ export {
   type NarrativeContextProvider,
   type NarrativeStyleProvider,
   type NarrativeCritic,
+  type PostNarrativeContributor,
   type PassageAssembler,
   type ChoiceContributor,
   type ChoiceFilter,
@@ -264,6 +265,8 @@ export {
 export {
   STANDARD_AGENT_TASK_TYPES,
   type StandardAgentTaskType,
+  NarrativeHistoryMessageSchema,
+  type NarrativeHistoryMessage,
   NarrativeWriteInputSchema,
   type NarrativeWriteInput,
   NarrativeWriteOutputSchema,

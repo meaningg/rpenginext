@@ -37,6 +37,7 @@ import type {
   NarrativeCritic,
   NarrativeStyleProvider,
   OnTurnRejected,
+  PostNarrativeContributor,
   OutputRepairHintProvider,
   PassageAssembler,
   Planner,
@@ -120,6 +121,7 @@ export class ContributionIndex {
   readonly narrativeContextProviders: Owned<NarrativeContextProvider>[] = [];
   readonly narrativeStyleProviders: Owned<NarrativeStyleProvider>[] = [];
   readonly narrativeCritics: Owned<NarrativeCritic>[] = [];
+  readonly postNarrativeContributors: Owned<PostNarrativeContributor>[] = [];
   readonly passageAssemblers: Owned<PassageAssembler>[] = [];
   readonly choiceContributors: Owned<ChoiceContributor>[] = [];
   readonly choiceFilters: Owned<ChoiceFilter>[] = [];
@@ -174,6 +176,7 @@ export class ContributionIndex {
       this.narrativeContextProviders,
       this.narrativeStyleProviders,
       this.narrativeCritics,
+      this.postNarrativeContributors,
       this.passageAssemblers,
       this.choiceContributors,
       this.choiceFilters,

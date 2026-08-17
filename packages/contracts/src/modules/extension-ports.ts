@@ -10,6 +10,7 @@ import type {
 import type { Choice, Passage } from "../turn/passage.ts";
 import type { AgentTask } from "../agents/task.ts";
 import type { WorldState } from "../state/world-state.ts";
+import type { TurnKind } from "../turn/stages.ts";
 
 /**
  * Closed set of typed contribution port ids (layer C, freeze v1).
@@ -48,6 +49,7 @@ export const CONTRIBUTION_PORT_IDS = [
   "NarrativeContextProvider",
   "NarrativeStyleProvider",
   "NarrativeCritic",
+  "PostNarrativeContributor",
   "PassageAssembler",
   "ChoiceContributor",
   "ChoiceFilter",
@@ -289,6 +291,23 @@ export interface NarrativeCritic {
   critique: PortHandler<
     { prose: string; brief: JsonObject; draft: WorldState },
     { ok: true } | { ok: false; reason: string }
+  >;
+}
+
+/**
+ * Emits draft StateCommands after passage prose is known and before COMMIT.
+ * Used for same-turn materialization (e.g. working-memory pairs).
+ */
+export interface PostNarrativeContributor {
+  contribute: PortHandler<
+    {
+      passage: Passage;
+      intent: ActionIntent;
+      draft: WorldState;
+      rawAction: PlayerAction;
+      turnKind: TurnKind;
+    },
+    { commands: StateCommand[] }
   >;
 }
 

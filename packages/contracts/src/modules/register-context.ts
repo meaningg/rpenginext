@@ -45,6 +45,7 @@ import type {
   NarrativeCritic,
   NarrativeStyleProvider,
   OnTurnRejected,
+  PostNarrativeContributor,
   OutputRepairHintProvider,
   PassageAssembler,
   Planner,
@@ -124,6 +125,7 @@ export interface ModuleRegisterContext {
   addNarrativeContextProvider(handler: NarrativeContextProvider): Result<void, Failure>;
   addNarrativeStyleProvider(handler: NarrativeStyleProvider): Result<void, Failure>;
   addNarrativeCritic(handler: NarrativeCritic): Result<void, Failure>;
+  addPostNarrativeContributor(handler: PostNarrativeContributor): Result<void, Failure>;
   addPassageAssembler(handler: PassageAssembler): Result<void, Failure>;
   addChoiceContributor(handler: ChoiceContributor): Result<void, Failure>;
   addChoiceFilter(handler: ChoiceFilter): Result<void, Failure>;

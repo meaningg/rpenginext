@@ -474,8 +474,11 @@ export class TurnPipeline {
         return this.stageValidate(session, scratch, ctx);
       case "narrate":
         return this.stageNarrate(scratch, ctx);
-      case "present":
-        return this.stagePresent(scratch, ctx);
+      case "present": {
+        const presented = await this.stagePresent(scratch, ctx);
+        if (!presented.ok) return presented;
+        return this.stageMaterialize(session, scratch, ctx);
+      }
       case "commit":
         return this.stageCommit(session, scratch);
       case "after":
@@ -1266,6 +1269,9 @@ export class TurnPipeline {
       namespaces[result.value.namespace] = result.value.data;
     }
 
+    const history = extractNarrativeHistory(namespaces);
+    stripHistoryFromWorkingMemoryNamespace(namespaces);
+
     const style: JsonObject = {};
     for (const owned of this.index.narrativeStyleProviders) {
       const result = await owned.value.provide(
@@ -1284,6 +1290,7 @@ export class TurnPipeline {
         brief,
         style,
         locale: this.config.turn.locale,
+        ...(history.length > 0 ? { history } : {}),
       },
       constraints: {
         timeoutMs: this.config.agents.defaultTimeoutMs,
@@ -1424,6 +1431,125 @@ export class TurnPipeline {
         Object.keys(visibleState).length > 0 ? visibleState : undefined,
     };
     this.tracer.recordPassage(scratch.passage);
+    return ok(undefined);
+  }
+
+  /**
+   * Pre-commit materialize window: modules may emit StateCommands now that
+   * passage prose is known (e.g. working-memory pairs). Progressive dry-apply.
+   */
+  private async stageMaterialize(
+    session: SessionTurnState,
+    scratch: TurnScratch,
+    ctx: ReturnType<typeof createTurnContext>,
+  ): Promise<Result<void, Failure>> {
+    const passage = scratch.passage;
+    const intent = scratch.intent;
+    if (!passage || !intent) {
+      return ok(undefined);
+    }
+    if (this.index.postNarrativeContributors.length === 0) {
+      return ok(undefined);
+    }
+
+    const draft = ctx.stateView;
+    const extraCommands: StateCommand[] = [];
+
+    scratch.proposeOpen = true;
+    try {
+      for (const owned of this.index.postNarrativeContributors) {
+        const result = await owned.value.contribute(
+          {
+            passage,
+            intent,
+            draft,
+            rawAction: scratch.rawAction,
+            turnKind: scratch.kind,
+          },
+          this.moduleCtx(owned.moduleId, ctx),
+        );
+        if (!result.ok) return result;
+        const stamped = result.value.commands.map((command) =>
+          command.source
+            ? command
+            : {
+                ...command,
+                source: { kind: "module" as const, id: owned.moduleId },
+              },
+        );
+        const checked = this.checkCommandPermissions(stamped);
+        if (!checked.ok) return checked;
+        extraCommands.push(...stamped);
+      }
+    } finally {
+      scratch.proposeOpen = false;
+    }
+
+    if (extraCommands.length === 0) {
+      return ok(undefined);
+    }
+
+    for (const command of extraCommands) {
+      for (const owned of this.index.commandValidators) {
+        const currentDraft = session.kernel.getDraftView() as WorldState;
+        const result = await owned.value.validate(
+          { command, draft: currentDraft },
+          this.moduleCtx(owned.moduleId, ctx),
+        );
+        if (!result.ok) return result;
+        if (!result.value.ok) {
+          return err(
+            failure("COMMAND_INVALID", result.value.reason, {
+              causedBy: [owned.moduleId],
+            }),
+          );
+        }
+      }
+    }
+
+    const applied = session.kernel.dryApply(extraCommands);
+    if (!applied.ok) {
+      this.tracer.recordCommands(
+        extraCommands.map((command) => ({
+          command,
+          accepted: false,
+          reason: applied.error.message,
+        })),
+      );
+      return applied;
+    }
+
+    scratch.acceptedCommands.push(...applied.value.acceptedCommands);
+    this.tracer.recordCommands(
+      applied.value.records.map((record) => ({
+        command: record.command,
+        accepted: record.accepted,
+        reason: record.reason,
+      })),
+    );
+
+    const nextDraft = applied.value.draft;
+    for (const owned of this.index.invariantPorts) {
+      const result = await owned.value.check(
+        { draft: nextDraft },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
+      if (!result.ok) return result;
+      if (!result.value.ok) {
+        return err(
+          failure("INVARIANT_FAILED", result.value.reason, {
+            causedBy: [owned.moduleId],
+          }),
+        );
+      }
+    }
+
+    this.tracer.recordStateDiff(diffWorldState(scratch.s0, nextDraft));
+    this.tracer.note({
+      namespace: "core",
+      title: "Materialize",
+      body: `Post-narrative commands applied: ${applied.value.acceptedCommands.length}`,
+    });
     return ok(undefined);
   }
 
@@ -1901,5 +2027,45 @@ function stampTaskRequester(task: AgentTask, moduleId: string): AgentTask {
     ...task,
     requester: { kind: "module", id: moduleId },
   };
+}
+
+/**
+ * Lifts `namespaces.working_memory.history` into narrative.write chat history.
+ */
+function extractNarrativeHistory(
+  namespaces: Record<string, JsonObject>,
+): Array<{ role: "user" | "assistant"; content: string }> {
+  const wm = namespaces.working_memory;
+  if (!wm || typeof wm !== "object") return [];
+  const raw = (wm as JsonObject).history;
+  if (!Array.isArray(raw)) return [];
+  const out: Array<{ role: "user" | "assistant"; content: string }> = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const role = (item as { role?: unknown }).role;
+    const content = (item as { content?: unknown }).content;
+    if (
+      (role === "user" || role === "assistant") &&
+      typeof content === "string" &&
+      content.length > 0
+    ) {
+      out.push({ role, content });
+    }
+  }
+  return out;
+}
+
+/**
+ * Removes history from brief namespace so transcript is not double-sent in JSON.
+ */
+function stripHistoryFromWorkingMemoryNamespace(
+  namespaces: Record<string, JsonObject>,
+): void {
+  const wm = namespaces.working_memory;
+  if (!wm || typeof wm !== "object") return;
+  if (!("history" in wm)) return;
+  const next: Record<string, JsonObject[string]> = { ...wm };
+  delete next.history;
+  namespaces.working_memory = next;
 }
 

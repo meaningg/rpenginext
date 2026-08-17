@@ -134,6 +134,9 @@ Fallback-passage-with-kept-state **запрещён** в v1.
 - `ChoiceContributor` modules;
 - assemble `Passage` artifact (still not published);
 - prepare public view payload.
+- **Materialize (pre-commit window, not a separate StageId):** after passage is built,
+  run `PostNarrativeContributor` → progressive dry-apply of extra `StateCommand`s
+  (e.g. working-memory pairs). Failures still full-rollback the turn.
 
 Failure → reject turn, full rollback.
 
@@ -268,7 +271,7 @@ AFTER: metrics only
 | PROPOSE | TransitionContributor, CommandDecorator |
 | VALIDATE | CommandValidator, Invariant, ConflictResolver, DraftSimulator |
 | NARRATE | NarrativeContextProvider, NarrativeStyleProvider, PromptFragmentProvider, BriefPolicy, NarrativeCritic |
-| PRESENT | PassageAssembler, ChoiceContributor, ChoiceFilter, StatusPanelProvider |
+| PRESENT (+ materialize) | PassageAssembler, ChoiceContributor, ChoiceFilter, StatusPanelProvider, PostNarrativeContributor |
 | AFTER | AfterCommitHook, SystemTurnScheduler (schedule only) |
 
 Catalog registrations (`registerCommand`, `registerSlice`, …) работают across stages and are the main way to add domain mechanics without new stages.

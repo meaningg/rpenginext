@@ -43,6 +43,7 @@ import {
   type NarrativeCritic,
   type NarrativeStyleProvider,
   type OnTurnRejected,
+  type PostNarrativeContributor,
   type OutputRepairHintProvider,
   type PassageAssembler,
   type Planner,
@@ -427,6 +428,13 @@ export function createRegisterContext(
     },
     addNarrativeCritic(handler: NarrativeCritic) {
       return push(index.narrativeCritics, handler, "NarrativeCritic");
+    },
+    addPostNarrativeContributor(handler: PostNarrativeContributor) {
+      return push(
+        index.postNarrativeContributors,
+        handler,
+        "PostNarrativeContributor",
+      );
     },
     addPassageAssembler(handler: PassageAssembler) {
       return push(index.passageAssemblers, handler, "PassageAssembler");

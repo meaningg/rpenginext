@@ -119,6 +119,11 @@ Agents never receive entire raw DB dump blindly.
 - last N passages or summary memory;
 - accepted command outcomes this turn (after commit policy).
 
+`narrative.write` may receive optional `history: { role: user|assistant, content }[]`
+(chat pairs for continuity). Core lifts `namespaces.working_memory.history` from
+`NarrativeContextProvider` into real LLM chat messages (not duplicated inside brief JSON).
+Product module: `@rpengineext/module-working-memory`.
+
 This is how canon control stays strict.
 
 ## 8. Schema validation & repair

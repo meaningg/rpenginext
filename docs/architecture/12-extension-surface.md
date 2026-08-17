@@ -148,6 +148,7 @@ Named ports (слой C) остаются для мест, где нужен **t
 | `NarrativeContextProvider` | narrate | brief slices | merge object by ns keys |
 | `NarrativeStyleProvider` | narrate | tone/rating/voice constraints | merge; deny overrides |
 | `NarrativeCritic` | narrate | post-LLM structured QA (continuity) | any hard fail → turn fail (rollback) |
+| `PostNarrativeContributor` | present→commit (materialize) | emit StateCommands after passage prose is known | concat commands; progressive dry-apply |
 | `PassageAssembler` | present | contribute sections to passage body model | ordered sections by slot/priority |
 | `ChoiceContributor` | present | choices | concat + dedupe by id |
 | `ChoiceFilter` | present | hide/disable choices | ordered filters |

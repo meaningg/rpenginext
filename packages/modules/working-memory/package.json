@@ -1,0 +1,27 @@
+{
+  "name": "@rpengineext/module-working-memory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Working memory module: unbounded turn pairs + last-N history for narrative.write",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@rpengineext/contracts": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@rpengineext/core": "workspace:*",
+    "@rpengineext/logger": "workspace:*",
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

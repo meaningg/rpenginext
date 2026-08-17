@@ -16,6 +16,18 @@ export type StandardAgentTaskType =
   (typeof STANDARD_AGENT_TASK_TYPES)[keyof typeof STANDARD_AGENT_TASK_TYPES];
 
 /**
+ * Prior chat pair message for narrative continuity (not world truth).
+ */
+export const NarrativeHistoryMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().min(1),
+});
+
+export type NarrativeHistoryMessage = z.infer<
+  typeof NarrativeHistoryMessageSchema
+>;
+
+/**
  * Input for `narrative.write`.
  */
 export const NarrativeWriteInputSchema = z.object({
@@ -23,6 +35,11 @@ export const NarrativeWriteInputSchema = z.object({
   style: JsonObjectSchema.optional(),
   locale: z.string().min(1).optional(),
   maxChoices: z.number().int().positive().optional(),
+  /**
+   * Prior user/assistant pairs flattened as chat messages.
+   * Expected order: user, assistant, user, assistant, …
+   */
+  history: z.array(NarrativeHistoryMessageSchema).optional(),
 });
 
 export type NarrativeWriteInput = z.infer<typeof NarrativeWriteInputSchema>;
