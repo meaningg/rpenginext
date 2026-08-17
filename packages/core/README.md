@@ -6,11 +6,14 @@ Stable engine runtime for rpengineext.
 
 - `ModuleRegistry` + capability graph + full extension surface (catalogs / interceptors / typed ports)
 - `strictManifest` / permissions / capability filtering at boot
+- `moduleConfig` validated against `registerConfigSchema` at boot
 - `StateKernel` — draft dry-apply, single commit / discard
 - `TurnPipeline` — fixed stages 0–11, **full-atomic** turns, stage timeouts
+- Module-scoped `TurnContext.permissions` on every contribution call
+- Agent task queue drained on **plan / propose / narrate** (contributors + interceptor enqueue)
 - `SessionRuntime` / `createEngine` — host facade, system-turn drain, journal replay, slice migrations
-- `AgentOrchestrator` — mock scripts and/or `LlmPort`, parallel tasks, agent tools
-- `HostSurface` — help / debug / CLI meta-commands / save metadata / read models
+- `AgentOrchestrator` — mock/`LlmPort`, parallel tasks, tools, repair hints wired
+- `HostSurface` — help / debug / CLI / save meta / read models / memory-kind validate
 - `TurnTracer` — markdown turn dossiers via `TraceSinkPort`
 
 ## Usage
@@ -47,11 +50,18 @@ bun test packages/core
 
 Testing helpers: `@rpengineext/core/testing`.
 
+## Stability note
+
+Core Phase 4 finalize is intended to be **rarely changed**. Prefer modules +
+contracts extension surface. Touch core only for mechanism gaps (new pipeline
+semantics, atomicity, security boundary) with an ADR.
+
 ## Normative docs
 
 - `docs/architecture/02-core.md`
 - `docs/architecture/04-state-and-commands.md`
 - `docs/architecture/06-turn-pipeline.md`
+- `docs/architecture/12-extension-surface.md`
 - `docs/architecture/13-turn-tracing.md`
 
 ## Module authors

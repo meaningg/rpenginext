@@ -1,7 +1,7 @@
 # Roadmap
 
-> **Статус:** Phase 4 complete (core hardening: full extension wiring, permissions, replay, migrations)  
-> Phase 5+ next: product modules on frozen contracts (explicit tasks only).
+> **Статус:** Phase 4 complete + core finalize pass (wiring / permissions / agent queue / repair hints)  
+> Phase 5+ next: product modules on frozen contracts (explicit tasks only). Core changes only via ADR.
 
 ## Decisions locked
 
@@ -74,6 +74,9 @@
 - [x] Host surface aggregation (help / debug / CLI commands / save metadata / read models)
 - [x] Idempotency bound + restore from snapshot turnIds; seed in snapshot meta
 - [x] Restore turn kind (no LLM) when loaded session lacks passage
+- [x] Core finalize pass: module-scoped permissions; agent queue on plan/propose/narrate;
+      AgentTaskContributor@narrate; repair hints → LLM; conflict path match;
+      moduleConfig boot validation; memory-kind validate; dead code removed
 - [ ] Richer CLI UX polish (host app; core APIs ready via HostSurface)
 - [ ] Content safety hooks (optional, deferred)
 

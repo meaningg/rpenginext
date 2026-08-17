@@ -33,7 +33,7 @@ import {
 
 import type { AgentOrchestrator } from "../agents/agent-orchestrator.ts";
 import type { EngineConfig } from "../config/types.ts";
-import type { ContributionIndex, Owned } from "../registry/contribution-index.ts";
+import type { ContributionIndex } from "../registry/contribution-index.ts";
 import type { StateKernel } from "../state/state-kernel.ts";
 import type { TurnTracer } from "../tracing/turn-tracer.ts";
 import type { Clock } from "../util/clock.ts";
@@ -42,9 +42,12 @@ import { createSeededRng } from "../util/rng.ts";
 import { diffWorldState } from "../util/state-diff.ts";
 import { deepClone } from "../util/clone.ts";
 import { withTimeout } from "../util/with-timeout.ts";
+import { commandTouchesConflictKey } from "./conflict-paths.ts";
 import {
   createCorePermissionChecker,
+  createModulePermissionChecker,
   createTurnContext,
+  withPermissions,
   type MutableExtras,
 } from "./turn-context.ts";
 
@@ -103,7 +106,10 @@ interface TurnScratch {
   outcome: "pending" | "committed" | "rejected";
   queuedTasks: AgentTask[];
   proposeOpen: boolean;
+  /** requestAgent allowed (normalize/plan/propose/narrate). */
   agentOpen: boolean;
+  /** interceptor enqueueAgentTask allowed (plan/propose/narrate only). */
+  agentQueueOpen: boolean;
   scheduledSystemTurns: PendingSystemTurn[];
 }
 
@@ -173,10 +179,9 @@ export class TurnPipeline {
       queuedTasks: [],
       proposeOpen: false,
       agentOpen: false,
+      agentQueueOpen: false,
       scheduledSystemTurns: [],
     };
-
-    this.orchestrator.beginTurn();
 
     const rng = createSeededRng(session.seed ?? `${session.sessionId}:${turnId}`);
     const ctx = createTurnContext({
@@ -263,6 +268,8 @@ export class TurnPipeline {
       permissions: createCorePermissionChecker(),
     });
 
+    this.orchestrator.beginTurn(ctx);
+
     this.tracer.open({
       turnId,
       sessionId: session.sessionId,
@@ -283,7 +290,9 @@ export class TurnPipeline {
     if (!begin.ok) {
       scratch.failure = toTurnFailure(turnId, begin.error, "begin");
       scratch.outcome = "rejected";
-      return await this.finishRejected(session, scratch);
+      const rejected = await this.finishRejected(session, scratch);
+      this.orchestrator.endTurn();
+      return rejected;
     }
 
     for (const stage of STAGE_IDS) {
@@ -323,7 +332,9 @@ export class TurnPipeline {
       if (scratch.scheduledSystemTurns.length > 0) {
         session.pendingSystemTurns.push(...scratch.scheduledSystemTurns);
       }
-      return await this.finishCommitted(session, scratch);
+      const result = await this.finishCommitted(session, scratch);
+      this.orchestrator.endTurn();
+      return result;
     }
     if (scratch.outcome === "pending") {
       scratch.failure = {
@@ -335,7 +346,22 @@ export class TurnPipeline {
       scratch.outcome = "rejected";
       session.kernel.discard();
     }
-    return await this.finishRejected(session, scratch);
+    const rejected = await this.finishRejected(session, scratch);
+    this.orchestrator.endTurn();
+    return rejected;
+  }
+
+  /**
+   * Module-scoped TurnContext so handlers see their own permission grants.
+   */
+  private moduleCtx(
+    moduleId: string,
+    ctx: ReturnType<typeof createTurnContext>,
+  ): ReturnType<typeof createTurnContext> {
+    return withPermissions(
+      ctx,
+      createModulePermissionChecker(this.getModulePermissions(moduleId)),
+    ) as ReturnType<typeof createTurnContext>;
   }
 
   private async runStage(
@@ -351,12 +377,22 @@ export class TurnPipeline {
       stage === "plan" ||
       stage === "narrate" ||
       stage === "propose";
+    scratch.agentQueueOpen =
+      stage === "plan" || stage === "propose" || stage === "narrate";
 
     const timeoutMs = this.config.turn.stageTimeoutsMs[stage] ?? 0;
+
+    const isAgentStage = scratch.agentQueueOpen;
 
     const run = async (): Promise<Result<void, Failure>> => {
       const before = await this.runInterceptors(stage, "before", scratch, ctx);
       if (!before.ok) return before;
+
+      // Drain tasks enqueued by before-interceptors (plan also collects inside body).
+      if (isAgentStage && stage !== "plan") {
+        const preDrain = await this.drainQueuedAgents(scratch, ctx);
+        if (!preDrain.ok) return preDrain;
+      }
 
       try {
         const body = await this.stageBody(stage, session, scratch, ctx);
@@ -364,7 +400,14 @@ export class TurnPipeline {
           await this.runInterceptors(stage, "onError", scratch, ctx, body.error);
           return body;
         }
-        return await this.runInterceptors(stage, "after", scratch, ctx);
+        const after = await this.runInterceptors(stage, "after", scratch, ctx);
+        if (!after.ok) return after;
+
+        // Drain tasks enqueued by after-interceptors on agent stages.
+        if (isAgentStage) {
+          return await this.drainQueuedAgents(scratch, ctx);
+        }
+        return ok(undefined);
       } catch (error) {
         const fail = failure("INTERNAL", `stage ${stage} threw`, {
           details: String(error),
@@ -404,6 +447,7 @@ export class TurnPipeline {
     } finally {
       scratch.proposeOpen = false;
       scratch.agentOpen = false;
+      scratch.agentQueueOpen = false;
     }
   }
 
@@ -448,11 +492,59 @@ export class TurnPipeline {
     ctx: ReturnType<typeof createTurnContext>,
   ): Promise<Result<void, Failure>> {
     for (const owned of this.index.turnSetups) {
-      const result = await owned.value.setup({}, ctx);
+      const result = await owned.value.setup({}, this.moduleCtx(owned.moduleId, ctx));
       if (!result.ok) return result;
       if (result.value.extras) {
         Object.assign(scratch.extras, result.value.extras);
       }
+    }
+    return ok(undefined);
+  }
+
+  /**
+   * Executes and clears scratch.queuedTasks with tracing + required-task fail policy.
+   */
+  private async drainQueuedAgents(
+    scratch: TurnScratch,
+    ctx: ReturnType<typeof createTurnContext>,
+  ): Promise<Result<void, Failure>> {
+    const tasks = [...scratch.queuedTasks];
+    scratch.queuedTasks = [];
+    if (tasks.length === 0 || scratch.kind === "restore") {
+      return ok(undefined);
+    }
+
+    const results = await this.orchestrator.executeMany(tasks, ctx);
+    for (let i = 0; i < tasks.length; i++) {
+      const task = tasks[i]!;
+      const result = results[i]!;
+      this.tracer.recordAgent({
+        taskId: task.taskId,
+        type: task.type,
+        requester: `${task.requester.kind}:${task.requester.id}`,
+        status: result.ok ? "ok" : "fail",
+        input: task.input,
+        output: result.ok ? result.data : undefined,
+        error: result.ok ? undefined : result.error.message,
+      });
+      if (result.ok) {
+        scratch.extras[`agent.${task.type}.${task.taskId}`] = result.data;
+      }
+      if (!result.ok && !task.constraints.optional) {
+        return err(
+          failure("AGENT_FAILED", result.error.message, {
+            details: result.error,
+            causedBy: [task.requester.id],
+          }),
+        );
+      }
+    }
+    for (const tool of this.orchestrator.drainToolCalls()) {
+      this.tracer.recordTool({
+        toolName: tool.toolName,
+        callId: tool.callId,
+        error: tool.error,
+      });
     }
     return ok(undefined);
   }
@@ -485,7 +577,10 @@ export class TurnPipeline {
     }
 
     for (const owned of this.index.inputNormalizers) {
-      const result = await owned.value.normalize(raw, ctx);
+      const result = await owned.value.normalize(
+        raw,
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       const partial = result.value;
       if (partial.actionType) actionType = partial.actionType;
@@ -499,7 +594,7 @@ export class TurnPipeline {
     for (const owned of this.index.actionClassifiers) {
       const result = await owned.value.classify(
         { raw, normalized: undefined },
-        ctx,
+        this.moduleCtx(owned.moduleId, ctx),
       );
       if (!result.ok) return result;
       const best = [...result.value].sort((a, b) => b.confidence - a.confidence)[0];
@@ -526,7 +621,7 @@ export class TurnPipeline {
               extras,
             },
           },
-          ctx,
+          this.moduleCtx(owned.moduleId, ctx),
         );
         if (!result.ok) return result;
         const candidates = result.value;
@@ -643,7 +738,10 @@ export class TurnPipeline {
   ): Promise<Result<Choice[], Failure>> {
     const options: Choice[] = [];
     for (const owned of this.index.disambiguationProviders) {
-      const result = await owned.value.provide({ reason, candidates }, ctx);
+      const result = await owned.value.provide(
+        { reason, candidates },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       options.push(...result.value.options);
     }
@@ -664,7 +762,10 @@ export class TurnPipeline {
     };
 
     for (const owned of this.index.intentContributors) {
-      const result = await owned.value.contribute({ action, intent }, ctx);
+      const result = await owned.value.contribute(
+        { action, intent },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       intent = {
         ...intent,
@@ -687,7 +788,10 @@ export class TurnPipeline {
       let bestType = intent.intentType;
       let bestScore = Number.NEGATIVE_INFINITY;
       for (const owned of this.index.intentScorers) {
-        const scored = await owned.value.score({ candidates }, ctx);
+        const scored = await owned.value.score(
+          { candidates },
+          this.moduleCtx(owned.moduleId, ctx),
+        );
         if (!scored.ok) return scored;
         for (const row of scored.value) {
           if (row.score > bestScore) {
@@ -723,7 +827,10 @@ export class TurnPipeline {
     const intent = scratch.intent!;
 
     for (const owned of this.index.prerequisiteCheckers) {
-      const result = await owned.value.check({ intent }, ctx);
+      const result = await owned.value.check(
+        { intent },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       if (result.value.missing.length > 0) {
         return err(
@@ -738,18 +845,26 @@ export class TurnPipeline {
 
     const mergedCosts: Record<string, number> = {};
     for (const owned of this.index.resourceCostEvaluators) {
-      const result = await owned.value.evaluate({ intent }, ctx);
+      const result = await owned.value.evaluate(
+        { intent },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       for (const [key, value] of Object.entries(result.value.costs)) {
         mergedCosts[key] = (mergedCosts[key] ?? 0) + value;
       }
     }
+    // Declared costs only — modules enforce via commands/guards reading this key.
     if (Object.keys(mergedCosts).length > 0) {
       scratch.extras["core.resourceCosts"] = mergedCosts;
+      this.tracer.warn(`resource costs declared: ${JSON.stringify(mergedCosts)}`);
     }
 
     for (const owned of this.index.guards) {
-      const result = await owned.value.check({ action, intent }, ctx);
+      const result = await owned.value.check(
+        { action, intent },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       if (!result.value.allow) {
         return err(
@@ -763,7 +878,10 @@ export class TurnPipeline {
     }
 
     for (const owned of this.index.softGuards) {
-      const result = await owned.value.check({ action, intent }, ctx);
+      const result = await owned.value.check(
+        { action, intent },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       scratch.warnings.push(...result.value.warnings);
       for (const w of result.value.warnings) this.tracer.warn(w);
@@ -772,7 +890,7 @@ export class TurnPipeline {
     for (const owned of this.index.policyRules) {
       const result = await owned.value.evaluate(
         { intent, draftCommands: scratch.proposedCommands },
-        ctx,
+        this.moduleCtx(owned.moduleId, ctx),
       );
       if (!result.ok) return result;
       if (result.value.decision === "deny") {
@@ -800,66 +918,42 @@ export class TurnPipeline {
     const intent = scratch.intent!;
 
     for (const owned of this.index.salienceProviders) {
-      const result = await owned.value.provide({ intent }, ctx);
+      const result = await owned.value.provide(
+        { intent },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       scratch.extras[`salience.${owned.moduleId}`] = result.value;
     }
 
     for (const owned of this.index.planners) {
-      const result = await owned.value.plan({ intent }, ctx);
+      const result = await owned.value.plan(
+        { intent },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       scratch.planArtifacts = {
         ...scratch.planArtifacts,
         [owned.moduleId]: result.value.artifacts,
       };
-      scratch.queuedTasks.push(...result.value.suggestedTasks);
+      for (const task of result.value.suggestedTasks) {
+        scratch.queuedTasks.push(stampTaskRequester(task, owned.moduleId));
+      }
     }
 
     for (const owned of this.index.agentTaskContributors) {
       const result = await owned.value.contribute(
         { stage: "plan", intent },
-        ctx,
+        this.moduleCtx(owned.moduleId, ctx),
       );
       if (!result.ok) return result;
-      scratch.queuedTasks.push(...result.value.tasks);
+      for (const task of result.value.tasks) {
+        scratch.queuedTasks.push(stampTaskRequester(task, owned.moduleId));
+      }
     }
 
-    // Interceptor-enqueued tasks are already in queuedTasks
-    const tasks = [...scratch.queuedTasks];
-    scratch.queuedTasks = [];
-    const results = await this.orchestrator.executeMany(tasks);
-    for (let i = 0; i < tasks.length; i++) {
-      const task = tasks[i]!;
-      const result = results[i]!;
-      this.tracer.recordAgent({
-        taskId: task.taskId,
-        type: task.type,
-        requester: `${task.requester.kind}:${task.requester.id}`,
-        status: result.ok ? "ok" : "fail",
-        input: task.input,
-        output: result.ok ? result.data : undefined,
-        error: result.ok ? undefined : result.error.message,
-      });
-      if (!result.ok && !task.constraints.optional) {
-        return err(
-          failure("AGENT_FAILED", result.error.message, {
-            details: result.error,
-            causedBy: [task.requester.id],
-          }),
-        );
-      }
-      if (result.ok) {
-        scratch.extras[`agent.${task.type}.${task.taskId}`] = result.data;
-      }
-    }
-    for (const tool of this.orchestrator.drainToolCalls()) {
-      this.tracer.recordTool({
-        toolName: tool.toolName,
-        callId: tool.callId,
-        error: tool.error,
-      });
-    }
-    return ok(undefined);
+    // Includes before:plan interceptor tasks + planner/contributor tasks.
+    return this.drainQueuedAgents(scratch, ctx);
   }
 
   private async stagePropose(
@@ -882,7 +976,7 @@ export class TurnPipeline {
     for (const owned of this.index.transitionContributors) {
       const result = await owned.value.contribute(
         { intent, planArtifacts: scratch.planArtifacts },
-        ctx,
+        this.moduleCtx(owned.moduleId, ctx),
       );
       if (!result.ok) return result;
       const stamped = result.value.commands.map((command) =>
@@ -901,7 +995,7 @@ export class TurnPipeline {
     for (const owned of this.index.commandDecorators) {
       const result = await owned.value.decorate(
         { commands: scratch.proposedCommands },
-        ctx,
+        this.moduleCtx(owned.moduleId, ctx),
       );
       if (!result.ok) return result;
       scratch.proposedCommands = result.value.commands;
@@ -949,7 +1043,10 @@ export class TurnPipeline {
     for (const command of scratch.proposedCommands) {
       for (const owned of this.index.commandValidators) {
         const draft = session.kernel.getDraftView() as WorldState;
-        const result = await owned.value.validate({ command, draft }, ctx);
+        const result = await owned.value.validate(
+          { command, draft },
+          this.moduleCtx(owned.moduleId, ctx),
+        );
         if (!result.ok) return result;
         if (!result.value.ok) {
           return err(
@@ -984,7 +1081,10 @@ export class TurnPipeline {
 
     const draft = applied.value.draft;
     for (const owned of this.index.invariantPorts) {
-      const result = await owned.value.check({ draft }, ctx);
+      const result = await owned.value.check(
+        { draft },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       if (!result.value.ok) {
         return err(
@@ -998,7 +1098,7 @@ export class TurnPipeline {
     for (const owned of this.index.draftSimulators) {
       const sim = await owned.value.simulate(
         { draft, commands: scratch.acceptedCommands },
-        ctx,
+        this.moduleCtx(owned.moduleId, ctx),
       );
       if (!sim.ok) return sim;
       scratch.extras[`draftSim.${owned.moduleId}`] = sim.value.preview;
@@ -1020,18 +1120,16 @@ export class TurnPipeline {
     let working = [...commands];
     for (const keyOwned of this.index.conflictKeys) {
       const key = keyOwned.value;
-      const matching = working.filter((command) => command.slice === key.slice);
+      const matching = working.filter((command) =>
+        commandTouchesConflictKey(command, key),
+      );
       if (matching.length <= 1) continue;
 
-      const resolver = this.index.conflictResolvers.find(
-        (item) =>
-          // resolvers are not keyed; first deterministic wins per conflict key order
-          true,
-      );
-      // Prefer resolver whose module matches key owner, else first
+      // Prefer resolver whose module owns the conflict key, else first registered.
       const preferred =
-        this.index.conflictResolvers.find((item) => item.moduleId === keyOwned.moduleId) ??
-        resolver;
+        this.index.conflictResolvers.find(
+          (item) => item.moduleId === keyOwned.moduleId,
+        ) ?? this.index.conflictResolvers[0];
 
       if (!preferred) {
         return err(
@@ -1050,7 +1148,7 @@ export class TurnPipeline {
 
       const resolved = await preferred.value.resolve(
         { key: key.id, commands: matching, draft },
-        ctx,
+        this.moduleCtx(preferred.moduleId, ctx),
       );
       if (!resolved.ok) return resolved;
 
@@ -1077,13 +1175,31 @@ export class TurnPipeline {
     }
 
     const intent = scratch.intent!;
+
+    // Narrate-stage agent contributions (NPC voice, etc.) before narrative.write.
+    for (const owned of this.index.agentTaskContributors) {
+      const result = await owned.value.contribute(
+        { stage: "narrate", intent },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
+      if (!result.ok) return result;
+      for (const task of result.value.tasks) {
+        scratch.queuedTasks.push(stampTaskRequester(task, owned.moduleId));
+      }
+    }
+    const narrateAgents = await this.drainQueuedAgents(scratch, ctx);
+    if (!narrateAgents.ok) return narrateAgents;
+
     const draft = ctx.stateView;
     const namespaces: Record<string, JsonObject> = {};
     const denyMention = new Set<string>();
     const allowMention = new Set<string>();
 
     for (const owned of this.index.briefPolicies) {
-      const result = await owned.value.contribute({}, ctx);
+      const result = await owned.value.contribute(
+        {},
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       for (const item of result.value.denyMention) denyMention.add(item);
       for (const item of result.value.allowMention ?? []) allowMention.add(item);
@@ -1092,7 +1208,10 @@ export class TurnPipeline {
     const promptFragments: { id: string; text: string; priority: number }[] = [];
     for (const owned of this.index.promptFragmentProviders) {
       for (const slot of ["system", "narrate", "style"]) {
-        const result = await owned.value.provide({ slot }, ctx);
+        const result = await owned.value.provide(
+          { slot },
+          this.moduleCtx(owned.moduleId, ctx),
+        );
         if (!result.ok) return result;
         for (const frag of result.value.fragments) {
           promptFragments.push({
@@ -1107,16 +1226,19 @@ export class TurnPipeline {
       (a, b) => a.priority - b.priority || a.id.localeCompare(b.id),
     );
 
-    // Localization strings for narrative locale
     const localeStrings: Record<string, string> = {};
     for (const owned of this.index.localizationContributors) {
       const result = await owned.value.provide(
         { locale: this.config.turn.locale },
-        ctx,
+        this.moduleCtx(owned.moduleId, ctx),
       );
       if (!result.ok) return result;
       Object.assign(localeStrings, result.value.strings);
     }
+
+    const resourceCosts =
+      (scratch.extras["core.resourceCosts"] as Record<string, number> | undefined) ??
+      undefined;
 
     const brief: JsonObject = {
       intent: intent as unknown as JsonObject,
@@ -1132,17 +1254,24 @@ export class TurnPipeline {
       },
       promptFragments: promptFragments.map((f) => ({ id: f.id, text: f.text })),
       ...(Object.keys(localeStrings).length > 0 ? { localeStrings } : {}),
+      ...(resourceCosts ? { resourceCosts } : {}),
     };
 
     for (const owned of this.index.narrativeContextProviders) {
-      const result = await owned.value.provide({ draft, intent }, ctx);
+      const result = await owned.value.provide(
+        { draft, intent },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       namespaces[result.value.namespace] = result.value.data;
     }
 
     const style: JsonObject = {};
     for (const owned of this.index.narrativeStyleProviders) {
-      const result = await owned.value.provide({}, ctx);
+      const result = await owned.value.provide(
+        {},
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       Object.assign(style, result.value);
     }
@@ -1181,7 +1310,7 @@ export class TurnPipeline {
     for (const owned of this.index.narrativeCritics) {
       const critique = await owned.value.critique(
         { prose, brief, draft },
-        ctx,
+        this.moduleCtx(owned.moduleId, ctx),
       );
       if (!critique.ok) return critique;
       if (!critique.value.ok) {
@@ -1212,7 +1341,10 @@ export class TurnPipeline {
     let prose = scratch.narrativeProse ?? "";
 
     for (const owned of this.index.passageAssemblers) {
-      const result = await owned.value.assemble({ prose, draft }, ctx);
+      const result = await owned.value.assemble(
+        { prose, draft },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       const sections = [...result.value.sections].sort(
         (a, b) => a.priority - b.priority || a.slot.localeCompare(b.slot),
@@ -1224,7 +1356,10 @@ export class TurnPipeline {
 
     let choices: Choice[] = [...scratch.choiceDrafts];
     for (const owned of this.index.choiceContributors) {
-      const result = await owned.value.contribute({ draft, intent }, ctx);
+      const result = await owned.value.contribute(
+        { draft, intent },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       for (const choice of result.value.choices) {
         if (
@@ -1238,7 +1373,10 @@ export class TurnPipeline {
     }
 
     for (const owned of this.index.choiceFilters) {
-      const result = await owned.value.filter({ choices, draft }, ctx);
+      const result = await owned.value.filter(
+        { choices, draft },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       choices = result.value.choices;
     }
@@ -1261,7 +1399,10 @@ export class TurnPipeline {
 
     const statusLines: { slot: string; text: string }[] = [];
     for (const owned of this.index.statusPanelProviders) {
-      const result = await owned.value.provide({ draft }, ctx);
+      const result = await owned.value.provide(
+        { draft },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
       if (!result.ok) return result;
       statusLines.push(...result.value.lines);
     }
@@ -1426,7 +1567,7 @@ export class TurnPipeline {
             passage: scratch.passage,
             acceptedCommands: scratch.acceptedCommands,
           },
-          ctx,
+          this.moduleCtx(owned.moduleId, ctx),
         );
         if (!result.ok) {
           this.log.warn(
@@ -1449,7 +1590,10 @@ export class TurnPipeline {
     if (scratch.kind === "player") {
       for (const owned of this.index.systemTurnSchedulers) {
         try {
-          const scheduled = await owned.value.schedule({}, ctx);
+          const scheduled = await owned.value.schedule(
+            {},
+            this.moduleCtx(owned.moduleId, ctx),
+          );
           if (scheduled.ok) {
             for (const request of scheduled.value.requests) {
               scratch.scheduledSystemTurns.push({
@@ -1475,7 +1619,10 @@ export class TurnPipeline {
     if (!scratch.failure) return;
     for (const owned of this.index.onTurnRejected) {
       try {
-        await owned.value.onRejected({ failure: scratch.failure }, ctx);
+        await owned.value.onRejected(
+          { failure: scratch.failure },
+          this.moduleCtx(owned.moduleId, ctx),
+        );
       } catch {
         /* observe */
       }
@@ -1489,18 +1636,10 @@ export class TurnPipeline {
     ctx: ReturnType<typeof createTurnContext>,
     error?: Failure,
   ): Promise<Result<void, Failure>> {
-    const list = this.index.getInterceptors(stage, when);
-    for (const owned of list) {
-      const result = await owned.value.handle(ctx, error);
-      if (!result.ok) return result;
-      const effects = normalizeEffects(result.value);
-      for (const effect of effects) {
-        const applied = applyInterceptorEffect(effect, scratch);
-        if (!applied.ok) return applied;
-      }
-    }
+    const ran = await this.runInterceptorList(stage, when, scratch, ctx, error);
+    if (!ran.ok) return ran;
     if (stage === "begin" && when === "before") {
-      return this.runNamedInterceptors("turn.begin", when, scratch, ctx, error);
+      return this.runInterceptorList("turn.begin", when, scratch, ctx, error);
     }
     return ok(undefined);
   }
@@ -1512,17 +1651,102 @@ export class TurnPipeline {
     ctx: ReturnType<typeof createTurnContext>,
     error?: Failure,
   ): Promise<Result<void, Failure>> {
+    return this.runInterceptorList(stage, when, scratch, ctx, error);
+  }
+
+  private async runInterceptorList(
+    stage: string,
+    when: "before" | "after" | "onError",
+    scratch: TurnScratch,
+    ctx: ReturnType<typeof createTurnContext>,
+    error?: Failure,
+  ): Promise<Result<void, Failure>> {
     const list = this.index.getInterceptors(stage, when);
     for (const owned of list) {
-      const result = await owned.value.handle(ctx, error);
+      if (owned.value.permission) {
+        const token = owned.value.permission as PermissionToken;
+        if (!hasPermission(this.getModulePermissions(owned.moduleId), token)) {
+          return err(
+            failure(
+              "PERMISSION_DENIED",
+              `module ${owned.moduleId} lacks interceptor permission ${owned.value.permission}`,
+              { causedBy: [owned.moduleId] },
+            ),
+          );
+        }
+      }
+      const mctx = this.moduleCtx(owned.moduleId, ctx);
+      const result = await owned.value.handle(mctx, error);
       if (!result.ok) return result;
       const effects = normalizeEffects(result.value);
       for (const effect of effects) {
-        const applied = applyInterceptorEffect(effect, scratch);
+        const applied = this.applyInterceptorEffect(
+          effect,
+          scratch,
+          owned.moduleId,
+        );
         if (!applied.ok) return applied;
       }
     }
     return ok(undefined);
+  }
+
+  private applyInterceptorEffect(
+    effect: InterceptorEffect,
+    scratch: TurnScratch,
+    moduleId: string,
+  ): Result<void, Failure> {
+    switch (effect.type) {
+      case "reject":
+        return err(effect.failure);
+      case "warn":
+        scratch.warnings.push(effect.message);
+        return ok(undefined);
+      case "patchExtras":
+        scratch.extras[effect.namespace] = {
+          ...((scratch.extras[effect.namespace] as JsonObject) ?? {}),
+          ...effect.data,
+        };
+        return ok(undefined);
+      case "enqueueAgentTask": {
+        if (!scratch.agentQueueOpen) {
+          return err(
+            failure(
+              "INTERNAL",
+              `enqueueAgentTask from module ${moduleId} is only allowed on plan/propose/narrate stages`,
+              { causedBy: [moduleId] },
+            ),
+          );
+        }
+        scratch.queuedTasks.push(stampTaskRequester(effect.task, moduleId));
+        return ok(undefined);
+      }
+      case "enqueueCommands": {
+        if (!scratch.proposeOpen) {
+          return err(
+            failure(
+              "INTERNAL",
+              `enqueueCommands from module ${moduleId} is only allowed during propose/validate window`,
+              { causedBy: [moduleId] },
+            ),
+          );
+        }
+        const stamped = effect.commands.map((command) =>
+          command.source
+            ? command
+            : {
+                ...command,
+                source: { kind: "module" as const, id: moduleId },
+              },
+        );
+        const checked = this.checkCommandPermissions(stamped);
+        if (!checked.ok) return checked;
+        scratch.proposedCommands.push(...stamped);
+        return ok(undefined);
+      }
+      default:
+        return ok(undefined);
+    }
   }
 
   private async finishCommitted(
@@ -1669,31 +1893,13 @@ function normalizeEffects(
   return [];
 }
 
-function applyInterceptorEffect(
-  effect: InterceptorEffect,
-  scratch: TurnScratch,
-): Result<void, Failure> {
-  switch (effect.type) {
-    case "reject":
-      return err(effect.failure);
-    case "warn":
-      scratch.warnings.push(effect.message);
-      return ok(undefined);
-    case "patchExtras":
-      scratch.extras[effect.namespace] = {
-        ...((scratch.extras[effect.namespace] as JsonObject) ?? {}),
-        ...effect.data,
-      };
-      return ok(undefined);
-    case "enqueueAgentTask":
-      scratch.queuedTasks.push(effect.task);
-      return ok(undefined);
-    case "enqueueCommands":
-      scratch.proposedCommands.push(...effect.commands);
-      return ok(undefined);
-    default:
-      return ok(undefined);
+function stampTaskRequester(task: AgentTask, moduleId: string): AgentTask {
+  if (task.requester?.kind === "module" && task.requester.id) {
+    return task;
   }
+  return {
+    ...task,
+    requester: { kind: "module", id: moduleId },
+  };
 }
-
 

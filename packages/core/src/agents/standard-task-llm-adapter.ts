@@ -28,6 +28,16 @@ export interface StandardTaskLlmAdapterOptions {
   readonly defaultTemperature?: number;
 }
 
+export interface StandardTaskExecuteOptions {
+  /**
+   * Optional module/core repair hints collected for this schema failure.
+   */
+  readonly getRepairHints?: (
+    taskType: string,
+    schemaError: string,
+  ) => Promise<readonly string[]>;
+}
+
 /**
  * Maps standard AgentTask types to LlmPort calls with JSON parse + schema check.
  */
@@ -65,8 +75,12 @@ export class StandardTaskLlmAdapter {
    * Executes a standard task via LlmPort.
    *
    * @param task - agent task
+   * @param options - optional repair hint provider
    */
-  async execute(task: AgentTask): Promise<AgentResult> {
+  async execute(
+    task: AgentTask,
+    options: StandardTaskExecuteOptions = {},
+  ): Promise<AgentResult> {
     if (!this.supports(task.type)) {
       return {
         ok: false,
@@ -85,7 +99,16 @@ export class StandardTaskLlmAdapter {
 
     for (let attempt = 0; attempt <= maxRepairs; attempt++) {
       if (attempt > 0) {
-        messages = this.buildRepairMessages(task, messages, lastRaw, lastIssues);
+        const hints = options.getRepairHints
+          ? await options.getRepairHints(task.type, lastIssues)
+          : [];
+        messages = this.buildRepairMessages(
+          task,
+          messages,
+          lastRaw,
+          lastIssues,
+          hints,
+        );
       }
 
       const completion = await this.llm.complete({
@@ -166,7 +189,6 @@ export class StandardTaskLlmAdapter {
     if (task.type === STANDARD_AGENT_TASK_TYPES.narrativeWrite) {
       return buildNarrativeWriteMessages(task);
     }
-    // action.interpret
     const input = ActionInterpretInputSchema.safeParse(task.input);
     const payload = input.success ? input.data : task.input;
     return [
@@ -190,16 +212,26 @@ export class StandardTaskLlmAdapter {
     base: readonly LlmMessage[],
     previousText: string,
     issues: string,
+    hints: readonly string[],
   ): LlmMessage[] {
     if (task.type === STANDARD_AGENT_TASK_TYPES.narrativeWrite) {
-      return buildNarrativeWriteRepairMessages(base, previousText, issues);
+      return buildNarrativeWriteRepairMessages(
+        base,
+        previousText,
+        issues,
+        hints,
+      );
     }
+    const hintBlock =
+      hints.length > 0
+        ? `\nAdditional repair hints:\n- ${hints.join("\n- ")}`
+        : "";
     return [
       ...base,
       { role: "assistant", content: previousText },
       {
         role: "user",
-        content: `Previous JSON failed validation. Fix it. Issues: ${issues}`,
+        content: `Previous JSON failed validation. Fix it. Issues: ${issues}${hintBlock}`,
       },
     ];
   }
@@ -225,7 +257,6 @@ function parseJsonObject(text: string): Result<JsonObject, Failure> {
     }
     return ok(value as JsonObject);
   } catch (error) {
-    // Try to extract first {...} block
     const start = unfenced.indexOf("{");
     const end = unfenced.lastIndexOf("}");
     if (start >= 0 && end > start) {

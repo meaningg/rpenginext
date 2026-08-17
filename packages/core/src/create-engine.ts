@@ -3,13 +3,14 @@ import {
   err,
   failure,
   ok,
+  type ConfigSchemaDefinition,
   type Engine,
   type EngineDependencies,
   type Failure,
+  type JsonObject,
   type Module,
   type ModuleFactory,
   type Result,
-  type TurnLogger,
 } from "@rpengineext/contracts";
 
 import { AgentOrchestrator } from "./agents/agent-orchestrator.ts";
@@ -50,7 +51,7 @@ export interface CreateEngineSuccess {
 }
 
 /**
- * Composition root: boots registry, wires pipeline, returns Engine facade.
+ * Composition root: boots registry, validates module config schemas, wires runtime.
  *
  * @param options - engine options
  */
@@ -80,6 +81,14 @@ export async function createEngine(
     return boot;
   }
 
+  const configCheck = validateModuleConfigs(
+    registry.getIndex().configSchemas,
+    config.moduleConfig,
+  );
+  if (!configCheck.ok) {
+    return configCheck;
+  }
+
   const started = await registry.startAll();
   if (!started.ok) {
     return started;
@@ -104,6 +113,7 @@ export async function createEngine(
     defaultModel: config.agents.defaultModel,
     defaultTemperature: config.agents.temperature,
     maxParallelPerTurn: config.agents.maxParallelPerTurn,
+    getModulePermissions: (moduleId) => registry.getModulePermissions(moduleId),
   });
 
   const tracer = new TurnTracer({
@@ -146,19 +156,27 @@ export async function createEngine(
 }
 
 /**
- * Adapts a structured logger to TurnLogger if needed (identity for compatible loggers).
+ * Validates host-provided moduleConfig sections against registered schemas.
  *
- * @param log - logger
+ * @param schemas - contribution index config schemas
+ * @param moduleConfig - host config map keyed by schema key
  */
-export function asTurnLogger(log: TurnLogger): TurnLogger {
-  return log;
+export function validateModuleConfigs(
+  schemas: ReadonlyMap<string, { readonly value: ConfigSchemaDefinition }>,
+  moduleConfig: Readonly<Record<string, JsonObject>>,
+): Result<void, Failure> {
+  for (const [key, owned] of schemas) {
+    const raw = moduleConfig[key] ?? {};
+    const parsed = owned.value.schema.safeParse(raw);
+    if (!parsed.success) {
+      return err(
+        failure(
+          "REGISTRATION_INVALID",
+          `moduleConfig["${key}"] failed registered config schema`,
+          { details: parsed.error.flatten() },
+        ),
+      );
+    }
+  }
+  return ok(undefined);
 }
-
-/**
- * Convenience failure when createEngine is used incorrectly.
- */
-export function engineNotCreated(message: string): Failure {
-  return failure("INTERNAL", message);
-}
-
-void err;

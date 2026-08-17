@@ -1,13 +1,11 @@
 import {
   createPermissionChecker,
-  err,
-  failure,
-  ok,
   type AgentResult,
   type AgentTask,
   type Failure,
   type JsonObject,
   type PermissionChecker,
+  type PermissionToken,
   type Result,
   type StateCommand,
   type TraceNote,
@@ -70,7 +68,7 @@ export function createTurnContext(host: TurnContextHost): TurnContext {
 }
 
 /**
- * Core-scoped permission checker (all core permissions).
+ * Core-scoped permission checker (full technical privileges for pipeline internals).
  */
 export function createCorePermissionChecker(): PermissionChecker {
   return createPermissionChecker([
@@ -78,17 +76,59 @@ export function createCorePermissionChecker(): PermissionChecker {
     "state:propose:*",
     "agent:call:*",
     "rng:use",
+    "memory:read",
+    "memory:write",
+    "canon:read",
+    "canon:propose",
   ]);
 }
 
 /**
- * Reject helper when propose is used outside allowed stages.
+ * Builds a permission checker from a module's granted tokens.
+ *
+ * @param granted - module manifest permissions
  */
-export function proposeClosed(): Result<void, Failure> {
-  return err(
-    failure(
-      "INTERNAL",
-      "propose() is only allowed during propose/validate draft window",
-    ),
-  );
+export function createModulePermissionChecker(
+  granted: readonly PermissionToken[],
+): PermissionChecker {
+  return createPermissionChecker(granted);
+}
+
+/**
+ * Returns a TurnContext view with a different permission checker.
+ * Used so module handlers see their own grants, not core's full set.
+ *
+ * @param ctx - base turn context
+ * @param permissions - effective checker for the module
+ */
+export function withPermissions(
+  ctx: TurnContext,
+  permissions: PermissionChecker,
+): TurnContext {
+  return {
+    get turnId() {
+      return ctx.turnId;
+    },
+    get sessionId() {
+      return ctx.sessionId;
+    },
+    get stateView() {
+      return ctx.stateView;
+    },
+    get rng() {
+      return ctx.rng;
+    },
+    permissions,
+    propose(commands) {
+      return ctx.propose(commands);
+    },
+    requestAgent(task) {
+      return ctx.requestAgent(task);
+    },
+    log: ctx.log,
+    trace: ctx.trace,
+    get extras() {
+      return ctx.extras;
+    },
+  };
 }

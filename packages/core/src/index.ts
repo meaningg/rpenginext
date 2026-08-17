@@ -7,7 +7,7 @@
  */
 
 export { CORE_VERSION } from "./version.ts";
-export { createEngine, asTurnLogger } from "./create-engine.ts";
+export { createEngine, validateModuleConfigs } from "./create-engine.ts";
 export type {
   CreateEngineOptions,
   CreateEngineSuccess,
@@ -44,3 +44,14 @@ export { applySliceMigrations } from "./state/slice-migrations.ts";
 export { createSystemClock, createFixedClock } from "./util/clock.ts";
 export type { Clock } from "./util/clock.ts";
 export { withTimeout } from "./util/with-timeout.ts";
+export {
+  createCorePermissionChecker,
+  createModulePermissionChecker,
+  createTurnContext,
+  withPermissions,
+} from "./pipeline/turn-context.ts";
+export {
+  commandTouchesConflictKey,
+  collectCommandWritePaths,
+  globPathMatch,
+} from "./pipeline/conflict-paths.ts";

@@ -20,6 +20,7 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
     strictManifest: true,
     failOnMissingCapability: true,
   },
+  moduleConfig: {},
   turn: {
     stageTimeoutsMs: buildStageTimeouts(),
     sessionBusyPolicy: "error",
@@ -72,6 +73,7 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
  */
 export type EngineConfigOverrides = {
   readonly modules?: Partial<EngineConfig["modules"]>;
+  readonly moduleConfig?: EngineConfig["moduleConfig"];
   readonly turn?: Partial<Omit<EngineConfig["turn"], "stageTimeoutsMs">> &
     {
       readonly stageTimeoutsMs?: Partial<
@@ -92,6 +94,10 @@ export function mergeEngineConfig(
   }
   return {
     modules: { ...DEFAULT_ENGINE_CONFIG.modules, ...overrides.modules },
+    moduleConfig: {
+      ...DEFAULT_ENGINE_CONFIG.moduleConfig,
+      ...overrides.moduleConfig,
+    },
     turn: {
       ...DEFAULT_ENGINE_CONFIG.turn,
       ...overrides.turn,

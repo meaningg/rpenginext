@@ -19,7 +19,8 @@ interface StoredSession {
 }
 
 /**
- * In-memory PersistencePort for Phase 2 (sqlite arrives in Phase 3).
+ * In-memory PersistencePort for tests and ephemeral hosts.
+ * Provides atomic {@link commitTurn} so core never needs the non-TX save+journal split.
  */
 export class InMemoryPersistence implements PersistencePort {
   private readonly sessions = new Map<string, StoredSession>();

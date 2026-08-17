@@ -58,17 +58,25 @@ export function buildNarrativeWriteRepairMessages(
   base: readonly LlmMessage[],
   previousText: string,
   issues: string,
+  hints: readonly string[] = [],
 ): LlmMessage[] {
+  const lines = [
+    "Your previous JSON failed schema validation.",
+    "Fix and return ONLY valid JSON for narrative.write.",
+    `Validation issues: ${issues}`,
+  ];
+  if (hints.length > 0) {
+    lines.push("Additional repair hints:");
+    for (const hint of hints) {
+      lines.push(`- ${hint}`);
+    }
+  }
   return [
     ...base,
     { role: "assistant", content: previousText },
     {
       role: "user",
-      content: [
-        "Your previous JSON failed schema validation.",
-        "Fix and return ONLY valid JSON for narrative.write.",
-        `Validation issues: ${issues}`,
-      ].join("\n"),
+      content: lines.join("\n"),
     },
   ];
 }

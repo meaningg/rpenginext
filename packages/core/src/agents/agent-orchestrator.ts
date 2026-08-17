@@ -1,7 +1,9 @@
 import {
   STANDARD_AGENT_TASK_TYPES,
+  agentCallPermission,
   err,
   failure,
+  hasPermission,
   ok,
   type AgentResult,
   type AgentTask,
@@ -10,6 +12,7 @@ import {
   type Failure,
   type JsonObject,
   type LlmPort,
+  type PermissionToken,
   type Result,
   type TurnContext,
   type TurnLogger,
@@ -42,6 +45,10 @@ export interface AgentOrchestratorOptions {
   readonly defaultModel?: string;
   readonly defaultTemperature?: number;
   readonly maxParallelPerTurn?: number;
+  /** Resolves module grants for tool permission checks. */
+  readonly getModulePermissions?: (
+    moduleId: string,
+  ) => readonly PermissionToken[];
 }
 
 export interface ToolInvokeRecord {
@@ -67,8 +74,12 @@ export class AgentOrchestrator {
   private readonly mode: AgentsRuntimeMode;
   private readonly llmAdapter: StandardTaskLlmAdapter | undefined;
   private readonly maxParallelPerTurn: number;
-  private turnInFlight = 0;
+  private readonly getModulePermissions?: (
+    moduleId: string,
+  ) => readonly PermissionToken[];
   private lastToolCalls: ToolInvokeRecord[] = [];
+  /** Active turn context for repair-hint providers (set by pipeline). */
+  private activeCtx: TurnContext | null = null;
 
   /**
    * @param options - orchestrator dependencies
@@ -83,22 +94,15 @@ export class AgentOrchestrator {
     this.maxRepairAttempts = options.maxRepairAttempts ?? 1;
     this.mode = options.mode ?? (options.llm ? "llm" : "mock");
     this.maxParallelPerTurn = Math.max(1, options.maxParallelPerTurn ?? 4);
-    this.llmAdapter =
-      options.llm && options.defaultModel
-        ? new StandardTaskLlmAdapter({
-            llm: options.llm,
-            model: options.defaultModel,
-            log: this.log,
-            defaultTemperature: options.defaultTemperature,
-          })
-        : options.llm
-          ? new StandardTaskLlmAdapter({
-              llm: options.llm,
-              model: "unspecified",
-              log: this.log,
-              defaultTemperature: options.defaultTemperature,
-            })
-          : undefined;
+    this.getModulePermissions = options.getModulePermissions;
+    this.llmAdapter = options.llm
+      ? new StandardTaskLlmAdapter({
+          llm: options.llm,
+          model: options.defaultModel?.trim() || "unspecified",
+          log: this.log,
+          defaultTemperature: options.defaultTemperature,
+        })
+      : undefined;
   }
 
   /**
@@ -134,20 +138,43 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Resets per-turn agent bookkeeping.
+   * Resets per-turn agent bookkeeping and binds turn context for repair hints.
+   *
+   * @param ctx - optional active turn context
    */
-  beginTurn(): void {
-    this.turnInFlight = 0;
+  beginTurn(ctx?: TurnContext): void {
     this.lastToolCalls = [];
+    this.activeCtx = ctx ?? null;
+  }
+
+  /**
+   * Updates the active turn context mid-turn (after ctx is fully built).
+   *
+   * @param ctx - turn context
+   */
+  setTurnContext(ctx: TurnContext): void {
+    this.activeCtx = ctx;
+  }
+
+  /**
+   * Clears active turn context after turn end.
+   */
+  endTurn(): void {
+    this.activeCtx = null;
   }
 
   /**
    * Executes many agent tasks with a concurrency limit.
    *
    * @param tasks - tasks to run
+   * @param ctx - optional turn context for permissions/repair
    */
-  async executeMany(tasks: readonly AgentTask[]): Promise<AgentResult[]> {
+  async executeMany(
+    tasks: readonly AgentTask[],
+    ctx?: TurnContext,
+  ): Promise<AgentResult[]> {
     if (tasks.length === 0) return [];
+    if (ctx) this.activeCtx = ctx;
     const results: AgentResult[] = new Array(tasks.length);
     let next = 0;
     const workers = Array.from(
@@ -156,7 +183,7 @@ export class AgentOrchestrator {
         while (true) {
           const index = next++;
           if (index >= tasks.length) return;
-          results[index] = await this.execute(tasks[index]!);
+          results[index] = await this.execute(tasks[index]!, ctx);
         }
       },
     );
@@ -169,7 +196,7 @@ export class AgentOrchestrator {
    *
    * @param toolId - tool id
    * @param args - tool arguments
-   * @param ctx - turn context (permissions)
+   * @param ctx - turn context (caller permissions)
    * @param allowlist - optional per-task allowlist
    */
   async invokeTool(
@@ -181,74 +208,70 @@ export class AgentOrchestrator {
     const started = this.clock.nowMs();
     const callId = `tool_${toolId}_${started}`;
     if (allowlist && !allowlist.includes(toolId)) {
-      const fail = failure(
-        "PERMISSION_DENIED",
-        `tool ${toolId} is not on the task allowlist`,
-      );
-      this.lastToolCalls.push({
-        toolName: toolId,
+      return this.toolFail(
+        toolId,
         callId,
         args,
-        error: fail.message,
-        durationMs: this.clock.nowMs() - started,
-      });
-      return err(fail);
+        started,
+        failure(
+          "PERMISSION_DENIED",
+          `tool ${toolId} is not on the task allowlist`,
+        ),
+      );
     }
 
-    const def = this.index.agentTools.get(toolId)?.value;
+    const owned = this.index.agentTools.get(toolId);
+    const def = owned?.value;
     if (!def) {
-      const fail = failure("INTERNAL", `unknown agent tool: ${toolId}`);
-      this.lastToolCalls.push({
-        toolName: toolId,
+      return this.toolFail(
+        toolId,
         callId,
         args,
-        error: fail.message,
-        durationMs: this.clock.nowMs() - started,
-      });
-      return err(fail);
+        started,
+        failure("INTERNAL", `unknown agent tool: ${toolId}`),
+      );
     }
 
-    if (def.permission && !ctx.permissions.allows(def.permission)) {
-      const fail = failure(
-        "PERMISSION_DENIED",
-        `missing permission ${def.permission} for tool ${toolId}`,
-      );
-      this.lastToolCalls.push({
-        toolName: toolId,
-        callId,
-        args,
-        error: fail.message,
-        durationMs: this.clock.nowMs() - started,
-      });
-      return err(fail);
+    if (def.permission) {
+      const token = def.permission as PermissionToken;
+      if (!ctx.permissions.allows(token)) {
+        return this.toolFail(
+          toolId,
+          callId,
+          args,
+          started,
+          failure(
+            "PERMISSION_DENIED",
+            `missing permission ${def.permission} for tool ${toolId}`,
+          ),
+        );
+      }
     }
 
     const parsedArgs = def.argsSchema.safeParse(args);
     if (!parsedArgs.success) {
-      const fail = failure("SCHEMA_INVALID", `invalid args for tool ${toolId}`, {
-        details: parsedArgs.error.flatten(),
-      });
-      this.lastToolCalls.push({
-        toolName: toolId,
+      return this.toolFail(
+        toolId,
         callId,
         args,
-        error: fail.message,
-        durationMs: this.clock.nowMs() - started,
-      });
-      return err(fail);
+        started,
+        failure("SCHEMA_INVALID", `invalid args for tool ${toolId}`, {
+          details: parsedArgs.error.flatten(),
+        }),
+      );
     }
 
-    const handler = this.index.agentToolHandlers.find((item) => item.value.id === toolId);
+    const handler = this.index.agentToolHandlers.find(
+      (item) => item.value.id === toolId,
+    );
     if (!handler) {
-      const fail = failure("INTERNAL", `no handler registered for tool ${toolId}`);
-      this.lastToolCalls.push({
-        toolName: toolId,
+      return this.toolFail(
+        toolId,
         callId,
         args,
-        error: fail.message,
-        durationMs: this.clock.nowMs() - started,
-      });
-      return err(fail);
+        started,
+        failure("INTERNAL", `no handler registered for tool ${toolId}`),
+      );
     }
 
     try {
@@ -265,19 +288,15 @@ export class AgentOrchestrator {
       }
       const parsedResult = def.resultSchema.safeParse(invoked.value);
       if (!parsedResult.success) {
-        const fail = failure(
-          "SCHEMA_INVALID",
-          `tool ${toolId} returned invalid result`,
-          { details: parsedResult.error.flatten() },
-        );
-        this.lastToolCalls.push({
-          toolName: toolId,
+        return this.toolFail(
+          toolId,
           callId,
-          args: parsedArgs.data,
-          error: fail.message,
-          durationMs: this.clock.nowMs() - started,
-        });
-        return err(fail);
+          parsedArgs.data,
+          started,
+          failure("SCHEMA_INVALID", `tool ${toolId} returned invalid result`, {
+            details: parsedResult.error.flatten(),
+          }),
+        );
       }
       this.lastToolCalls.push({
         toolName: toolId,
@@ -288,17 +307,15 @@ export class AgentOrchestrator {
       });
       return ok(parsedResult.data);
     } catch (error) {
-      const fail = failure("MODULE_ERROR", `tool ${toolId} threw`, {
-        details: String(error),
-      });
-      this.lastToolCalls.push({
-        toolName: toolId,
+      return this.toolFail(
+        toolId,
         callId,
-        args: parsedArgs.data,
-        error: fail.message,
-        durationMs: this.clock.nowMs() - started,
-      });
-      return err(fail);
+        parsedArgs.data,
+        started,
+        failure("MODULE_ERROR", `tool ${toolId} threw`, {
+          details: String(error),
+        }),
+      );
     }
   }
 
@@ -330,14 +347,34 @@ export class AgentOrchestrator {
    * Executes an agent task with schema validation.
    *
    * @param task - agent task
+   * @param ctx - optional turn context
    */
-  async execute(task: AgentTask): Promise<AgentResult> {
+  async execute(task: AgentTask, ctx?: TurnContext): Promise<AgentResult> {
+    if (ctx) this.activeCtx = ctx;
     const started = this.clock.nowMs();
-    this.turnInFlight += 1;
     this.log.debug(
       { taskId: task.taskId, type: task.type, mode: this.mode },
       "agent task start",
     );
+
+    if (
+      task.requester.kind === "module" &&
+      this.getModulePermissions &&
+      !hasPermission(
+        this.getModulePermissions(task.requester.id),
+        agentCallPermission(task.type),
+      )
+    ) {
+      this.emitFinished(task, false);
+      return {
+        ok: false,
+        taskId: task.taskId,
+        error: {
+          code: "PERMISSION_DENIED",
+          message: `module ${task.requester.id} lacks ${agentCallPermission(task.type)}`,
+        },
+      };
+    }
 
     try {
       const raw = await this.invoke(task);
@@ -348,7 +385,6 @@ export class AgentOrchestrator {
 
       const validated = this.validateOutput(task, raw.data);
       if (!validated.ok) {
-        // Mock path: optional single re-invoke. LLM adapter already repairs.
         if (this.mode === "mock" && this.maxRepairAttempts > 0) {
           const retry = await this.invoke(task);
           if (retry.ok) {
@@ -403,21 +439,26 @@ export class AgentOrchestrator {
           details: String(error),
         },
       };
-    } finally {
-      this.turnInFlight = Math.max(0, this.turnInFlight - 1);
     }
   }
 
   private async invoke(task: AgentTask): Promise<AgentResult> {
+    const repairOpts = {
+      getRepairHints: async (taskType: string, schemaError: string) => {
+        if (!this.activeCtx) return [] as string[];
+        return this.collectRepairHints(taskType, schemaError, this.activeCtx);
+      },
+    };
+
     if (this.mode === "mock") {
       const mock = this.mockScript.get(task.type);
       if (mock) {
         return await mock(task);
       }
-      // Allow LLM fallback in mock mode if no handler and llm present
       if (this.llmAdapter?.supports(task.type)) {
         return await this.llmAdapter.execute(
           withDefaultRepairs(task, this.maxRepairAttempts),
+          repairOpts,
         );
       }
       return {
@@ -430,10 +471,10 @@ export class AgentOrchestrator {
       };
     }
 
-    // llm mode: standard tasks go through LlmPort (mocks ignored for those types)
     if (this.llmAdapter?.supports(task.type)) {
       return await this.llmAdapter.execute(
         withDefaultRepairs(task, this.maxRepairAttempts),
+        repairOpts,
       );
     }
 
@@ -448,7 +489,6 @@ export class AgentOrchestrator {
       };
     }
 
-    // Non-standard types in llm mode may still use mock handlers if registered
     const mock = this.mockScript.get(task.type);
     if (mock) {
       return await mock(task);
@@ -492,6 +532,23 @@ export class AgentOrchestrator {
       ok: success,
       at: this.clock.nowIso(),
     });
+  }
+
+  private toolFail(
+    toolId: string,
+    callId: string,
+    args: JsonObject,
+    started: number,
+    fail: Failure,
+  ): Result<JsonObject, Failure> {
+    this.lastToolCalls.push({
+      toolName: toolId,
+      callId,
+      args,
+      error: fail.message,
+      durationMs: this.clock.nowMs() - started,
+    });
+    return err(fail);
   }
 }
 

@@ -12,8 +12,6 @@ import {
 } from "@rpengineext/contracts";
 import { z } from "zod";
 
-const EmptyPayloadSchema = z.object({}).passthrough() as z.ZodType<JsonObject>;
-
 const SetFlagPayloadSchema = z
   .object({
     key: z.string().min(1),
@@ -170,6 +168,3 @@ export function validateCommandPayload(
   }
   return ok(undefined);
 }
-
-// silence unused in some tooling paths
-void EmptyPayloadSchema;

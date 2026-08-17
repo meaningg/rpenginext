@@ -162,4 +162,47 @@ export class HostSurface {
   getTemplate(id: string): string | undefined {
     return this.index.templates.get(id)?.value.text;
   }
+
+  /**
+   * Lists registered memory kind ids (catalog vocabulary for modules/host).
+   */
+  listMemoryKinds(): readonly string[] {
+    return [...this.index.memoryKinds.keys()].sort();
+  }
+
+  /**
+   * Validates a memory payload against a registered kind schema when present.
+   * Kinds without schema always pass (catalog-only entry).
+   *
+   * @param kind - memory kind id
+   * @param data - candidate payload
+   */
+  validateMemory(
+    kind: string,
+    data: JsonObject,
+  ): Result<void, Failure> {
+    const owned = this.index.memoryKinds.get(kind);
+    if (!owned) {
+      return err(failure("INTERNAL", `unknown memory kind: ${kind}`));
+    }
+    const schema = owned.value.schema;
+    if (!schema) return ok(undefined);
+    const parsed = schema.safeParse(data);
+    if (!parsed.success) {
+      return err(
+        failure("SCHEMA_INVALID", `memory kind ${kind} payload invalid`, {
+          details: parsed.error.flatten(),
+          causedBy: [owned.moduleId],
+        }),
+      );
+    }
+    return ok(undefined);
+  }
+
+  /**
+   * Lists registered module config schema keys.
+   */
+  listConfigSchemaKeys(): readonly string[] {
+    return [...this.index.configSchemas.keys()].sort();
+  }
 }

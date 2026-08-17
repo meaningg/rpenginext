@@ -1,4 +1,4 @@
-import type { StageId } from "@rpengineext/contracts";
+import type { JsonObject, StageId } from "@rpengineext/contracts";
 
 /**
  * Runtime engine configuration (host may override partials).
@@ -10,8 +10,15 @@ export interface EngineConfig {
     /** Fail boot when a required capability is missing. */
     readonly failOnMissingCapability: boolean;
   };
+  /**
+   * Host-provided per-module config sections, keyed by
+   * {@link import("@rpengineext/contracts").ConfigSchemaDefinition.key}.
+   * Validated at boot against registered config schemas.
+   */
+  readonly moduleConfig: Readonly<Record<string, JsonObject>>;
   readonly turn: {
     readonly stageTimeoutsMs: Readonly<Record<StageId, number>>;
+    /** v1 supports reject-on-busy only (queue is out of scope). */
     readonly sessionBusyPolicy: "error";
     readonly defaultTurnKind: "player";
     /** Max retained clientActionId → TurnResult entries per session. */
