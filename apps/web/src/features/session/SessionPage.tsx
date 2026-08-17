@@ -28,6 +28,23 @@ import {
 
 const NARRATIVE_TASK = "narrative.write";
 
+/** Maintenance / restore markers produced by core for non-player turns. */
+const INTERNAL_PROSE_RE = /^\((?:system|restore)\)\b/i;
+
+/**
+ * True when prose is an internal engine marker, not chat narrative.
+ */
+function isInternalPassageProse(prose: string): boolean {
+  return INTERNAL_PROSE_RE.test(prose.trim());
+}
+
+/**
+ * Player chat should only react to player turns (system/background is silent).
+ */
+function isPlayerTurnKind(turnKind: unknown): boolean {
+  return turnKind == null || turnKind === "player";
+}
+
 /**
  * Chat-style play surface with SSE narrative streaming (prose-only draft).
  */
@@ -108,6 +125,8 @@ export function SessionPage() {
   const finalizeAssistant = useCallback(
     (prose: string, passageId?: string) => {
       if (!prose.trim()) return;
+      // Never surface background system / restore markers as Narrator chat.
+      if (isInternalPassageProse(prose)) return;
 
       if (passageId && lastPassageIdRef.current === passageId) {
         const cleaned = messagesRef.current.filter((m) => !m.streaming);
@@ -168,12 +187,19 @@ export function SessionPage() {
     const view = await getSession(p, sessionId);
     setSession(view);
 
-    const stored = loadTranscript(sessionId);
+    const stored = loadTranscript(sessionId).filter(
+      (m) => !isInternalPassageProse(m.content),
+    );
     if (stored.length > 0) {
       messagesRef.current = stored;
       setMessages(stored);
+      saveTranscript(sessionId, stored);
       lastPassageIdRef.current = view.passage?.id ?? null;
-    } else if (view.passage?.prose) {
+    } else if (view.passage?.prose && !isInternalPassageProse(view.passage.prose)) {
+      } else if (
+      view.passage?.prose &&
+      !isInternalPassageProse(view.passage.prose)
+    ) {
       const seed: ChatMessage = {
         id: createMessageId("open"),
         role: "assistant",
@@ -219,6 +245,7 @@ export function SessionPage() {
           phase?: string;
           text?: string;
           taskType?: string;
+          turnKind?: string;
           passage?: Passage;
           failure?: { message: string };
         };
@@ -226,8 +253,11 @@ export function SessionPage() {
 
       if (data.type !== "engine" || !data.event) return;
       const ev = data.event;
+      const playerFacingTurn = isPlayerTurnKind(ev.turnKind);
 
       if (ev.type === "turn.started") {
+        // Background system turns (outfit_sync, etc.) must not hijack chat UX.
+        if (!playerFacingTurn) return;
         setBusy(true);
         rawDraftRef.current = "";
         finalizedTurnRef.current = false;
@@ -236,7 +266,7 @@ export function SessionPage() {
         streamMsgIdRef.current = null;
       }
 
-      if (ev.type === "turn.stage") {
+      if (ev.type === "turn.stage" && playerFacingTurn) {
         const label = humanStage(ev.stage, ev.phase);
         if (label) setStageHint(label);
       }
@@ -255,16 +285,25 @@ export function SessionPage() {
       }
 
       if (ev.type === "passage.published" && ev.passage) {
-        finalizeAssistant(ev.passage.prose, ev.passage.id);
+        if (!isInternalPassageProse(ev.passage.prose)) {
+          finalizeAssistant(ev.passage.prose, ev.passage.id);
+        }
       }
 
       if (ev.type === "turn.committed") {
+        if (!playerFacingTurn) {
+          // Still refresh session meta/visible state after background work.
+          void getSession(player, sessionId)
+            .then((view) => setSession(view))
+            .catch(() => undefined);
+          return;
+        }
         setBusy(false);
         setStageHint(null);
         void getSession(player, sessionId)
           .then((view) => {
             setSession(view);
-            if (view.passage?.prose) {
+            if (view.passage?.prose && !isInternalPassageProse(view.passage.prose)) {
               finalizeAssistant(view.passage.prose, view.passage.id);
             }
           })
@@ -272,6 +311,7 @@ export function SessionPage() {
       }
 
       if (ev.type === "turn.rejected") {
+        if (!playerFacingTurn) return;
         rawDraftRef.current = "";
         finalizedTurnRef.current = true;
         setBusy(false);
@@ -328,7 +368,9 @@ export function SessionPage() {
         false,
       );
       if ("status" in result && result.status === "committed") {
-        finalizeAssistant(result.passage.prose, result.passage.id);
+        if (!isInternalPassageProse(result.passage.prose)) {
+          finalizeAssistant(result.passage.prose, result.passage.id);
+        }
         setBusy(false);
         setStageHint(null);
       } else if ("status" in result && result.status === "rejected") {
@@ -370,16 +412,21 @@ export function SessionPage() {
     <div className="flex h-[calc(100dvh-5.5rem)] min-h-[28rem] flex-col">
       <header className="mb-3 flex shrink-0 items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
-            <Link to="/sessions" className="hover:text-violet-300">
+          <div className="flex items-center gap-2 text-xs text-stone-500">
+            <Link
+              to="/sessions"
+              className="transition hover:text-violet-300"
+            >
               Sessions
             </Link>
-            <span aria-hidden>·</span>
-            <span className="truncate font-mono text-[11px] text-zinc-600">
+            <span aria-hidden className="text-stone-700">
+              ·
+            </span>
+            <span className="truncate font-mono text-[11px] text-stone-600">
               {sessionId}
             </span>
           </div>
-          <h1 className="mt-1 truncate text-xl font-semibold tracking-tight text-zinc-50">
+          <h1 className="mt-1 truncate text-xl font-semibold tracking-tight text-stone-50">
             {session?.title ?? "Session"}
           </h1>
         </div>
@@ -392,7 +439,7 @@ export function SessionPage() {
           <button
             type="button"
             onClick={() => void onSave()}
-            className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-sm text-zinc-200 transition hover:border-violet-400/40 hover:bg-violet-500/10 hover:text-white"
+            className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-sm text-stone-200 transition hover:border-violet-400/40 hover:bg-violet-500/10 hover:text-white"
           >
             Save
           </button>
@@ -405,19 +452,19 @@ export function SessionPage() {
         </div>
       ) : null}
 
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_80px_-32px_rgba(0,0,0,0.85)] backdrop-blur-xl">
+      <div className="chat-shell relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.08] shadow-[0_0_0_1px_rgba(255,255,255,0.025),0_28px_90px_-36px_rgba(0,0,0,0.9)] backdrop-blur-xl">
         <div
           ref={scrollerRef}
-          className="flex-1 space-y-4 overflow-y-auto px-3 py-4 sm:px-5"
+          className="flex-1 space-y-5 overflow-y-auto px-3.5 py-5 sm:px-6 sm:py-6"
         >
           {!hydrated ? (
-            <p className="py-12 text-center text-sm text-zinc-500">
+            <p className="py-12 text-center text-sm text-stone-500">
               Loading story…
             </p>
           ) : messages.length === 0 && !showTyping ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center">
-              <p className="text-sm text-zinc-400">The page is blank.</p>
-              <p className="text-xs text-zinc-600">
+              <p className="text-sm text-stone-400">The page is blank.</p>
+              <p className="text-xs text-stone-600">
                 Type an action below to begin.
               </p>
             </div>
@@ -429,20 +476,20 @@ export function SessionPage() {
 
           {showTyping ? (
             <div className="flex justify-start">
-              <div className="rounded-2xl rounded-bl-md border border-white/8 bg-zinc-900/90 px-4 py-3 text-sm text-zinc-400 shadow-lg shadow-black/20">
-                <span className="mr-2 inline-flex gap-1 align-middle">
+              <div className="inline-flex items-center gap-2.5 rounded-full border border-white/[0.07] bg-zinc-900/70 px-3.5 py-2 text-sm text-stone-400 shadow-lg shadow-black/20">
+                <span className="inline-flex gap-1">
                   <span className="typing-dot" />
                   <span className="typing-dot animation-delay-150" />
                   <span className="typing-dot animation-delay-300" />
                 </span>
-                {stageHint ?? "Writing the next moment…"}
+                <span>{stageHint ?? "Writing the next moment…"}</span>
               </div>
             </div>
           ) : null}
         </div>
 
-        <div className="shrink-0 border-t border-white/8 bg-zinc-950/80 p-3 backdrop-blur-md sm:p-4">
-          <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-zinc-900/80 p-2 shadow-inner shadow-black/30 focus-within:border-violet-400/40 focus-within:ring-2 focus-within:ring-violet-500/20">
+        <div className="shrink-0 border-t border-white/[0.07] bg-zinc-950/75 p-3 backdrop-blur-md sm:p-4">
+          <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-zinc-900/70 p-2 shadow-inner shadow-black/25 transition focus-within:border-violet-400/45 focus-within:ring-2 focus-within:ring-violet-500/20">
             <textarea
               ref={inputRef}
               value={text}
@@ -456,7 +503,7 @@ export function SessionPage() {
               onKeyDown={onComposerKeyDown}
               disabled={busy || !hydrated}
               placeholder="What do you do?"
-              className="max-h-36 min-h-[2.75rem] flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 disabled:opacity-50"
+              className="max-h-36 min-h-[2.75rem] flex-1 resize-none bg-transparent px-3 py-2.5 font-sans text-[15px] leading-relaxed text-stone-100 outline-none placeholder:text-stone-600 disabled:opacity-50"
             />
             <button
               type="button"
@@ -468,7 +515,7 @@ export function SessionPage() {
               <SendIcon />
             </button>
           </div>
-          <p className="mt-2 px-1 text-[11px] text-zinc-600">
+          <p className="mt-2 px-1 text-[11px] text-stone-600">
             Enter to send · Shift+Enter for newline
           </p>
         </div>
@@ -481,34 +528,69 @@ function ChatBubble({ message }: { readonly message: ChatMessage }) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[min(100%,36rem)] rounded-2xl rounded-br-md bg-gradient-to-br from-violet-600 to-fuchsia-600 px-4 py-2.5 text-[15px] leading-relaxed text-white shadow-lg shadow-violet-950/40">
+        <div className="max-w-[min(100%,34rem)] rounded-2xl rounded-br-md bg-gradient-to-br from-violet-600 to-fuchsia-600 px-4 py-2.5 font-sans text-[14.5px] leading-relaxed text-white shadow-lg shadow-violet-950/35">
           <p className="whitespace-pre-wrap">{message.content}</p>
         </div>
       </div>
     );
   }
 
+  const paragraphs = splitNarrativeParagraphs(message.content);
+
   return (
-    <div className="flex justify-start">
-      <div className="max-w-[min(100%,42rem)] rounded-2xl rounded-bl-md border border-white/8 bg-zinc-900/90 px-4 py-3 shadow-lg shadow-black/25">
-        <div className="mb-1.5 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-violet-300/70">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-violet-400/80" />
+    <article className="narrative-panel relative w-full overflow-hidden rounded-2xl pl-1">
+      <div className="px-4 py-4 sm:px-5 sm:py-5">
+        <div className="mb-3 flex items-center gap-2 font-sans text-[10.5px] font-medium uppercase tracking-[0.16em] text-violet-300/75">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-violet-300/90" />
           Narrator
           {message.streaming ? (
-            <span className="normal-case tracking-normal text-zinc-500">
-              streaming
+            <span className="normal-case tracking-normal text-stone-500">
+              writing…
             </span>
           ) : null}
         </div>
-        <p className="whitespace-pre-wrap font-serif text-[16px] leading-8 text-zinc-100">
-          {message.content}
-          {message.streaming ? (
-            <span className="ml-0.5 inline-block h-[1.05em] w-0.5 animate-pulse bg-violet-300 align-[-0.15em]" />
+        <div className="narrative-prose mx-auto max-w-[42rem]">
+          {paragraphs.map((paragraph, index) => {
+            const isLast = index === paragraphs.length - 1;
+            return (
+              <p key={`${message.id}-p-${index}`}>
+                {paragraph}
+                {message.streaming && isLast ? (
+                  <span className="stream-cursor" aria-hidden />
+                ) : null}
+              </p>
+            );
+          })}
+          {message.streaming && paragraphs.length === 0 ? (
+            <p>
+              <span className="stream-cursor" aria-hidden />
+            </p>
           ) : null}
-        </p>
+        </div>
       </div>
-    </div>
+    </article>
   );
+}
+
+/**
+ * Splits narrator prose into readable paragraphs.
+ * Prefers blank-line breaks; falls back to single newlines for denser text.
+ */
+function splitNarrativeParagraphs(content: string): string[] {
+  const normalized = content.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return [];
+
+  const byBlank = normalized
+    .split(/\n\s*\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (byBlank.length > 1) return byBlank;
+
+  const byLine = normalized
+    .split("\n")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return byLine.length > 0 ? byLine : [normalized];
 }
 
 function SendIcon() {

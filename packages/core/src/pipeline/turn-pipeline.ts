@@ -179,6 +179,17 @@ export class TurnPipeline {
     turnId: string,
     kind: TurnKind = "player",
   ): Promise<TurnResult> {
+    const startedAt = this.clock.nowMs();
+    this.log.info(
+      {
+        turnId,
+        sessionId: session.sessionId,
+        kind,
+        actionKind: action.kind,
+      },
+      "turn started",
+    );
+
     const s0 = session.kernel.getAuthoritative() as WorldState;
     const scratch: TurnScratch = {
       turnId,
@@ -293,6 +304,7 @@ export class TurnPipeline {
       type: "turn.started",
       sessionId: session.sessionId,
       turnId,
+      turnKind: kind,
       at: this.clock.nowIso(),
     });
 
@@ -302,6 +314,7 @@ export class TurnPipeline {
       scratch.outcome = "rejected";
       const rejected = await this.finishRejected(session, scratch);
       this.orchestrator.endTurn();
+      this.logTurnFinished(rejected, startedAt);
       return rejected;
     }
 
@@ -344,6 +357,7 @@ export class TurnPipeline {
       }
       const result = await this.finishCommitted(session, scratch);
       this.orchestrator.endTurn();
+      this.logTurnFinished(result, startedAt);
       return result;
     }
     if (scratch.outcome === "pending") {
@@ -358,7 +372,42 @@ export class TurnPipeline {
     }
     const rejected = await this.finishRejected(session, scratch);
     this.orchestrator.endTurn();
+    this.logTurnFinished(rejected, startedAt);
     return rejected;
+  }
+
+  /**
+   * Emits a single structured line when a turn reaches a terminal status.
+   *
+   * @param result - terminal turn result
+   * @param startedAt - clock ms from turn start
+   */
+  private logTurnFinished(result: TurnResult, startedAt: number): void {
+    const durationMs = this.clock.nowMs() - startedAt;
+    if (result.status === "committed") {
+      this.log.info(
+        {
+          turnId: result.turnId,
+          sessionId: result.sessionId,
+          durationMs,
+          revision: result.revision,
+          warningCount: result.warnings.length,
+        },
+        "turn committed",
+      );
+      return;
+    }
+    this.log.warn(
+      {
+        turnId: result.turnId,
+        sessionId: result.sessionId,
+        durationMs,
+        code: result.failure.code,
+        stage: result.failure.stage,
+        message: result.failure.message,
+      },
+      "turn rejected",
+    );
   }
 
   /**
@@ -400,6 +449,7 @@ export class TurnPipeline {
       turnId: scratch.turnId,
       stage,
       phase: "started",
+      turnKind: scratch.kind,
       at: this.clock.nowIso(),
     });
 
@@ -453,6 +503,7 @@ export class TurnPipeline {
           stage,
           phase: "finished",
           ok: false,
+          turnKind: scratch.kind,
           at: this.clock.nowIso(),
         });
         return timed;
@@ -471,6 +522,7 @@ export class TurnPipeline {
           stage,
           phase: "finished",
           ok: false,
+          turnKind: scratch.kind,
           at: this.clock.nowIso(),
         });
         return timed.value;
@@ -487,6 +539,7 @@ export class TurnPipeline {
         stage,
         phase: "finished",
         ok: true,
+        turnKind: scratch.kind,
         at: this.clock.nowIso(),
       });
       return ok(undefined);
@@ -1639,6 +1692,12 @@ export class TurnPipeline {
       timestamp,
     };
 
+    // System turns keep internal/journal passages but must not replace the
+    // player-facing lastPassage (chat / GET passage / resume UX).
+    const playerFacingPassage =
+      scratch.kind === "system" ? (session.lastPassage ?? null) : passage;
+    const lastPassageId = playerFacingPassage?.id ?? passage.id;
+
     const snapshot = {
       formatVersion: 1,
       sessionId: session.sessionId,
@@ -1650,7 +1709,7 @@ export class TurnPipeline {
       },
       enabledModules: [...session.enabledModules],
       state: deepClone(draft),
-      lastPassageId: passage.id,
+      lastPassageId,
       passages: [
         ...[...session.passages.values()].map((p) => deepClone(p)),
         deepClone(passage),
@@ -1716,8 +1775,10 @@ export class TurnPipeline {
       return committed;
     }
 
-    session.lastPassage = passage;
     session.passages.set(passage.id, passage);
+    if (scratch.kind !== "system") {
+      session.lastPassage = passage;
+    }
 
     this.events.publish({
       type: "state.committed",
@@ -1725,18 +1786,22 @@ export class TurnPipeline {
       revision: nextRevision,
       at: timestamp,
     });
-    this.events.publish({
-      type: "passage.published",
-      sessionId: session.sessionId,
-      passage,
-      at: timestamp,
-    });
+    // Only player/restore passages are player-facing chat content.
+    if (scratch.kind !== "system") {
+      this.events.publish({
+        type: "passage.published",
+        sessionId: session.sessionId,
+        passage,
+        at: timestamp,
+      });
+    }
     this.events.publish({
       type: "turn.committed",
       sessionId: session.sessionId,
       turnId: scratch.turnId,
       revision: nextRevision,
       passageId: passage.id,
+      turnKind: scratch.kind,
       at: timestamp,
     });
 
@@ -2009,6 +2074,7 @@ export class TurnPipeline {
       sessionId: scratch.sessionId,
       turnId: scratch.turnId,
       failure: failurePayload,
+      turnKind: scratch.kind,
       at: this.clock.nowIso(),
     });
 

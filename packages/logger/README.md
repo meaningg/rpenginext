@@ -49,6 +49,8 @@ turnLog.error({ err: new Error("boom"), apiKey: "secret" }, "agent failed");
 ## Design notes
 
 - Public type is `Logger` — **pino is not re-exported**.
+- Pretty mode uses an **in-process sync** `pino-pretty` stream (not worker
+  transport), so API/host and engine child loggers stay ordered on one stdout.
 - Secrets: default redact paths cover keys/tokens/Authorization.
 - Turn markdown dossiers are **not** this package (see core tracing).
 - Levels match architecture: `debug | info | warn | error`.

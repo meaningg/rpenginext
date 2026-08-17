@@ -10,25 +10,26 @@ import { SessionsPage } from "../features/sessions/SessionsPage.tsx";
  */
 export function App() {
   return (
-    <div className="relative min-h-dvh overflow-x-hidden">
+    <div className="relative min-h-dvh overflow-x-hidden font-sans">
       <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-zinc-950" />
-        <div className="absolute -left-32 top-0 h-96 w-96 rounded-full bg-violet-600/20 blur-3xl" />
-        <div className="absolute -right-24 top-40 h-80 w-80 rounded-full bg-fuchsia-600/15 blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.06),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[#07070a]" />
+        <div className="absolute -left-40 top-[-6rem] h-[28rem] w-[28rem] rounded-full bg-violet-600/18 blur-3xl" />
+        <div className="absolute -right-28 top-32 h-[22rem] w-[22rem] rounded-full bg-fuchsia-600/12 blur-3xl" />
+        <div className="absolute bottom-[-4rem] left-1/3 h-80 w-80 rounded-full bg-indigo-500/10 blur-3xl" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.045),transparent_58%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent,rgba(7,7,10,0.55))]" />
       </div>
 
-      <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-4 pb-6 pt-4 sm:px-6">
-        <header className="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-zinc-950/50 px-4 py-3 shadow-lg shadow-black/20 backdrop-blur-xl">
+      <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 pb-6 pt-4 sm:px-6">
+        <header className="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-white/[0.08] bg-zinc-950/55 px-4 py-3 shadow-[0_10px_40px_-18px_rgba(0,0,0,0.8)] backdrop-blur-xl">
           <Link
             to="/"
-            className="group flex items-center gap-2.5 text-zinc-100"
+            className="group flex items-center gap-2.5 text-stone-100"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-sm font-bold text-white shadow-md shadow-violet-900/40">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-sm font-bold tracking-tight text-white shadow-md shadow-violet-900/40">
               R
             </span>
-            <span className="text-[15px] font-semibold tracking-tight group-hover:text-white">
+            <span className="text-[15px] font-semibold tracking-tight text-stone-100 group-hover:text-white">
               RP Engine
             </span>
           </Link>
@@ -61,7 +62,7 @@ function NavLink({
   return (
     <Link
       to={to}
-      className="rounded-full px-3 py-1.5 text-zinc-400 transition hover:bg-white/5 hover:text-zinc-100"
+      className="rounded-full px-3 py-1.5 text-stone-400 transition hover:bg-white/[0.05] hover:text-stone-100"
     >
       {children}
     </Link>

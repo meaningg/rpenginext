@@ -364,8 +364,13 @@ export class AgentOrchestrator {
   async execute(task: AgentTask, ctx?: TurnContext): Promise<AgentResult> {
     if (ctx) this.activeCtx = ctx;
     const started = this.clock.nowMs();
-    this.log.debug(
-      { taskId: task.taskId, type: task.type, mode: this.mode },
+    this.log.info(
+      {
+        taskId: task.taskId,
+        type: task.type,
+        mode: this.mode,
+        requester: task.requester,
+      },
       "agent task start",
     );
     this.emitStarted(task);
@@ -379,7 +384,7 @@ export class AgentOrchestrator {
       )
     ) {
       this.emitFinished(task, false);
-      return {
+      const denied: AgentResult = {
         ok: false,
         taskId: task.taskId,
         error: {
@@ -387,12 +392,15 @@ export class AgentOrchestrator {
           message: `module ${task.requester.id} lacks ${agentCallPermission(task.type)}`,
         },
       };
+      this.logAgentFinished(task, denied, started);
+      return denied;
     }
 
     try {
       const raw = await this.invoke(task);
       if (!raw.ok) {
         this.emitFinished(task, false);
+        this.logAgentFinished(task, raw, started);
         return raw;
       }
 
@@ -404,7 +412,7 @@ export class AgentOrchestrator {
             const again = this.validateOutput(task, retry.data);
             if (again.ok) {
               this.emitFinished(task, true);
-              return {
+              const repaired: AgentResult = {
                 ok: true,
                 taskId: task.taskId,
                 data: again.value,
@@ -415,11 +423,13 @@ export class AgentOrchestrator {
                   repaired: true,
                 },
               };
+              this.logAgentFinished(task, repaired, started);
+              return repaired;
             }
           }
         }
         this.emitFinished(task, false);
-        return {
+        const invalid: AgentResult = {
           ok: false,
           taskId: task.taskId,
           error: {
@@ -429,10 +439,12 @@ export class AgentOrchestrator {
           },
           rawMeta: raw.rawMeta,
         };
+        this.logAgentFinished(task, invalid, started);
+        return invalid;
       }
 
       this.emitFinished(task, true);
-      return {
+      const success: AgentResult = {
         ok: true,
         taskId: task.taskId,
         data: validated.value,
@@ -442,9 +454,11 @@ export class AgentOrchestrator {
           durationMs: this.clock.nowMs() - started,
         },
       };
+      this.logAgentFinished(task, success, started);
+      return success;
     } catch (error) {
       this.emitFinished(task, false);
-      return {
+      const thrown: AgentResult = {
         ok: false,
         taskId: task.taskId,
         error: {
@@ -453,7 +467,46 @@ export class AgentOrchestrator {
           details: String(error),
         },
       };
+      this.logAgentFinished(task, thrown, started);
+      return thrown;
     }
+  }
+
+  /**
+   * Structured terminal log for one agent task (visible in host/API stdout).
+   *
+   * @param task - executed task
+   * @param result - terminal agent result
+   * @param started - clock ms at task start
+   */
+  private logAgentFinished(
+    task: AgentTask,
+    result: AgentResult,
+    started: number,
+  ): void {
+    const durationMs = this.clock.nowMs() - started;
+    if (result.ok) {
+      this.log.info(
+        {
+          taskId: task.taskId,
+          type: task.type,
+          durationMs,
+          repaired: result.rawMeta?.repaired === true,
+        },
+        "agent task finished",
+      );
+      return;
+    }
+    this.log.warn(
+      {
+        taskId: task.taskId,
+        type: task.type,
+        durationMs,
+        code: result.error.code,
+        message: result.error.message,
+      },
+      "agent task failed",
+    );
   }
 
   private async invoke(task: AgentTask): Promise<AgentResult> {

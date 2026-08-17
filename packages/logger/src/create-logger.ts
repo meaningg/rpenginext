@@ -1,5 +1,6 @@
 import pino from "pino";
 import type { Logger as PinoLogger } from "pino";
+import pretty from "pino-pretty";
 
 import {
   isLogLevel,
@@ -16,6 +17,8 @@ import type {
 const PRETTY_IGNORE_FIELDS = "pid,hostname" as const;
 const PRETTY_TRANSLATE_TIME = "SYS:standard" as const;
 const PRETTY_ERROR_PROPS = "message,stack,code,type" as const;
+/** stdout fd — used by pretty destination */
+const STDOUT_FD = 1;
 
 type LogMethod = "debug" | "info" | "warn" | "error";
 
@@ -24,6 +27,8 @@ type LogMethod = "debug" | "info" | "warn" | "error";
  *
  * - DI-friendly factory (no global singleton).
  * - Pretty colored output when `json` is false and no custom destination.
+ *   Uses an in-process sync pretty stream (not worker transport) so host,
+ *   API, and engine lines stay ordered and visible under Bun.
  * - NDJSON when `json` is true or a custom `destination` is provided.
  * - Default secret redaction; extend via `redactPaths`.
  *
@@ -59,19 +64,19 @@ export function createLogger(options: CreateLoggerOptions = {}): Logger {
   let pinoInstance: PinoLogger;
 
   if (usePretty) {
-    pinoInstance = pino({
-      ...baseOptions,
-      transport: {
-        target: "pino-pretty",
-        options: {
-          colorize: true,
-          translateTime: PRETTY_TRANSLATE_TIME,
-          ignore: PRETTY_IGNORE_FIELDS,
-          errorProps: PRETTY_ERROR_PROPS,
-          singleLine: false,
-        },
-      },
+    // Worker `transport: { target: "pino-pretty" }` buffers out-of-process and
+    // reorders/hides lines under Bun (API console vs engine child loggers).
+    // Sync in-process stream keeps one shared stdout timeline for the host.
+    const prettyStream = pretty({
+      colorize: true,
+      translateTime: PRETTY_TRANSLATE_TIME,
+      ignore: PRETTY_IGNORE_FIELDS,
+      errorProps: PRETTY_ERROR_PROPS,
+      singleLine: false,
+      sync: true,
+      destination: STDOUT_FD,
     });
+    pinoInstance = pino(baseOptions, prettyStream);
   } else if (options.destination !== undefined) {
     pinoInstance = pino(baseOptions, options.destination as pino.DestinationStream);
   } else {

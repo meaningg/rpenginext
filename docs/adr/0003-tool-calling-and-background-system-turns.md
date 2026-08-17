@@ -26,7 +26,10 @@ Player-facing prose must not wait on optional maintenance agents.
    - `background`: return player passage first; run system turn when session is free
    - Next player action **waits** until background work finishes (serial session)
 
-3. **System turns skip `narrative.write`** and use a short `(system) <reason>` passage.
+3. **System turns skip `narrative.write`** and use a short internal `(system) <reason>`
+   passage for journal/trace only. They **do not** replace player-facing `lastPassage`
+   and **do not** emit `passage.published`. Turn events carry `turnKind` so hosts can
+   ignore system turns in chat UX.
 
 4. **Character module** (`@rpengineext/module-character`):
    - Story JSON `character: { name, appearance, features, outfit }`
@@ -38,3 +41,4 @@ Player-facing prose must not wait on optional maintenance agents.
 - Optional maintenance cost after each free_text turn when character is present
 - Outfit may lag by one background job if the player immediately acts (they wait)
 - Responses API adapters must map function tools / function_call_output items
+- Hosts must treat `turnKind !== "player"` as non-chat (no Narrator bubble, no busy hijack)

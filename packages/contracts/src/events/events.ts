@@ -1,6 +1,7 @@
 import type { TurnFailure } from "../turn/turn-result.ts";
 import type { Passage } from "../turn/passage.ts";
 import type { TraceOutcome } from "../tracing/port.ts";
+import type { TurnKind } from "../turn/stages.ts";
 
 /**
  * Observe-only engine events. Subscribers must never mutate world state.
@@ -11,6 +12,8 @@ export type EngineEvent =
       readonly type: "turn.started";
       readonly sessionId: string;
       readonly turnId: string;
+      /** player | system | restore — UI should ignore non-player chat effects */
+      readonly turnKind?: TurnKind;
       readonly at: string;
     }
   | {
@@ -19,6 +22,8 @@ export type EngineEvent =
       readonly turnId: string;
       readonly revision: number;
       readonly passageId: string;
+      /** player | system | restore — UI should ignore non-player chat effects */
+      readonly turnKind?: TurnKind;
       readonly at: string;
     }
   | {
@@ -26,6 +31,8 @@ export type EngineEvent =
       readonly sessionId: string;
       readonly turnId: string;
       readonly failure: TurnFailure;
+      /** player | system | restore — UI should ignore non-player chat effects */
+      readonly turnKind?: TurnKind;
       readonly at: string;
     }
   | {
@@ -41,6 +48,8 @@ export type EngineEvent =
       readonly stage: string;
       readonly phase: "started" | "finished";
       readonly ok?: boolean;
+      /** player | system | restore — UI should ignore non-player chat effects */
+      readonly turnKind?: TurnKind;
       readonly at: string;
     }
   | {

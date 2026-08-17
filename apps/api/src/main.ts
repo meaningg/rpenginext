@@ -52,12 +52,19 @@ async function main(): Promise<void> {
     log: runtime.log,
   });
 
-  console.log(`rpengineext API at ${api.server.url}`);
-  console.log(`agents mode: ${runtime.env.agentsMode}`);
-  console.log(`CORS origin: ${runtime.env.corsOrigin}`);
+  // Prefer structured logger so host/engine lines share one stdout stream.
+  runtime.log.info(
+    {
+      url: String(api.server.url),
+      agentsMode: runtime.env.agentsMode,
+      corsOrigin: runtime.env.corsOrigin,
+      logLevel: runtime.env.logLevel,
+    },
+    "rpengineext API ready",
+  );
 
   const shutdown = async () => {
-    console.log("shutting down API…");
+    runtime.log.info("shutting down API…");
     await api.stop();
     process.exit(0);
   };

@@ -191,5 +191,14 @@ describe("character module integration", () => {
       if (outfit.includes("crimson")) break;
     }
     expect(outfit).toBe("crimson cloak over dark clothes");
+
+    // Background system turn must not replace the player-facing lastPassage.
+    const passage = await session.value.getPassage();
+    expect(passage.ok).toBe(true);
+    if (!passage.ok) return;
+    expect(passage.value?.prose).toBe(
+      "You put on a crimson cloak over your clothes.",
+    );
+    expect(passage.value?.prose).not.toContain("(system)");
   });
 });

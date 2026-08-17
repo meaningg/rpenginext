@@ -43,16 +43,16 @@ export function HomePage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-violet-300/80">
+    <div className="space-y-7">
+      <div className="space-y-2.5">
+        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-violet-300/85">
           Interactive fiction
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
+        <h1 className="text-3xl font-semibold tracking-tight text-stone-50 sm:text-4xl">
           Choose a story
         </h1>
-        <p className="max-w-xl text-[15px] leading-relaxed text-zinc-400">
-          Free-text roleplay in a modern chat. One action at a time — the
+        <p className="max-w-xl text-[15px] leading-relaxed text-stone-400">
+          Free-text roleplay in a calm reading view. One action at a time — the
           narrator answers in prose.
         </p>
       </div>
@@ -63,9 +63,9 @@ export function HomePage() {
         </p>
       ) : null}
 
-      <div className="grid gap-3">
+      <div className="grid gap-3.5">
         {templates.length === 0 && !error ? (
-          <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-zinc-500">
+          <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-stone-500">
             Loading stories…
           </div>
         ) : null}
@@ -73,21 +73,21 @@ export function HomePage() {
         {templates.map((template) => (
           <article
             key={template.id}
-            className="group rounded-2xl border border-white/10 bg-zinc-900/50 p-5 shadow-xl shadow-black/20 backdrop-blur-sm transition hover:border-violet-400/30 hover:bg-zinc-900/80"
+            className="group rounded-2xl border border-white/[0.08] bg-zinc-900/45 p-5 shadow-[0_18px_50px_-28px_rgba(0,0,0,0.85)] backdrop-blur-sm transition hover:border-violet-400/30 hover:bg-zinc-900/70"
           >
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 space-y-2">
-                <h2 className="text-lg font-semibold text-zinc-50 transition group-hover:text-white">
+                <h2 className="text-lg font-semibold tracking-tight text-stone-50 transition group-hover:text-white">
                   {template.title}
                 </h2>
-                <p className="text-sm leading-relaxed text-zinc-400">
+                <p className="text-[14.5px] leading-relaxed text-stone-400">
                   {template.synopsis}
                 </p>
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {template.tags.map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full border border-white/8 bg-white/5 px-2.5 py-0.5 text-[11px] text-zinc-400"
+                      className="rounded-full border border-white/[0.07] bg-white/[0.04] px-2.5 py-0.5 text-[11px] text-stone-400"
                     >
                       {tag}
                     </span>

@@ -199,6 +199,14 @@ describe("phase 4 hardening", () => {
     expect(state?.core.flags.systemRan).toBe(true);
     // player + system each bump
     expect(state?.core.turnIndex).toBe(2);
+
+    // System turn keeps journal passage but does not clobber player lastPassage.
+    if (result.status !== "committed") return;
+    const last = await session.value.getPassage();
+    expect(last.ok).toBe(true);
+    if (!last.ok) return;
+    expect(last.value?.id).toBe(result.passage.id);
+    expect(last.value?.prose).not.toMatch(/^\(system\)/);
   });
 
   test("conflict resolver merges competing commands", async () => {

@@ -26,12 +26,12 @@ export function SessionsPage() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-violet-300/80">
+    <div className="space-y-7">
+      <div className="space-y-2.5">
+        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-violet-300/85">
           Continue
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">
+        <h1 className="text-3xl font-semibold tracking-tight text-stone-50">
           My sessions
         </h1>
       </div>
@@ -44,10 +44,10 @@ export function SessionsPage() {
 
       {sessions.length === 0 && !error ? (
         <div className="rounded-2xl border border-dashed border-white/10 px-4 py-12 text-center">
-          <p className="text-sm text-zinc-400">No sessions yet.</p>
+          <p className="text-sm text-stone-400">No sessions yet.</p>
           <Link
             to="/"
-            className="mt-3 inline-flex text-sm text-violet-300 hover:text-violet-200"
+            className="mt-3 inline-flex text-sm text-violet-300 transition hover:text-violet-200"
           >
             Start a story →
           </Link>
@@ -58,10 +58,12 @@ export function SessionsPage() {
             <li key={session.sessionId}>
               <Link
                 to={`/play/${session.sessionId}`}
-                className="block rounded-2xl border border-white/10 bg-zinc-900/50 px-4 py-3.5 shadow-lg shadow-black/15 transition hover:border-violet-400/30 hover:bg-zinc-900/80"
+                className="block rounded-2xl border border-white/[0.08] bg-zinc-900/45 px-4 py-3.5 shadow-[0_14px_40px_-24px_rgba(0,0,0,0.8)] transition hover:border-violet-400/30 hover:bg-zinc-900/70"
               >
-                <div className="font-medium text-zinc-100">{session.title}</div>
-                <p className="mt-1 text-xs text-zinc-500">
+                <div className="font-medium tracking-tight text-stone-100">
+                  {session.title}
+                </div>
+                <p className="mt-1 text-xs text-stone-500">
                   {session.templateId} · updated{" "}
                   {formatWhen(session.updatedAt)}
                 </p>

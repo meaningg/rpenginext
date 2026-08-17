@@ -96,4 +96,16 @@ describe("createLogger", () => {
     expect(lines[0]?.msg).toBe("failed");
     expect(err?.message).toBe("agent timeout");
   });
+
+  test("edge: pretty mode creates logger without throwing", () => {
+    // Worker transport is intentionally avoided; sync pretty must boot on Bun.
+    const log = createLogger({
+      name: "pretty-smoke",
+      level: "info",
+      json: false,
+    });
+    const child = log.child({ component: "engine" });
+    expect(log.level).toBe("info");
+    expect(() => child.info({ sessionId: "s_1" }, "pretty smoke")).not.toThrow();
+  });
 });

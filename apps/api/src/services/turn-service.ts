@@ -100,6 +100,15 @@ export class TurnService {
 
     this.activeTurns += 1;
     let capturedTurnId: string | undefined;
+    this.log.info(
+      {
+        sessionId,
+        wait,
+        actionKind: action.kind,
+        activeTurns: this.activeTurns,
+      },
+      "turn submit",
+    );
 
     const unsub = this.events.subscribe("turn.started", (event) => {
       if (event.type !== "turn.started") return;
@@ -123,6 +132,14 @@ export class TurnService {
           result,
         });
         this.latestBySession.set(sessionId, turnId);
+        this.log.info(
+          {
+            sessionId,
+            turnId,
+            status: result.status,
+          },
+          "turn job finished",
+        );
         return result;
       })
       .catch((error: unknown) => {
