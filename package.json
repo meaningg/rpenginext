@@ -1,0 +1,33 @@
+{
+  "name": "rpengineext",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "workspaces": ["packages/*", "packages/*/*", "apps/*"],
+  "scripts": {
+    "test": "bun test",
+    "test:logger": "bun test packages/logger",
+    "test:contracts": "bun test packages/contracts",
+    "test:core": "bun test packages/core",
+    "test:persistence": "bun test packages/persistence/sqlite",
+    "test:agents-responses": "bun test packages/agents/responses",
+    "typecheck": "bunx tsc --noEmit -p packages/logger/tsconfig.json && bunx tsc --noEmit -p packages/contracts/tsconfig.json && bunx tsc --noEmit -p packages/core/tsconfig.json && bunx tsc --noEmit -p packages/persistence/sqlite/tsconfig.json && bunx tsc --noEmit -p packages/agents/responses/tsconfig.json && bunx tsc --noEmit -p apps/cli/tsconfig.json",
+    "start": "bun run index.ts",
+    "cli": "bun run apps/cli/src/main.ts",
+    "cli:hello": "bun run apps/cli/src/main.ts --once hello",
+    "cli:book": "bun run apps/cli/src/main.ts --repl"
+  },
+  "dependencies": {
+    "@rpengineext/logger": "workspace:*",
+    "@rpengineext/contracts": "workspace:*",
+    "@rpengineext/core": "workspace:*",
+    "@rpengineext/persistence-sqlite": "workspace:*",
+    "@rpengineext/agents-responses": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

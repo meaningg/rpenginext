@@ -1,0 +1,220 @@
+# Module System
+
+> **Статус:** normative  
+> **Цель:** разные авторы пишут modules параллельно, опираясь только на docs + `contracts`.
+
+## 1. Что такое module
+
+**Module** — изолированный пакет расширения runtime, который:
+
+1. Объявляет манифест (identity, engines, provides/requires, permissions, priority).
+2. Регистрирует contribution’ы в fixed extension points.
+3. Может иметь namespaced state slice schema.
+4. Может описывать agent tasks / tools.
+5. Не управляет lifecycle сессии и не commit’ит state сам.
+
+Игрок modules не видит напрямую — только их эффект в правилах мира и качестве истории.
+
+## 2. Example modules (иллюстрация, не scope v1 core)
+
+Следующие id — **примеры** будущих расширений. Они **не** реализуются, пока не придёт отдельная задача:
+
+| Module id (example) | Назначение |
+|---------------------|------------|
+| `npc` | сущности NPC, отношения, инициативы реплик/поведения |
+| `plot-controller` | акты, beats, gates, fail-forward |
+| `fandom-canon` | поиск/проверка канона, proposal канон-фактов кампании |
+| `summarizer` | сжатие истории в memory items |
+
+Любой module (ваш или third-party) подключается одинаково: манифест + contracts.
+
+## 3. Manifest (нормативная структура)
+
+Логический schema (имена полей стабильны):
+
+```json
+{
+  "id": "npc",
+  "version": "1.2.0",
+  "displayName": "NPC System",
+  "description": "NPC entities, relations, turn intents",
+  "engines": {
+    "core": "^1.0.0",
+    "contracts": "^1.0.0"
+  },
+  "priority": 100,
+  "provides": ["capability:npc", "agent-task:npc.voice"],
+  "requires": ["capability:state-core"],
+  "permissions": [
+    "state:read",
+    "state:propose:npc",
+    "agent:call:npc.voice",
+    "memory:read"
+  ],
+  "stateSlices": [
+    {
+      "name": "npc",
+      "schemaVersion": 1
+    }
+  ],
+  "extensionPoints": [
+    "Guard",
+    "Planner",
+    "TransitionContributor",
+    "NarrativeContextProvider",
+    "AfterCommitHook"
+  ]
+}
+```
+
+### Правила манифеста
+
+- `id` — kebab-case / reverse-domain, уникален в process.
+- `priority` — число; **меньший** = раньше в детерминированном порядке (tie-break: `id` asc).
+- `provides`/`requires` — строки из registry vocabulary + module-defined capabilities.
+- `permissions` — subset known permission tokens; default-deny.
+- Незаявленный extension point implementation игнорируется или fail on strict mode (config).
+
+## 4. Module lifecycle
+
+```text
+discover → load manifest → import factory → register(ctx)
+  → validate graph → start(ctx) → (turns...) → stop(ctx)
+```
+
+| Phase | Module may | Module must not |
+|-------|------------|-----------------|
+| `register` | объявить handlers, schemas, task specs | трогать session state |
+| `start` | warm caches, open own read-only resources | commit world commands |
+| turn hooks | read view, propose, request agents per rules | partial external side effects that can’t roll back without compensation policy |
+| `stop` | close resources | assume further turns |
+
+## 5. Extension surface (wide freeze v1)
+
+Короткий список из 8–9 хуков **недостаточен**: под каждый модуль снова лезли бы в core.
+
+Поэтому v1 использует **три слоя** (полный норматив — отдельный документ):
+
+**→ [12-extension-surface.md](./12-extension-surface.md)**
+
+| Слой | Суть |
+|------|------|
+| **A. Catalog registrations** | `registerSlice/Command/AgentTask/Tool/ActionType/ReadModel/...` — новые данные и операции без core |
+| **B. Stage interceptors** | `before/after/onError` на **каждой** стадии pipeline + session lifecycle |
+| **C. Typed contribution ports** | расширенный набор розеток (Guard, Planner, Narrative*, Choice*, Status*, …) с merge-политиками |
+
+### Принцип стабильности core
+
+```text
+Новый gameplay  → registration + ports/interceptors в module
+Новый механизм  → ADR + core (редко)
+```
+
+Product modules (npc/plot/canon/…) — **примеры**; не реализуются, пока нет отдельной задачи.
+
+### Handler contract shape (logical)
+
+Каждый handler/interceptor:
+
+- не трогает authoritative state напрямую;
+- получает typed input + `TurnContext`;
+- возвращает typed output или `Result`;
+- ограничен timeout/budget;
+- пишет extras/brief только в свой namespace.
+
+## 6. Permissions vocabulary (v1)
+
+| Token | Meaning |
+|-------|---------|
+| `state:read` | читать world state view |
+| `state:propose:<slice>` | предлагать commands в slice |
+| `state:propose:*` | только privileged first-party, review required |
+| `canon:read` | читать canon facts |
+| `canon:propose` | предлагать canon upsert commands |
+| `memory:read` | читать memory items |
+| `memory:write` | предлагать memory write commands (в draft до COMMIT или system turn) |
+| `agent:call:<taskType>` | запрашивать task type |
+| `agent:call:*` | privileged |
+| `rng:use` | использовать seeded rng |
+
+Registry отвергает module, если handler пытается сделать действие без permission.
+
+## 7. Capability graph
+
+При boot:
+
+1. Собрать все `provides`.
+2. Убедиться, что каждый `requires` удовлетворён.
+3. Обнаружить cycles в hard dependency (forbid).
+4. Построить order по priority + id.
+
+Если missing capability:
+
+- fail boot **или** disable module + fail only if required by host profile (config policy).
+
+Для production RP profile: missing required gameplay capability = fail boot.
+
+## 8. Inter-module communication
+
+Разрешено:
+
+- через state commands + shared read models;
+- через capability interfaces, published in contracts or agreed capability id;
+- через plan artifacts в `TurnContext.extras` с namespaced keys (`npc.*`, `plot.*`).
+
+Запрещено:
+
+- direct import another module package internals;
+- hidden event coupling for truth;
+- order-sensitive race without deterministic priority rules.
+
+## 9. Packaging rules for independent authors
+
+Минимальный skeleton:
+
+```text
+modules/<id>/
+  package.json
+  module.manifest.json
+  README.md
+  src/
+    index.ts            # createModule(): Module
+    handlers/
+    schema/             # state slice zod/json-schema
+    agents/             # task specs (optional)
+    __tests__/
+  docs/
+    gameplay.md         # optional player-facing effects
+```
+
+Автор модуля обязан:
+
+1. Зависеть только от `@rpengineext/contracts` (+ shared).
+2. Покрыть ≥3 unit tests на сервис/основной handler set (success, reject, edge) — см. project rules.
+3. Не обещать side effects вне atomic turn model.
+4. Документировать commands, permissions, agent tasks.
+
+См. практический гайд: [../modules/writing-modules-for-core.md](../modules/writing-modules-for-core.md)  
+(index: [../modules/README.md](../modules/README.md)).
+
+## 10. Official vs community modules
+
+| | Official | Community |
+|--|----------|-----------|
+| path | `packages/modules/*` | external packages / `modules/` drop-in |
+| review | core maintainers | host integrator |
+| permissions | may request broader, still reviewed | prefer least privilege |
+| stability | versioned with repo | own semver |
+
+Host whitelist modules by id/version in config.
+
+## 11. How core stays unchanged when modules grow
+
+Если автору нужна «ещё одна возможность»:
+
+1. Сначала выразить через existing extension point + commands.
+2. Если не хватает **данных** — namespaced slice + commands.
+3. Если не хватает **стадии** — ADR на новый extension point (rare).
+4. Если не хватает **инфраструктуры LLM** — новый `taskType` + agent adapter, не core domain code.
+
+Это и есть механизм «core минимально меняется».

@@ -1,0 +1,25 @@
+{
+  "name": "@rpengineext/logger",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Structured logger factory (pino) for rpengineext core, modules, and hosts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "pino": "^9.9.0",
+    "pino-pretty": "^13.1.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

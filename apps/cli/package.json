@@ -1,0 +1,28 @@
+{
+  "name": "@rpengineext/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CLI host for rpengineext (hello turn / dev loop)",
+  "bin": {
+    "rpengineext": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "bun run src/main.ts",
+    "hello": "bun run src/main.ts --once hello"
+  },
+  "dependencies": {
+    "@rpengineext/agents-responses": "workspace:*",
+    "@rpengineext/contracts": "workspace:*",
+    "@rpengineext/core": "workspace:*",
+    "@rpengineext/logger": "workspace:*",
+    "@rpengineext/persistence-sqlite": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

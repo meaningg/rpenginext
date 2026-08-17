@@ -1,0 +1,28 @@
+{
+  "name": "@rpengineext/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Stable RP engine runtime: registry, state kernel, turn pipeline, agents, tracing",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@rpengineext/contracts": "workspace:*",
+    "@rpengineext/logger": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@rpengineext/persistence-sqlite": "workspace:*",
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}
