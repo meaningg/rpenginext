@@ -3,8 +3,10 @@ import { describe, expect, test } from "bun:test";
 import type { AgentTask } from "@rpengineext/contracts";
 
 import {
+  PLAYER_ACTION_LABEL,
   buildCoreNarrativePromptSections,
   buildNarrativeWriteMessages,
+  buildRulesReminder,
   sortNarrativePromptSections,
 } from "../src/agents/prompts/narrative-write.ts";
 
@@ -45,16 +47,18 @@ describe("narrative.write history messages", () => {
 
     const messages = buildNarrativeWriteMessages(task);
     expect(messages[0]?.role).toBe("system");
-    expect(messages[0]?.content).toContain("game master");
-    expect(messages[0]?.content).toContain("CURRENT action");
-    expect(messages[0]?.content).toContain("free text");
+    expect(messages[0]?.content).toContain("интерактивной книги");
+    expect(messages[0]?.content).toContain("текущий поступок");
+    expect(messages[0]?.content).toContain("свободным текстом");
     expect(messages[0]?.content).toContain('"prose": string');
-    expect(messages[0]?.content).toContain('language of locale "en"');
+    expect(messages[0]?.content).toContain('locale «en»');
+    expect(messages[0]?.content).toContain("авторское знание");
     expect(messages[1]).toEqual({ role: "user", content: "hello" });
     expect(messages[2]).toEqual({ role: "assistant", content: "Hi there." });
     expect(messages[3]?.role).toBe("user");
-    expect(messages[3]?.content).toContain("CURRENT PLAYER ACTION");
+    expect(messages[3]?.content).toContain(PLAYER_ACTION_LABEL);
     expect(messages[3]?.content).toContain("open the door");
+    expect(messages[3]?.content).toContain("Служебная памятка рассказчику");
     expect(messages[3]?.content).not.toContain("TASK JSON");
     expect(messages[3]?.content).not.toContain("narrative.write");
   });
@@ -82,9 +86,10 @@ describe("narrative.write history messages", () => {
     } as AgentTask;
 
     const messages = buildNarrativeWriteMessages(task);
-    expect(messages[0]?.content).toContain('language of locale "ru"');
-    expect(messages[0]?.content).toContain("Do not switch to English");
+    expect(messages[0]?.content).toContain('locale «ru»');
+    expect(messages[0]?.content).toContain("не уходи в English");
     expect(messages[1]?.content).toContain("Иду к деревне");
+    expect(messages[1]?.content).toContain(PLAYER_ACTION_LABEL);
     expect(messages[1]?.content).not.toContain('"locale": "ru"');
   });
 
@@ -107,6 +112,8 @@ describe("narrative.write history messages", () => {
     const messages = buildNarrativeWriteMessages(task);
     expect(messages).toHaveLength(2);
     expect(messages.map((m) => m.role)).toEqual(["system", "user"]);
+    expect(messages[0]?.content).toContain('locale «ru»');
+    expect(messages[1]?.content).toContain(buildRulesReminder());
   });
 
   test("compiles narrativePromptSections into system/user without brief dump", () => {
@@ -169,12 +176,14 @@ describe("narrative.write history messages", () => {
     expect(system).toContain("Name: Alex");
     expect(system).toContain("NARRATIVE STYLE");
     expect(system).toContain("second_person");
+    expect(system).toContain('NARRATIVE STYLE.length = «medium»');
 
     const user = messages[1]?.content ?? "";
-    expect(user).toContain("CURRENT PLAYER ACTION");
+    expect(user).toContain(PLAYER_ACTION_LABEL);
     expect(user).toContain("look");
     expect(user).toContain("CONSTRAINTS");
     expect(user).toContain("hidden prince");
+    expect(user).toContain("Служебная памятка рассказчику");
     expect(user).not.toContain("TASK JSON");
     expect(user).not.toContain("namespaces");
     expect(user).not.toContain('"present": true');
@@ -194,6 +203,7 @@ describe("narrative.write history messages", () => {
     ]);
     expect(sections[0]?.channel).toBe("user");
     expect(sections[0]?.text).toContain("secret map");
+    expect(sections[0]?.text).toContain("Не упоминай");
     expect(sections[1]?.channel).toBe("system");
     expect(sections[1]?.text).toContain("voice: second_person");
   });

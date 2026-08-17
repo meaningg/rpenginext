@@ -1,5 +1,6 @@
 import { STAGE_IDS } from "@rpengineext/contracts";
 
+import { DEFAULT_TURN_LOCALE } from "../util/locale.ts";
 import type { EngineConfig } from "./types.ts";
 
 const DEFAULT_STAGE_TIMEOUT_MS = 30_000;
@@ -26,7 +27,7 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
     sessionBusyPolicy: "error",
     defaultTurnKind: "player",
     idempotencyLimit: 256,
-    locale: "en",
+    locale: DEFAULT_TURN_LOCALE,
   },
   agents: {
     mode: "mock",

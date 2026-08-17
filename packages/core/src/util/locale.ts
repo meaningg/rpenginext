@@ -1,7 +1,7 @@
 import type { JsonObject } from "@rpengineext/contracts";
 
 /** Default when neither session nor engine config provides a locale. */
-export const DEFAULT_TURN_LOCALE = "en";
+export const DEFAULT_TURN_LOCALE = "ru";
 
 /**
  * Common non-BCP-47 aliases → preferred tags.

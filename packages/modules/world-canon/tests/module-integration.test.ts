@@ -57,7 +57,7 @@ describe("world_canon module integration", () => {
 
     const narrativeReq = requests.find((r) =>
       r.messages.some(
-        (m) => m.role === "system" && m.content.includes("game master"),
+        (m) => m.role === "system" && m.content.includes("интерактивной книги"),
       ),
     );
     expect(narrativeReq).toBeTruthy();
@@ -68,7 +68,7 @@ describe("world_canon module integration", () => {
     expect(system?.content).toContain(canon);
 
     const user = narrativeReq.messages.find(
-      (m) => m.role === "user" && m.content.includes("CURRENT PLAYER ACTION"),
+      (m) => m.role === "user" && m.content.includes("Действие игрока:"),
     );
     expect(user?.content).toContain("I look around");
     expect(user?.content).not.toContain(canon);

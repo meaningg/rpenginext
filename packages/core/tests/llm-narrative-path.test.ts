@@ -61,19 +61,19 @@ describe("llm narrative path", () => {
     expect(llm.calls[0]?.model).toBe("fake-model");
     expect(llm.calls[0]?.responseFormat).toBe("json");
     expect(String(llm.calls[0]?.messages[0]?.content ?? "")).toContain(
-      "game master",
+      "интерактивной книги",
     );
     const userMsg = String(
       llm.calls[0]?.messages[llm.calls[0]!.messages.length - 1]?.content ?? "",
     );
-    expect(userMsg).toContain("CURRENT PLAYER ACTION");
+    expect(userMsg).toContain("Действие игрока:");
     expect(userMsg).toContain("look around");
-    expect(userMsg).toContain('"text": "look around"');
+    expect(userMsg).toContain("Служебная памятка рассказчику");
 
     const md = created.value.memoryTraceSink.last()?.markdown ?? "";
     expect(md).toContain("#### Prompts");
     expect(md).toContain('role="system"');
-    expect(md).toContain("game master");
+    expect(md).toContain("интерактивной книги");
     expect(md).toContain("#### Raw model output");
     expect(md).toContain("The lantern flares");
   });
@@ -124,7 +124,7 @@ describe("llm narrative path", () => {
     // Prompts still captured when the LLM call was built before upstream failure.
     expect(trace?.markdown).toContain("#### Prompts");
     expect(trace?.markdown).toContain('role="system"');
-    expect(trace?.markdown).toContain("game master");
+    expect(trace?.markdown).toContain("интерактивной книги");
   });
 
   test("invalid JSON then repair succeeds", async () => {

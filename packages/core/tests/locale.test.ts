@@ -15,7 +15,8 @@ describe("locale helpers", () => {
   });
 
   test("resolveTurnLocale prefers session meta over config", () => {
-    expect(resolveTurnLocale({ locale: "ru" }, "en")).toBe("ru");
+    expect(DEFAULT_TURN_LOCALE).toBe("ru");
+    expect(resolveTurnLocale({ locale: "en" }, "ru")).toBe("en");
     expect(resolveTurnLocale({ locale: "русский" }, "en")).toBe("ru");
     expect(resolveTurnLocale({}, "en-GB")).toBe("en-GB");
     expect(resolveTurnLocale(undefined, undefined)).toBe(DEFAULT_TURN_LOCALE);

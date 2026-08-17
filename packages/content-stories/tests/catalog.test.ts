@@ -13,6 +13,9 @@ describe("StoryCatalog", () => {
     const list = loaded.value.list();
     expect(list.length).toBeGreaterThanOrEqual(2);
     expect(loaded.value.get("demo.hello")?.title).toBeTruthy();
+    expect(loaded.value.get("demo.hello")?.locale).toBe("ru");
     expect(loaded.value.get("demo.book")?.seed).toBeTruthy();
+    expect(loaded.value.get("demo.book")?.locale).toBe("ru");
+    expect(loaded.value.get("starwars.outer-rim")?.locale).toBe("ru");
   });
 });
