@@ -22,7 +22,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 describe("character module integration", () => {
-  test("success: seeds from meta and injects into narrative brief namespaces", async () => {
+  test("success: seeds from meta and injects into narrative system prompt", async () => {
     const requests: LlmCompletionRequest[] = [];
     const llm: LlmPort = {
       async complete(request): Promise<Result<LlmCompletionResponse, Failure>> {
@@ -75,7 +75,9 @@ describe("character module integration", () => {
     await sleep(50);
 
     const narrativeReq = requests.find((r) =>
-      r.messages.some((m) => m.content.includes("narrative.write")),
+      r.messages.some(
+        (m) => m.role === "system" && m.content.includes("game master"),
+      ),
     );
     expect(narrativeReq).toBeTruthy();
     if (!narrativeReq) return;
@@ -85,10 +87,13 @@ describe("character module integration", () => {
     expect(system?.content).toContain("Alex");
     expect(system?.content).toContain("black jacket");
 
-    const user = narrativeReq.messages.find((m) => m.role === "user");
-    expect(user?.content).toContain("narrative.write");
+    const user = narrativeReq.messages.find(
+      (m) => m.role === "user" && m.content.includes("CURRENT PLAYER ACTION"),
+    );
+    expect(user?.content).toContain("I look around");
     expect(user?.content).not.toContain("PLAYER CHARACTER");
-    expect(user?.content).not.toContain("system:character.profile");
+    expect(user?.content).not.toContain("TASK JSON");
+    expect(user?.content).not.toContain("namespaces");
   });
 
   test("error path: missing story character is no-op (no seed)", async () => {

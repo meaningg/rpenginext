@@ -269,7 +269,7 @@ AFTER: metrics only
 | PLAN | Planner, SalienceProvider, AgentTaskContributor (+ AgentTools on demand) |
 | PROPOSE | TransitionContributor, CommandDecorator |
 | VALIDATE | CommandValidator, Invariant, ConflictResolver, DraftSimulator |
-| NARRATE | NarrativeContextProvider, NarrativeStyleProvider, PromptFragmentProvider, BriefPolicy, NarrativeCritic |
+| NARRATE | NarrativeContextProvider, NarrativeStyleProvider, NarrativePromptContributor, PromptFragmentProvider (legacy bridge), BriefPolicy, NarrativeCritic |
 | PRESENT (+ materialize) | PassageAssembler, StatusPanelProvider, PostNarrativeContributor |
 | AFTER | AfterCommitHook, SystemTurnScheduler (schedule only) |
 

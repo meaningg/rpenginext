@@ -7,7 +7,7 @@ import {
 import { applySeed } from "./apply/seed.ts";
 import { COMMAND_TYPES, MODULE_ID, SLICE_NAME } from "./constants.ts";
 import { createNarrativeContextProvider } from "./handlers/narrative-context.ts";
-import { createPromptFragmentProvider } from "./handlers/prompt-fragments.ts";
+import { createNarrativePromptContributor } from "./handlers/prompt-contributor.ts";
 import { createSessionBootstrap } from "./handlers/session-bootstrap.ts";
 import { worldCanonManifest } from "./manifest.ts";
 import { SeedWorldCanonPayloadJsonSchema } from "./schema/commands.ts";
@@ -23,7 +23,7 @@ export {
   MAX_CANON_LENGTH,
   MODULE_ID,
   NARRATIVE_NAMESPACE,
-  PROMPT_FRAGMENT_PRIORITY,
+  PROMPT_SECTION_PRIORITY,
   SLICE_NAME,
 } from "./constants.ts";
 export type { WorldCanonSlice } from "./schema/slice.ts";
@@ -61,9 +61,9 @@ export function createWorldCanonModule(): Module {
 
       ctx.addSessionBootstrap(createSessionBootstrap());
       ctx.addNarrativeContextProvider(createNarrativeContextProvider());
-      ctx.addPromptFragmentProvider(createPromptFragmentProvider());
+      ctx.addNarrativePromptContributor(createNarrativePromptContributor());
 
-      ctx.log.info({ moduleId: MODULE_ID }, "world_canon module registered");
+      ctx.log.info({ moduleId: MODULE_ID }, "world-canon module registered");
       return;
     },
   };

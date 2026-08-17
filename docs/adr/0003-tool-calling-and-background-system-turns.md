@@ -30,7 +30,7 @@ Player-facing prose must not wait on optional maintenance agents.
 
 4. **Character module** (`@rpengineext/module-character`):
    - Story JSON `character: { name, appearance, features, outfit }`
-   - Narrative injection via prompt fragment + brief namespace
+   - Narrative injection via `NarrativePromptContributor` (system section) + structured brief namespace
    - Background `character.outfit_sync` agent with tool `character.update_outfit`
 
 ## Consequences

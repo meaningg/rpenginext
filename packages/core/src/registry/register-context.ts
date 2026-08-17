@@ -38,6 +38,7 @@ import {
   type ModuleRegisterContext,
   type NarrativeContextProvider,
   type NarrativeCritic,
+  type NarrativePromptContributor,
   type NarrativeStyleProvider,
   type OnTurnRejected,
   type PostNarrativeContributor,
@@ -376,6 +377,13 @@ export function createRegisterContext(
     },
     addPromptFragmentProvider(handler: PromptFragmentProvider) {
       return push(index.promptFragmentProviders, handler, "PromptFragmentProvider");
+    },
+    addNarrativePromptContributor(handler: NarrativePromptContributor) {
+      return push(
+        index.narrativePromptContributors,
+        handler,
+        "NarrativePromptContributor",
+      );
     },
     addOutputRepairHintProvider(handler: OutputRepairHintProvider) {
       return push(

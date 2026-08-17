@@ -18,7 +18,7 @@ import {
 } from "./constants.ts";
 import { createNarrativeContextProvider } from "./handlers/narrative-context.ts";
 import { createOutfitSyncTaskContributor } from "./handlers/outfit-sync-contributor.ts";
-import { createPromptFragmentProvider } from "./handlers/prompt-fragments.ts";
+import { createNarrativePromptContributor } from "./handlers/prompt-contributor.ts";
 import { createSessionBootstrap } from "./handlers/session-bootstrap.ts";
 import { createStatusPanelProvider } from "./handlers/status-panel.ts";
 import { createSystemTurnScheduler } from "./handlers/system-scheduler.ts";
@@ -121,7 +121,7 @@ export function createCharacterModule(): Module {
 
       ctx.addSessionBootstrap(createSessionBootstrap());
       ctx.addNarrativeContextProvider(createNarrativeContextProvider());
-      ctx.addPromptFragmentProvider(createPromptFragmentProvider());
+      ctx.addNarrativePromptContributor(createNarrativePromptContributor());
       ctx.addSystemTurnScheduler(createSystemTurnScheduler());
       ctx.addAgentTaskContributor(createOutfitSyncTaskContributor());
       ctx.addTransitionContributor(createTransitionContributor());

@@ -40,6 +40,7 @@ import type {
   LocalizationContributor,
   NarrativeContextProvider,
   NarrativeCritic,
+  NarrativePromptContributor,
   NarrativeStyleProvider,
   OnTurnRejected,
   PostNarrativeContributor,
@@ -111,6 +112,7 @@ export interface ModuleRegisterContext {
   addAgentToolHandler(handler: AgentToolHandler): Result<void, Failure>;
   addBriefPolicy(handler: BriefPolicy): Result<void, Failure>;
   addPromptFragmentProvider(handler: PromptFragmentProvider): Result<void, Failure>;
+  addNarrativePromptContributor(handler: NarrativePromptContributor): Result<void, Failure>;
   addOutputRepairHintProvider(handler: OutputRepairHintProvider): Result<void, Failure>;
   addTransitionContributor(handler: TransitionContributor): Result<void, Failure>;
   addCommandDecorator(handler: CommandDecorator): Result<void, Failure>;

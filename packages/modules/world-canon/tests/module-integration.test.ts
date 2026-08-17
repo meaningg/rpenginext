@@ -56,7 +56,9 @@ describe("world_canon module integration", () => {
     expect(turn.status).toBe("committed");
 
     const narrativeReq = requests.find((r) =>
-      r.messages.some((m) => m.content.includes("narrative.write")),
+      r.messages.some(
+        (m) => m.role === "system" && m.content.includes("game master"),
+      ),
     );
     expect(narrativeReq).toBeTruthy();
     if (!narrativeReq) return;
@@ -65,11 +67,13 @@ describe("world_canon module integration", () => {
     expect(system?.content).toContain("WORLD CANON");
     expect(system?.content).toContain(canon);
 
-    const user = narrativeReq.messages.find((m) => m.role === "user");
-    expect(user?.content).toContain("narrative.write");
+    const user = narrativeReq.messages.find(
+      (m) => m.role === "user" && m.content.includes("CURRENT PLAYER ACTION"),
+    );
+    expect(user?.content).toContain("I look around");
     expect(user?.content).not.toContain(canon);
-    expect(user?.content).toContain('"world_canon"');
-    expect(user?.content).toContain('"present": true');
+    expect(user?.content).not.toContain("TASK JSON");
+    expect(user?.content).not.toContain("namespaces");
   });
 
   test("error path: missing story canon is no-op (no seed)", async () => {

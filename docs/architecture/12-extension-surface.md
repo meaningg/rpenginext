@@ -126,7 +126,8 @@ Named ports (слой C) остаются для мест, где нужен **t
 | `AgentTaskContributor` | plan/narrate | extra tasks | concat; orchestrator schedules |
 | `AgentTool` | on demand | tools | catalog + allowlist per task |
 | `BriefPolicy` | narrate | what secrets may/may not leak | merge deny-list union |
-| `PromptFragmentProvider` | narrate/plan | named prompt fragments | concat by slot ordered |
+| `PromptFragmentProvider` | narrate/plan | legacy named prompt fragments (bridged into sections) | concat by slot ordered |
+| `NarrativePromptContributor` | narrate | compiled human-readable prompt sections (`system`/`user`) | concat; sort by priority+id per channel |
 | `OutputRepairHintProvider` | agent repair | schema repair hints | concat |
 
 ### 4.4 World transition
@@ -183,7 +184,7 @@ Named ports (слой C) остаются для мест, где нужен **t
 | Новые проверки | `Guard` / `Invariant` / `CommandValidator` / interceptor |
 | Подмешать LLM | `registerAgentTaskType` + `AgentTaskContributor` / `Planner` |
 | Инструмент поиска | `registerAgentTool` |
-| Влиять на текст | `NarrativeContextProvider` + `PromptFragmentProvider` + `NarrativeStyleProvider` |
+| Влиять на текст | `NarrativePromptContributor` + `NarrativeContextProvider` + `NarrativeStyleProvider` |
 | Статус в CLI | `StatusPanelProvider` / `PublicProjector` |
 | Пост-обработка memory | commands pre-commit **или** `SystemTurnScheduler` |
 | Вклиниться «между» стадиями | `StageInterceptor before/after` |

@@ -23,5 +23,5 @@ export const NARRATIVE_NAMESPACE = "world_canon" as const;
 /** Max world canon text length (characters). */
 export const MAX_CANON_LENGTH = 32_000;
 
-/** Prompt fragment priority (before character profile). */
-export const PROMPT_FRAGMENT_PRIORITY = 10;
+/** Narrative prompt section priority (before character profile). */
+export const PROMPT_SECTION_PRIORITY = 10;

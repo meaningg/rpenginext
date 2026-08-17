@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import type { AgentTask } from "@rpengineext/contracts";
 
-import { buildNarrativeWriteMessages } from "../src/agents/prompts/narrative-write.ts";
+import {
+  buildCoreNarrativePromptSections,
+  buildNarrativeWriteMessages,
+  sortNarrativePromptSections,
+} from "../src/agents/prompts/narrative-write.ts";
 
 describe("narrative.write history messages", () => {
   test("inserts history between system and brief user", () => {
@@ -51,9 +55,8 @@ describe("narrative.write history messages", () => {
     expect(messages[3]?.role).toBe("user");
     expect(messages[3]?.content).toContain("CURRENT PLAYER ACTION");
     expect(messages[3]?.content).toContain("open the door");
-    expect(messages[3]?.content).toContain("narrative.write");
-    // Prior history line must not be mistaken for the current action JSON text field alone.
-    expect(messages[3]?.content).toContain('"text": "open the door"');
+    expect(messages[3]?.content).not.toContain("TASK JSON");
+    expect(messages[3]?.content).not.toContain("narrative.write");
   });
 
   test("requires player-facing text in the given locale", () => {
@@ -82,7 +85,7 @@ describe("narrative.write history messages", () => {
     expect(messages[0]?.content).toContain('language of locale "ru"');
     expect(messages[0]?.content).toContain("Do not switch to English");
     expect(messages[1]?.content).toContain("Иду к деревне");
-    expect(messages[1]?.content).toContain('"locale": "ru"');
+    expect(messages[1]?.content).not.toContain('"locale": "ru"');
   });
 
   test("omits history when empty", () => {
@@ -106,7 +109,7 @@ describe("narrative.write history messages", () => {
     expect(messages.map((m) => m.role)).toEqual(["system", "user"]);
   });
 
-  test("lifts system prompt fragments into system and strips them from brief", () => {
+  test("compiles narrativePromptSections into system/user without brief dump", () => {
     const task = {
       taskId: "task_frag",
       type: "narrative.write",
@@ -114,22 +117,41 @@ describe("narrative.write history messages", () => {
       input: {
         brief: {
           playerAction: { kind: "free_text", text: "look" },
-          promptFragments: [
-            {
-              id: "system:world_canon.text",
-              text: "WORLD CANON\nMagic is rare.",
-            },
-            {
-              id: "system:character.profile",
-              text: "PLAYER CHARACTER\nName: Alex",
-            },
-            {
-              id: "narrate:hint",
-              text: "Keep it short.",
-            },
-          ],
+          namespaces: { character: { present: true, name: "Alex" } },
         },
+        playerAction: { kind: "free_text", text: "look" },
         locale: "en",
+        style: { voice: "second_person", length: "medium" },
+        narrativePromptSections: [
+          {
+            id: "world_canon.text",
+            channel: "system",
+            title: "WORLD CANON",
+            text: "Magic is rare.",
+            priority: 10,
+          },
+          {
+            id: "character.profile",
+            channel: "system",
+            title: "PLAYER CHARACTER",
+            text: "Name: Alex",
+            priority: 20,
+          },
+          {
+            id: "core.constraints",
+            channel: "user",
+            title: "CONSTRAINTS",
+            text: "Do not mention or reveal: the hidden prince",
+            priority: 5,
+          },
+          {
+            id: "core.style",
+            channel: "system",
+            title: "NARRATIVE STYLE",
+            text: "- length: medium\n- voice: second_person",
+            priority: 40,
+          },
+        ],
       },
       constraints: {
         timeoutMs: 1000,
@@ -145,13 +167,34 @@ describe("narrative.write history messages", () => {
     expect(system).toContain("Magic is rare.");
     expect(system).toContain("PLAYER CHARACTER");
     expect(system).toContain("Name: Alex");
+    expect(system).toContain("NARRATIVE STYLE");
+    expect(system).toContain("second_person");
 
     const user = messages[1]?.content ?? "";
-    expect(user).toContain("narrate:hint");
-    expect(user).toContain("Keep it short.");
-    expect(user).not.toContain("system:world_canon.text");
-    expect(user).not.toContain("system:character.profile");
-    expect(user).not.toContain("Magic is rare.");
-    expect(user).not.toContain("PLAYER CHARACTER");
+    expect(user).toContain("CURRENT PLAYER ACTION");
+    expect(user).toContain("look");
+    expect(user).toContain("CONSTRAINTS");
+    expect(user).toContain("hidden prince");
+    expect(user).not.toContain("TASK JSON");
+    expect(user).not.toContain("namespaces");
+    expect(user).not.toContain('"present": true');
+  });
+
+  test("buildCoreNarrativePromptSections formats style and policy", () => {
+    const sections = sortNarrativePromptSections(
+      buildCoreNarrativePromptSections({
+        style: { voice: "second_person", length: "short" },
+        denyMention: ["secret map"],
+        allowMention: ["the harbor"],
+      }),
+    );
+    expect(sections.map((s) => s.id)).toEqual([
+      "core.constraints",
+      "core.style",
+    ]);
+    expect(sections[0]?.channel).toBe("user");
+    expect(sections[0]?.text).toContain("secret map");
+    expect(sections[1]?.channel).toBe("system");
+    expect(sections[1]?.text).toContain("voice: second_person");
   });
 });

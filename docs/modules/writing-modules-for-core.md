@@ -289,7 +289,7 @@ ctx.addInterceptor({
 | PLAN | `Planner`, `SalienceProvider`, `AgentTaskContributor` |
 | PROPOSE | `TransitionContributor`, `CommandDecorator` |
 | VALIDATE | `CommandValidator`, `Invariant` (port), `ConflictResolver`, `DraftSimulator` |
-| NARRATE | `NarrativeContextProvider`, `NarrativeStyleProvider`, `BriefPolicy`, `PromptFragmentProvider`, `NarrativeCritic` |
+| NARRATE | `NarrativeContextProvider`, `NarrativeStyleProvider`, `BriefPolicy`, `NarrativePromptContributor`, `PromptFragmentProvider` (legacy), `NarrativeCritic` |
 | PRESENT | `PassageAssembler`, `StatusPanelProvider`, `LocalizationContributor` |
 | AFTER | `AfterCommitHook`, `SystemTurnScheduler` (только schedule) |
 | Session | `SessionBootstrap`, `SessionHydrator`, `TurnSetup`, `TurnTeardown`, `OnTurnRejected` |
@@ -812,7 +812,7 @@ await createTestEngine({ modules: […], mockAgentScript: script });
 | Предупредить, но не стоп | `SoftGuard` → warnings |
 | Спросить LLM | `registerAgentTaskType` + `AgentTaskContributor` / `Planner` |
 | Дать tool | `registerAgentTool` + `addAgentToolHandler` |
-| Влиять на текст | `NarrativeContextProvider` + style/brief/prompt fragments |
+| Влиять на текст | `NarrativePromptContributor` + `NarrativeContextProvider` + style providers |
 | Строка статуса в CLI | `StatusPanelProvider` / `PublicProjector` |
 | Вклиниться между стадиями | `addInterceptor` |
 | Сиды новой игры | `SessionBootstrap` |

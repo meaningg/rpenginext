@@ -32,6 +32,7 @@ import type {
   MigrationDefinition,
   NarrativeContextProvider,
   NarrativeCritic,
+  NarrativePromptContributor,
   NarrativeStyleProvider,
   OnTurnRejected,
   PostNarrativeContributor,
@@ -107,6 +108,7 @@ export class ContributionIndex {
   readonly agentToolHandlers: Owned<AgentToolHandler>[] = [];
   readonly briefPolicies: Owned<BriefPolicy>[] = [];
   readonly promptFragmentProviders: Owned<PromptFragmentProvider>[] = [];
+  readonly narrativePromptContributors: Owned<NarrativePromptContributor>[] = [];
   readonly outputRepairHintProviders: Owned<OutputRepairHintProvider>[] = [];
   readonly transitionContributors: Owned<TransitionContributor>[] = [];
   readonly commandDecorators: Owned<CommandDecorator>[] = [];
@@ -160,6 +162,7 @@ export class ContributionIndex {
       this.agentToolHandlers,
       this.briefPolicies,
       this.promptFragmentProviders,
+      this.narrativePromptContributors,
       this.outputRepairHintProviders,
       this.transitionContributors,
       this.commandDecorators,

@@ -17,6 +17,7 @@ import {
   type InterceptorEffect,
   type JournalEntry,
   type JsonObject,
+  type NarrativePromptSection,
   type NormalizedAction,
   type Passage,
   type PermissionToken,
@@ -37,6 +38,12 @@ import {
   extractLlmMessages,
   extractRawModelOutput,
 } from "../agents/llm-audit-meta.ts";
+import {
+  buildCoreNarrativePromptSections,
+  sectionsFromPromptFragments,
+  serializeNarrativePromptSections,
+  sortNarrativePromptSections,
+} from "../agents/prompts/narrative-write.ts";
 import type { EngineConfig } from "../config/types.ts";
 import type { ContributionIndex } from "../registry/contribution-index.ts";
 import type { StateKernel } from "../state/state-kernel.ts";
@@ -1252,27 +1259,6 @@ export class TurnPipeline {
       for (const item of result.value.allowMention ?? []) allowMention.add(item);
     }
 
-    const promptFragments: { id: string; text: string; priority: number }[] = [];
-    for (const owned of this.index.promptFragmentProviders) {
-      for (const slot of ["system", "narrate", "style"]) {
-        const result = await owned.value.provide(
-          { slot },
-          this.moduleCtx(owned.moduleId, ctx),
-        );
-        if (!result.ok) return result;
-        for (const frag of result.value.fragments) {
-          promptFragments.push({
-            id: `${slot}:${frag.id}`,
-            text: frag.text,
-            priority: frag.priority ?? owned.priority,
-          });
-        }
-      }
-    }
-    promptFragments.sort(
-      (a, b) => a.priority - b.priority || a.id.localeCompare(b.id),
-    );
-
     const locale = resolveTurnLocale(session.meta, this.config.turn.locale);
 
     const localeStrings: Record<string, string> = {};
@@ -1306,25 +1292,6 @@ export class TurnPipeline {
       scratch.normalized,
     );
 
-    const brief: JsonObject = {
-      /** Current turn input the GM must resolve (not prior history). */
-      playerAction,
-      intent: intent as unknown as JsonObject,
-      turnId: scratch.turnId,
-      core: {
-        turnIndex: draft.core.turnIndex,
-        flags: draft.core.flags as unknown as JsonObject,
-      },
-      namespaces,
-      policy: {
-        denyMention: [...denyMention].sort(),
-        allowMention: [...allowMention].sort(),
-      },
-      promptFragments: promptFragments.map((f) => ({ id: f.id, text: f.text })),
-      ...(Object.keys(localeStrings).length > 0 ? { localeStrings } : {}),
-      ...(resourceCosts ? { resourceCosts } : {}),
-    };
-
     const style: JsonObject = {};
     const metaStyle = session.meta?.narrativeStyle;
     if (
@@ -1343,6 +1310,78 @@ export class TurnPipeline {
       Object.assign(style, result.value);
     }
 
+    const denyList = [...denyMention].sort();
+    const allowList = [...allowMention].sort();
+
+    const promptSections: NarrativePromptSection[] = [
+      ...buildCoreNarrativePromptSections({
+        style,
+        denyMention: denyList,
+        allowMention: allowList,
+      }),
+    ];
+
+    for (const owned of this.index.narrativePromptContributors) {
+      const result = await owned.value.contribute(
+        { draft, intent, style, locale },
+        this.moduleCtx(owned.moduleId, ctx),
+      );
+      if (!result.ok) return result;
+      for (const section of result.value.sections) {
+        promptSections.push({
+          ...section,
+          priority: section.priority ?? owned.priority,
+        });
+      }
+    }
+
+    // Backward-compatible bridge: legacy PromptFragmentProvider → sections.
+    const legacyFragments: { id: string; text: string; priority?: number }[] =
+      [];
+    for (const owned of this.index.promptFragmentProviders) {
+      for (const slot of ["system", "narrate", "style"]) {
+        const result = await owned.value.provide(
+          { slot },
+          this.moduleCtx(owned.moduleId, ctx),
+        );
+        if (!result.ok) return result;
+        for (const frag of result.value.fragments) {
+          legacyFragments.push({
+            id: `${slot}:${frag.id}`,
+            text: frag.text,
+            priority: frag.priority ?? owned.priority,
+          });
+        }
+      }
+    }
+    promptSections.push(...sectionsFromPromptFragments(legacyFragments));
+
+    const narrativePromptSections =
+      sortNarrativePromptSections(promptSections);
+    const serializedPromptSections = serializeNarrativePromptSections(
+      narrativePromptSections,
+    );
+
+    const brief: JsonObject = {
+      /** Current turn input the GM must resolve (not prior history). */
+      playerAction,
+      intent: intent as unknown as JsonObject,
+      turnId: scratch.turnId,
+      core: {
+        turnIndex: draft.core.turnIndex,
+        flags: draft.core.flags as unknown as JsonObject,
+      },
+      namespaces,
+      policy: {
+        denyMention: denyList,
+        allowMention: allowList,
+      },
+      /** Compiled sections for traces/critics (not dumped into the LLM user msg). */
+      narrativePromptSections: serializedPromptSections,
+      ...(Object.keys(localeStrings).length > 0 ? { localeStrings } : {}),
+      ...(resourceCosts ? { resourceCosts } : {}),
+    };
+
     const task: AgentTask = {
       taskId: createTaskId(),
       type: "narrative.write",
@@ -1352,6 +1391,7 @@ export class TurnPipeline {
         playerAction,
         style,
         locale,
+        narrativePromptSections: serializedPromptSections,
         ...(history.length > 0 ? { history } : {}),
       },
       constraints: {

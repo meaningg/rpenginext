@@ -40,7 +40,7 @@ export const characterManifest: ModuleManifest = {
   contributes: [
     "SessionBootstrap",
     "NarrativeContextProvider",
-    "PromptFragmentProvider",
+    "NarrativePromptContributor",
     "SystemTurnScheduler",
     "AgentTaskContributor",
     "TransitionContributor",

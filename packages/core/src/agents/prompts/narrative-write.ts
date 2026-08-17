@@ -1,12 +1,18 @@
-import type { AgentTask, JsonObject, LlmMessage } from "@rpengineext/contracts";
+import type {
+  AgentTask,
+  JsonObject,
+  LlmMessage,
+  NarrativePromptSection,
+} from "@rpengineext/contracts";
 
 /**
  * Builds chat messages for `narrative.write` LLM calls.
  *
- * System-slot prompt fragments from modules (id prefix `system:`) are appended
- * to the system message and stripped from the user brief to avoid duplication.
+ * Prompt body is assembled from compiled {@link NarrativePromptSection}s
+ * (modules + core). Structured `brief` stays on the task for critics/traces
+ * and is NOT dumped into the user message.
  *
- * @param task - agent task (input: brief/style/locale/history)
+ * @param task - agent task (input: brief/style/locale/history/promptSections)
  */
 export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
   const input = task.input;
@@ -18,7 +24,7 @@ export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
       : "en";
   const history = normalizeHistory(input.history);
   const playerAction = resolvePlayerAction(input, brief);
-  const { systemFragmentTexts, briefForUser } = splitSystemPromptFragments(brief);
+  const sections = resolvePromptSections(input, brief, style);
 
   const languageRule = [
     `Locale: ${locale}.`,
@@ -30,12 +36,12 @@ export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
   const systemCore = [
     "You are the game master (GM) for a turn-based interactive role-playing story.",
     "Narrate the immediate, coherent outcome of the player's CURRENT action only.",
-    "The current action is brief.playerAction (and restated above the task JSON when present).",
+    "The current action is in the latest user message.",
     "Prior user/assistant messages are earlier turns for continuity ONLY — never treat them as the action you must resolve now.",
     "Do not ignore the current action. Do not invent an unrelated random scene.",
-    "Honor continuity: location, characters, tone, and open threads from history and brief.",
-    "Do not invent world facts, items, locations, or NPC knowledge beyond the brief, system canon/character blocks, and established history.",
-    "Do not include secrets that the brief marks as forbidden.",
+    "Honor continuity: location, characters, tone, and open threads from history and the provided context blocks.",
+    "Do not invent world facts, items, locations, or NPC knowledge beyond system context blocks and established history.",
+    "Do not include secrets marked as forbidden in constraints.",
     "The player replies with free text on every turn.",
     "Output MUST be a single JSON object (no markdown fences) with this shape:",
     '{ "prose": string (non-empty), "meta"?: object }',
@@ -43,26 +49,27 @@ export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
     "prose is player-facing story text only.",
   ].join("\n");
 
+  const systemSections = sections
+    .filter((s) => s.channel === "system")
+    .map(formatSection)
+    .filter((t) => t.length > 0);
+
   const system =
-    systemFragmentTexts.length > 0
-      ? [systemCore, ...systemFragmentTexts].join("\n\n")
+    systemSections.length > 0
+      ? [systemCore, ...systemSections].join("\n\n")
       : systemCore;
 
-  const userPayload = {
-    taskType: "narrative.write",
-    turnId: task.turnId,
-    playerAction,
-    brief: briefForUser,
-    style,
-    locale,
-  };
+  const userSections = sections
+    .filter((s) => s.channel === "user")
+    .map(formatSection)
+    .filter((t) => t.length > 0);
 
   return [
     { role: "system", content: system },
     ...history,
     {
       role: "user",
-      content: formatNarrativeUserContent(playerAction, userPayload),
+      content: formatNarrativeUserContent(playerAction, userSections),
     },
   ];
 }
@@ -104,46 +111,199 @@ export function buildNarrativeWriteRepairMessages(
 }
 
 /**
- * Lifts `system:*` prompt fragments into system message texts and returns a brief
- * copy without those fragments (other slots stay in the user payload).
+ * Formats a prompt section for inclusion in system/user content.
  *
- * @param brief - narrative brief object
+ * @param section - compiled section
  */
-export function splitSystemPromptFragments(brief: JsonObject): {
-  systemFragmentTexts: string[];
-  briefForUser: JsonObject;
-} {
-  const raw = brief.promptFragments;
-  if (!Array.isArray(raw) || raw.length === 0) {
-    return { systemFragmentTexts: [], briefForUser: brief };
+export function formatSection(section: NarrativePromptSection): string {
+  const body = section.text.trim();
+  if (!body) return "";
+  const title = section.title?.trim();
+  if (title && title.length > 0) {
+    return `${title}\n${body}`;
+  }
+  return body;
+}
+
+/**
+ * Builds core-owned style + constraint sections from assembled turn data.
+ *
+ * @param style - merged narrative style
+ * @param denyMention - brief policy deny list
+ * @param allowMention - brief policy allow list
+ */
+export function buildCoreNarrativePromptSections(input: {
+  readonly style: JsonObject;
+  readonly denyMention: readonly string[];
+  readonly allowMention: readonly string[];
+}): NarrativePromptSection[] {
+  const sections: NarrativePromptSection[] = [];
+
+  const styleLines = formatStyleLines(input.style);
+  if (styleLines.length > 0) {
+    sections.push({
+      id: "core.style",
+      channel: "system",
+      title: "NARRATIVE STYLE",
+      text: styleLines.join("\n"),
+      priority: 40,
+    });
   }
 
-  const systemFragmentTexts: string[] = [];
-  const remaining: JsonObject[] = [];
+  const constraintLines: string[] = [];
+  if (input.denyMention.length > 0) {
+    constraintLines.push(
+      `Do not mention or reveal: ${input.denyMention.join("; ")}`,
+    );
+  }
+  if (input.allowMention.length > 0) {
+    constraintLines.push(
+      `Prefer mentioning when relevant: ${input.allowMention.join("; ")}`,
+    );
+  }
+  if (constraintLines.length > 0) {
+    sections.push({
+      id: "core.constraints",
+      channel: "user",
+      title: "CONSTRAINTS",
+      text: constraintLines.join("\n"),
+      priority: 5,
+    });
+  }
 
-  for (const item of raw) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-    const frag = item as JsonObject;
-    const id = typeof frag.id === "string" ? frag.id : "";
-    const text = typeof frag.text === "string" ? frag.text.trim() : "";
-    if (id.startsWith("system:") && text.length > 0) {
-      systemFragmentTexts.push(text);
+  return sections;
+}
+
+/**
+ * Deterministic section order: channel groups are separate; within channel
+ * sort by priority asc, then id.
+ *
+ * @param sections - raw sections
+ */
+export function sortNarrativePromptSections(
+  sections: readonly NarrativePromptSection[],
+): NarrativePromptSection[] {
+  return [...sections].sort((a, b) => {
+    const pa = a.priority ?? 100;
+    const pb = b.priority ?? 100;
+    if (pa !== pb) return pa - pb;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+/**
+ * Serializes prompt sections for task input / brief traces (JSON-safe).
+ *
+ * @param sections - ordered sections
+ */
+export function serializeNarrativePromptSections(
+  sections: readonly NarrativePromptSection[],
+): JsonObject[] {
+  return sections.map((s) => ({
+    id: s.id,
+    channel: s.channel,
+    ...(s.title ? { title: s.title } : {}),
+    text: s.text,
+    ...(s.priority !== undefined ? { priority: s.priority } : {}),
+  }));
+}
+
+/**
+ * Bridges legacy PromptFragmentProvider output into narrative prompt sections.
+ *
+ * @param fragments - fragments with ids already prefixed as `slot:id`
+ */
+export function sectionsFromPromptFragments(
+  fragments: readonly { id: string; text: string; priority?: number }[],
+): NarrativePromptSection[] {
+  const out: NarrativePromptSection[] = [];
+  for (const frag of fragments) {
+    const text = frag.text.trim();
+    if (!text) continue;
+    const id = frag.id;
+    if (id.startsWith("system:")) {
+      out.push({
+        id: id.slice("system:".length) || id,
+        channel: "system",
+        text,
+        priority: frag.priority,
+      });
       continue;
     }
-    remaining.push(frag);
+    // narrate:/style:/other → user turn context
+    const stripped = id.includes(":") ? id.slice(id.indexOf(":") + 1) : id;
+    out.push({
+      id: stripped || id,
+      channel: "user",
+      text,
+      priority: frag.priority,
+    });
+  }
+  return out;
+}
+
+function resolvePromptSections(
+  input: AgentTask["input"],
+  brief: JsonObject,
+  style: JsonObject,
+): NarrativePromptSection[] {
+  const fromInput = input.narrativePromptSections;
+  if (Array.isArray(fromInput) && fromInput.length > 0) {
+    return sortNarrativePromptSections(
+      fromInput.filter(isNarrativePromptSection),
+    );
   }
 
-  if (remaining.length === raw.length) {
-    return { systemFragmentTexts, briefForUser: brief };
-  }
+  // Unit-test / direct-caller fallback: core style + policy only (no JSON dump).
+  const policy = (brief.policy ?? {}) as JsonObject;
+  const deny = Array.isArray(policy.denyMention)
+    ? policy.denyMention.filter((x): x is string => typeof x === "string")
+    : [];
+  const allow = Array.isArray(policy.allowMention)
+    ? policy.allowMention.filter((x): x is string => typeof x === "string")
+    : [];
 
-  const { promptFragments: _removed, ...rest } = brief;
-  void _removed;
-  const briefForUser: JsonObject =
-    remaining.length === 0
-      ? { ...rest }
-      : { ...rest, promptFragments: remaining };
-  return { systemFragmentTexts, briefForUser };
+  return sortNarrativePromptSections(
+    buildCoreNarrativePromptSections({
+      style,
+      denyMention: deny,
+      allowMention: allow,
+    }),
+  );
+}
+
+function isNarrativePromptSection(value: unknown): value is NarrativePromptSection {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.id === "string" &&
+    (v.channel === "system" || v.channel === "user") &&
+    typeof v.text === "string"
+  );
+}
+
+function formatStyleLines(style: JsonObject): string[] {
+  const lines: string[] = [];
+  for (const key of Object.keys(style).sort()) {
+    const raw = style[key];
+    if (raw === undefined || raw === null) continue;
+    if (typeof raw === "string") {
+      const t = raw.trim();
+      if (t) lines.push(`- ${key}: ${t}`);
+      continue;
+    }
+    if (typeof raw === "number" || typeof raw === "boolean") {
+      lines.push(`- ${key}: ${String(raw)}`);
+      continue;
+    }
+    if (Array.isArray(raw)) {
+      const parts = raw
+        .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+        .map((x) => x.trim());
+      if (parts.length > 0) lines.push(`- ${key}: ${parts.join("; ")}`);
+    }
+  }
+  return lines;
 }
 
 function resolvePlayerAction(
@@ -163,7 +323,7 @@ function resolvePlayerAction(
 
 function formatNarrativeUserContent(
   playerAction: JsonObject | null,
-  userPayload: JsonObject,
+  userSections: readonly string[],
 ): string {
   const lines: string[] = [];
   const text =
@@ -174,16 +334,17 @@ function formatNarrativeUserContent(
   if (text.length > 0) {
     lines.push("CURRENT PLAYER ACTION (resolve this now):");
     lines.push(text);
-    lines.push("");
   } else {
     lines.push(
-      "CURRENT PLAYER ACTION: (none provided — continue coherently from history and brief only)",
+      "CURRENT PLAYER ACTION: (none provided — continue coherently from history and context only)",
     );
-    lines.push("");
   }
 
-  lines.push("TASK JSON:");
-  lines.push(JSON.stringify(userPayload, null, 2));
+  for (const block of userSections) {
+    lines.push("");
+    lines.push(block);
+  }
+
   return lines.join("\n");
 }
 

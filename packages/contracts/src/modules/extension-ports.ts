@@ -37,6 +37,7 @@ export const CONTRIBUTION_PORT_IDS = [
   "AgentTool",
   "BriefPolicy",
   "PromptFragmentProvider",
+  "NarrativePromptContributor",
   "OutputRepairHintProvider",
   // World transition
   "TransitionContributor",
@@ -229,6 +230,46 @@ export interface PromptFragmentProvider {
   provide: PortHandler<
     { slot: string },
     { fragments: { id: string; text: string; priority?: number }[] }
+  >;
+}
+
+/**
+ * Where a narrative prompt section is injected for `narrative.write`.
+ * - system: stable constitution (canon, PC profile, style locks)
+ * - user: turn-local job context (constraints, salience, hints)
+ */
+export type NarrativePromptChannel = "system" | "user";
+
+/**
+ * One compiled, human-readable block for the narrative agent prompt.
+ * Modules own wording; core only orders/merges by channel + priority.
+ */
+export interface NarrativePromptSection {
+  /** Stable id for ordering/debug (e.g. `character.profile`). */
+  readonly id: string;
+  /** Target chat role channel. */
+  readonly channel: NarrativePromptChannel;
+  /** Human-readable body (already formatted for the model). */
+  readonly text: string;
+  /** Optional heading rendered above text when compiling. */
+  readonly title?: string;
+  /** Lower runs earlier within the same channel (default: module priority). */
+  readonly priority?: number;
+}
+
+/**
+ * Modules contribute compiled narrative prompt sections (not raw JSON dumps).
+ * Core assembles system/user messages from these sections + current action.
+ */
+export interface NarrativePromptContributor {
+  contribute: PortHandler<
+    {
+      draft: WorldState;
+      intent: ActionIntent;
+      style: JsonObject;
+      locale: string;
+    },
+    { sections: NarrativePromptSection[] }
   >;
 }
 

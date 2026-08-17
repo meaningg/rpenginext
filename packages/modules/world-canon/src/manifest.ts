@@ -28,7 +28,7 @@ export const worldCanonManifest: ModuleManifest = {
   contributes: [
     "SessionBootstrap",
     "NarrativeContextProvider",
-    "PromptFragmentProvider",
+    "NarrativePromptContributor",
   ],
   interceptors: [],
 };
