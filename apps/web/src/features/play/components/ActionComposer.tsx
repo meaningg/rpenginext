@@ -22,8 +22,8 @@ export function ActionComposer({
   readonly inputRef: RefObject<HTMLTextAreaElement | null>;
 }) {
   return (
-    <div className="shrink-0 border-t border-white/[0.06] bg-[#0a0a0c]/92 px-3 py-3 backdrop-blur-md sm:px-6 sm:py-4">
-      <div className="mx-auto flex max-w-[40rem] items-end gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-2 transition focus-within:border-orange-400/35 focus-within:ring-2 focus-within:ring-orange-500/15">
+    <div className="shrink-0 border-t border-white/6 bg-[#0a0a0c]/92 px-3 py-3 backdrop-blur-md sm:px-6 sm:py-4">
+      <div className="mx-auto flex max-w-160 items-end gap-2 rounded-2xl border border-white/8 bg-white/3 p-2 transition focus-within:border-orange-400/35 focus-within:ring-2 focus-within:ring-orange-500/15">
         <textarea
           ref={inputRef}
           value={value}
@@ -37,7 +37,7 @@ export function ActionComposer({
           onKeyDown={onKeyDown}
           disabled={disabled}
           placeholder={COPY.play.placeholder}
-          className="max-h-36 min-h-[2.75rem] flex-1 resize-none bg-transparent px-3 py-2.5 font-sans text-[15px] leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 disabled:opacity-50"
+          className="max-h-36 min-h-11 flex-1 resize-none bg-transparent px-3 py-2.5 font-sans text-[15px] leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 disabled:opacity-50"
         />
         <Button
           size="icon"
@@ -49,7 +49,7 @@ export function ActionComposer({
           <SendIcon />
         </Button>
       </div>
-      <p className="mx-auto mt-2 max-w-[42rem] px-1 text-[11px] text-zinc-600">
+      <p className="mx-auto mt-2 max-w-2xl px-1 text-[11px] text-zinc-600">
         {COPY.play.composerHint}
       </p>
     </div>

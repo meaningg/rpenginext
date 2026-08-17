@@ -16,7 +16,7 @@ export function BrowseLayout({ children }: { readonly children: ReactNode }) {
       </div>
 
       <div className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col px-4 pb-10 pt-4 sm:px-6">
-        <header className="mb-8 flex items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
+        <header className="mb-8 flex items-center justify-between gap-4 border-b border-white/6 pb-4">
           <NavLink to="/" className="group flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500 text-sm font-semibold text-white">
               R
@@ -59,8 +59,8 @@ function BrowseNavLink({
         cn(
           "rounded-lg px-3 py-1.5 transition",
           isActive
-            ? "bg-white/[0.06] text-zinc-50"
-            : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200",
+            ? "bg-white/6 text-zinc-50"
+            : "text-zinc-500 hover:bg-white/4 hover:text-zinc-200",
         )
       }
     >

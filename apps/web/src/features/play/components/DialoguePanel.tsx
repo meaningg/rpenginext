@@ -35,11 +35,11 @@ export function DialoguePanel({
   return (
     <aside
       className={cn(
-        "flex h-full min-h-0 w-full flex-col border-white/[0.06] bg-[#0d0d11]",
+        "flex h-full min-h-0 w-full flex-col border-white/6 bg-[#0d0d11]",
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-4 py-3">
+      <div className="flex items-center justify-between gap-2 border-b border-white/6 px-4 py-3">
         <div>
           <p className="text-sm font-medium text-zinc-100">
             {COPY.play.dialogue}
@@ -58,7 +58,7 @@ export function DialoguePanel({
         </Button>
       </div>
 
-      <div className="border-b border-white/[0.06] px-3 py-2.5">
+      <div className="border-b border-white/6 px-3 py-2.5">
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -79,7 +79,7 @@ export function DialoguePanel({
                 <button
                   type="button"
                   onClick={() => onJump(message.id)}
-                  className="w-full rounded-xl px-3 py-2.5 text-left transition hover:bg-white/[0.04]"
+                  className="w-full rounded-xl px-3 py-2.5 text-left transition hover:bg-white/4"
                   title={COPY.play.jumpTo}
                 >
                   <div className="mb-1 flex items-center justify-between gap-2">

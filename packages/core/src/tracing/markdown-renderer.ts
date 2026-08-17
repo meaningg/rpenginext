@@ -1,4 +1,8 @@
-import { TRACE_FORMAT_VERSION, type LlmMessage } from "@rpengineext/contracts";
+import {
+  TRACE_FORMAT_VERSION,
+  type JsonObject,
+  type LlmMessage,
+} from "@rpengineext/contracts";
 
 import type {
   TraceAgentRecord,

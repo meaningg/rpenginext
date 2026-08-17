@@ -6,10 +6,7 @@ import { cn } from "../lib/cn.ts";
 export function Skeleton({ className }: { readonly className?: string }) {
   return (
     <div
-      className={cn(
-        "animate-pulse rounded-xl bg-white/[0.05]",
-        className,
-      )}
+      className={cn("animate-pulse rounded-xl bg-white/5", className)}
       aria-hidden
     />
   );

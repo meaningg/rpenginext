@@ -13,7 +13,7 @@ export function StoryCard({
   readonly template: StoryTemplateSummary;
 }) {
   return (
-    <Card className="group flex h-full flex-col transition hover:border-white/[0.12] hover:bg-[#15151b]">
+    <Card className="group flex h-full flex-col transition hover:border-white/12 hover:bg-[#15151b]">
       <div className="flex min-h-0 flex-1 flex-col gap-3">
         <div className="space-y-2">
           <h2 className="text-lg font-semibold tracking-tight text-zinc-50 transition group-hover:text-white">

@@ -16,8 +16,8 @@ const VARIANT: Record<ButtonVariant, string> = {
   primary:
     "bg-orange-500 text-white hover:bg-orange-400 disabled:bg-orange-500/40",
   ghost:
-    "bg-transparent text-zinc-300 hover:bg-white/[0.05] hover:text-zinc-50 disabled:text-zinc-600",
-  soft: "bg-white/[0.04] text-zinc-100 border border-white/[0.08] hover:bg-white/[0.07] hover:border-white/[0.14] disabled:opacity-40",
+    "bg-transparent text-zinc-300 hover:bg-white/5 hover:text-zinc-50 disabled:text-zinc-600",
+  soft: "bg-white/4 text-zinc-100 border border-white/8 hover:bg-white/7 hover:border-white/14 disabled:opacity-40",
   danger:
     "bg-rose-500/15 text-rose-100 border border-rose-500/30 hover:bg-rose-500/25 disabled:opacity-40",
 };

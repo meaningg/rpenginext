@@ -83,8 +83,8 @@ export function PlayPage() {
         {/* Desktop side panel */}
         <div
           className={cn(
-            "hidden min-h-0 border-l border-white/[0.06] transition-[width] duration-200 xl:block",
-            play.dialogueOpen ? "w-[22rem]" : "w-0 overflow-hidden border-l-0",
+            "hidden min-h-0 border-l border-white/6 transition-[width] duration-200 xl:block",
+            play.dialogueOpen ? "w-88" : "w-0 overflow-hidden border-l-0",
           )}
         >
           <DialoguePanel
@@ -106,7 +106,7 @@ export function PlayPage() {
             aria-label={COPY.common.close}
             onClick={() => play.setDialogueOpen(false)}
           />
-          <div className="absolute inset-y-0 right-0 w-[min(100%,22rem)] border-l border-white/[0.08] shadow-2xl shadow-black/50">
+          <div className="absolute inset-y-0 right-0 w-[min(100%,22rem)] border-l border-white/8 shadow-2xl shadow-black/50">
             <DialoguePanel
               messages={play.messages}
               open

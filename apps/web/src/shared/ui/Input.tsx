@@ -11,7 +11,7 @@ export function Input({ className, ...rest }: InputProps) {
   return (
     <input
       className={cn(
-        "h-10 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 disabled:opacity-50",
+        "h-10 w-full rounded-xl border border-white/8 bg-white/3 px-3 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-orange-400/40 focus:ring-2 focus:ring-orange-500/15 disabled:opacity-50",
         className,
       )}
       {...rest}

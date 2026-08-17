@@ -35,7 +35,7 @@ export function ReadingStream({
           {COPY.play.loading}
         </p>
       ) : messages.length === 0 && !showTyping ? (
-        <div className="flex h-full min-h-[12rem] flex-col items-center justify-center gap-1.5 py-20 text-center">
+        <div className="flex h-full min-h-48 flex-col items-center justify-center gap-1.5 py-20 text-center">
           <p className="text-sm text-zinc-300">{COPY.play.emptyTitle}</p>
           <p className="text-xs text-zinc-600">{COPY.play.emptyBody}</p>
         </div>
@@ -50,8 +50,8 @@ export function ReadingStream({
       )}
 
       {showTyping ? (
-        <div className="mx-auto flex w-full max-w-[40rem] justify-start">
-          <div className="inline-flex items-center gap-2.5 rounded-full border border-white/[0.06] bg-white/[0.03] px-3.5 py-2 text-sm text-zinc-400">
+        <div className="mx-auto flex w-full max-w-160 justify-start">
+          <div className="inline-flex items-center gap-2.5 rounded-full border border-white/6 bg-white/3 px-3.5 py-2 text-sm text-zinc-400">
             <span className="inline-flex gap-1">
               <span className="typing-dot" />
               <span className="typing-dot animation-delay-150" />

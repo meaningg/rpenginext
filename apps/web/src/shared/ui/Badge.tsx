@@ -15,7 +15,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-0.5 text-[11px] text-zinc-400",
+        "inline-flex items-center rounded-full border border-white/7 bg-white/3 px-2.5 py-0.5 text-[11px] text-zinc-400",
         className,
       )}
     >

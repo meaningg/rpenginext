@@ -190,7 +190,7 @@ function previewArray(arr: JsonValue[]): JsonValue {
   const last = arr[arr.length - 1];
   if (last && typeof last === "object" && !Array.isArray(last)) {
     const o = last as JsonObject;
-    const slim: JsonObject = {};
+    const slim: Record<string, JsonValue> = {};
     for (const k of ["turnId", "id", "user", "assistant", "type"]) {
       if (o[k] !== undefined) {
         const v = o[k];
@@ -200,7 +200,7 @@ function previewArray(arr: JsonValue[]): JsonValue {
             : (v as JsonValue);
       }
     }
-    return { last: slim };
+    return { last: slim as JsonObject };
   }
   return { last: last as JsonValue };
 }

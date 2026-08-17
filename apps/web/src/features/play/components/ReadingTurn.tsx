@@ -21,7 +21,7 @@ export function ReadingTurn({
       <div
         id={`turn-${message.id}`}
         className={cn(
-          "mx-auto w-full max-w-[40rem] rounded-xl px-1 py-1 transition-colors",
+          "mx-auto w-full max-w-160 rounded-xl px-1 py-1 transition-colors",
           highlighted && "message-highlight",
         )}
       >
@@ -44,7 +44,7 @@ export function ReadingTurn({
       id={`turn-${message.id}`}
       lang="ru"
       className={cn(
-        "mx-auto w-full max-w-[40rem] rounded-xl px-1 py-1 transition-colors",
+        "mx-auto w-full max-w-160 rounded-xl px-1 py-1 transition-colors",
         highlighted && "message-highlight",
       )}
     >
