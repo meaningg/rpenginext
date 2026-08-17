@@ -45,7 +45,6 @@ function sampleSnapshot(
               id: `pas_${revision}`,
               turnId: `trn_${revision}`,
               prose: `Passage ${revision}`,
-              choices: [],
             },
           ]
         : [],

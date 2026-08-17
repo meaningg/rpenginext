@@ -99,7 +99,7 @@ END_TURN
 
 - все accepted `StateCommand` хода;
 - turn index / revision meta;
-- `Passage` (prose + choices) linked to `turnId`;
+- `Passage` (prose) linked to `turnId`;
 - journal entry;
 - sqlite flush этого turn unit.
 
@@ -242,7 +242,6 @@ Passage {
   id
   turnId
   prose
-  choices: Choice[]
   visibleState?: PublicView  // optional redacted projection
 }
 ```

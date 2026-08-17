@@ -29,7 +29,6 @@ You register handlers inside fixed stages:
 - plan / ask agents (`Planner`, `AgentTaskContributor`);
 - propose state changes (`TransitionContributor` → `StateCommand[]`);
 - feed the narrator (`NarrativeContextProvider`);
-- suggest choices (`ChoiceContributor`);
 - observe-only after success (`AfterCommitHook`).
 
 World changes = **commands only**. Turns are **full-atomic**.

@@ -44,6 +44,6 @@ await createEngine({
 ## Non-goals (v1)
 
 - No truncation of message text
-- No choice/system pairs
+- No system-turn pairs
 - No history on `action.interpret`
 - No summarizer / vector store

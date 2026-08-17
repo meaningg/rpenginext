@@ -28,12 +28,6 @@ export interface EngineConfig {
      * Forwarded to localization contributors and narrative.write.
      */
     readonly locale: string;
-    /**
-     * When false (default), player loop is free-text only:
-     * no choice buttons, narrative must not propose choiceDrafts,
-     * `kind: "choice"` actions are rejected.
-     */
-    readonly playerChoicesEnabled: boolean;
   };
   readonly agents: {
     /** mock uses scripts; llm uses LlmPort for standard tasks. */

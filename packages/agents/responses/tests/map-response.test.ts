@@ -5,7 +5,7 @@ import { mapResponsesPayloadToCompletion } from "../src/map-response.ts";
 describe("mapResponsesPayloadToCompletion", () => {
   test("reads output_text and usage", () => {
     const mapped = mapResponsesPayloadToCompletion({
-      output_text: '{"prose":"hi","choiceDrafts":[]}',
+      output_text: '{"prose":"hi"}',
       usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
     });
     expect(mapped.ok).toBe(true);

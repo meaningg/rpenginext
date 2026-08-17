@@ -101,7 +101,7 @@ discover → load manifest → import factory → register(ctx)
 |------|------|
 | **A. Catalog registrations** | `registerSlice/Command/AgentTask/Tool/ActionType/ReadModel/...` — новые данные и операции без core |
 | **B. Stage interceptors** | `before/after/onError` на **каждой** стадии pipeline + session lifecycle |
-| **C. Typed contribution ports** | расширенный набор розеток (Guard, Planner, Narrative*, Choice*, Status*, …) с merge-политиками |
+| **C. Typed contribution ports** | расширенный набор розеток (Guard, Planner, Narrative*, Status*, …) с merge-политиками |
 
 ### Принцип стабильности core
 

@@ -94,7 +94,6 @@ describe("core finalize wiring", () => {
           taskId: task.taskId,
           data: {
             prose: "A voice speaks.",
-            choiceDrafts: [],
           },
         };
       });
@@ -154,7 +153,7 @@ describe("core finalize wiring", () => {
       .on("narrative.write", async (task) => ({
         ok: true,
         taskId: task.taskId,
-        data: { prose: "Done.", choiceDrafts: [] },
+        data: { prose: "Done." },
       }));
 
     const mod: Module = {
@@ -358,7 +357,6 @@ describe("core finalize wiring", () => {
         return ok({
           text: JSON.stringify({
             prose: "Repaired with hints.",
-            choiceDrafts: [],
           }),
           usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
         });

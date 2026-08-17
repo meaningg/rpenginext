@@ -52,7 +52,6 @@ describe.skipIf(!LIVE)("playable e2e (LIVE LLM)", () => {
           sessionId: string;
           passage: {
             prose: string;
-            choices: Array<{ id: string; label: string }>;
           } | null;
         };
         openingTurn?: { status: string; failure?: { message: string } };
@@ -128,7 +127,6 @@ describe.skipIf(!LIVE)("playable e2e (LIVE LLM)", () => {
       const passageBody = (await passageRes.json()) as {
         passage: {
           prose: string;
-          choices: Array<{ id: string; enabled?: boolean }>;
         } | null;
       };
       const prose = passageBody.passage?.prose ?? "";
@@ -136,7 +134,6 @@ describe.skipIf(!LIVE)("playable e2e (LIVE LLM)", () => {
       expect(prose.includes(MOCK_HELLO_SNIPPET)).toBe(false);
       // Should advance from opening
       expect(prose).not.toBe(openingProse);
-      expect(passageBody.passage?.choices ?? []).toEqual([]);
 
       const cont = await fetch(
         `${baseUrl}/v1/sessions/${sessionId}/actions?wait=1`,
@@ -151,7 +148,7 @@ describe.skipIf(!LIVE)("playable e2e (LIVE LLM)", () => {
       );
       const contTurn = (await cont.json()) as {
         status: string;
-        passage?: { prose: string; choices?: unknown[] };
+        passage?: { prose: string };
         failure?: { message: string };
       };
       if (contTurn.status !== "committed") {
@@ -160,7 +157,6 @@ describe.skipIf(!LIVE)("playable e2e (LIVE LLM)", () => {
         );
       }
       expect(contTurn.passage?.prose.length).toBeGreaterThan(20);
-      expect(contTurn.passage?.choices ?? []).toEqual([]);
 
       sse.close();
     },

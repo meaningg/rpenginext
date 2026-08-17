@@ -15,7 +15,7 @@ describe("stream prose extraction", () => {
     const chunks = [
       '{"prose":"You ',
       'enter the',
-      ' hall.","choiceDrafts":[]}',
+      ' hall.",}',
     ];
     let visible = "";
     for (const chunk of chunks) {
@@ -27,7 +27,7 @@ describe("stream prose extraction", () => {
   });
 
   test("suppresses non-prose JSON prefix", () => {
-    const step = narrativeProseDelta("", '{"choiceDrafts":[],"me');
+    const step = narrativeProseDelta("", '{,"me');
     expect(step.proseDelta).toBe("");
   });
 });

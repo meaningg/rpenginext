@@ -98,7 +98,6 @@ async function main(): Promise<void> {
         sessionId: string;
         passage: {
           prose: string;
-          choices: Array<{ id: string; label: string }>;
         } | null;
       };
       openingTurn?: { status: string; failure?: { message: string } };
@@ -162,7 +161,7 @@ async function main(): Promise<void> {
       { headers: player.headers },
     );
     const passageBody = (await passageRes.json()) as {
-      passage: { prose: string; choices: Array<{ id: string }> } | null;
+      passage: { prose: string } | null;
     };
     const prose = passageBody.passage?.prose ?? "";
     console.log("passage after turn:", prose.slice(0, 160));
@@ -172,12 +171,6 @@ async function main(): Promise<void> {
     }
     if (prose === openingProse) {
       throw new Error("passage did not change after player action");
-    }
-
-    if ((passageBody.passage?.choices?.length ?? 0) > 0) {
-      throw new Error(
-        `expected free-text only (empty choices), got ${passageBody.passage?.choices?.length}`,
-      );
     }
 
     console.log("free-text continue");
@@ -194,16 +187,13 @@ async function main(): Promise<void> {
     );
     const contTurn = (await cont.json()) as {
       status: string;
-      passage?: { choices?: unknown[] };
+      passage?: { prose?: string };
       failure?: { message: string };
     };
     if (contTurn.status !== "committed") {
       throw new Error(
         `continue not committed: ${contTurn.failure?.message ?? contTurn.status}`,
       );
-    }
-    if ((contTurn.passage?.choices?.length ?? 0) > 0) {
-      throw new Error("continue passage unexpectedly included choices");
     }
     console.log("continue turn committed");
 

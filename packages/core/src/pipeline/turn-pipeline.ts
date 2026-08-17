@@ -11,7 +11,7 @@ import {
   type ActionIntent,
   type AgentResult,
   type AgentTask,
-  type Choice,
+  type DisambiguationOption,
   type EventBusPort,
   type Failure,
   type InterceptorEffect,
@@ -109,7 +109,6 @@ interface TurnScratch {
   planArtifacts: JsonObject;
   narrativeBrief?: JsonObject;
   narrativeProse?: string;
-  choiceDrafts: Choice[];
   passage?: Passage;
   failure?: TurnFailure;
   outcome: "pending" | "committed" | "rejected";
@@ -183,7 +182,6 @@ export class TurnPipeline {
       warnings: [],
       extras: {},
       planArtifacts: {},
-      choiceDrafts: [],
       outcome: "pending",
       queuedTasks: [],
       proposeOpen: false,
@@ -590,26 +588,11 @@ export class TurnPipeline {
     const raw = scratch.rawAction;
     let actionType = "noop";
     let text = raw.text;
-    let choiceId = raw.choiceId;
     let targets: string[] = [];
     let confidence: number | undefined;
     let extras: JsonObject = emptyJsonObject();
 
-    if (raw.kind === "choice") {
-      if (!this.config.turn.playerChoicesEnabled) {
-        return err(
-          failure(
-            "INVALID_INPUT",
-            "choice actions are disabled; use free_text only",
-          ),
-        );
-      }
-      if (!raw.choiceId) {
-        return err(failure("INVALID_INPUT", "choice action requires choiceId"));
-      }
-      actionType = "choice";
-      choiceId = raw.choiceId;
-    } else if (raw.kind === "system") {
+    if (raw.kind === "system") {
       actionType = "system";
     } else if (raw.text && raw.text.trim().length > 0) {
       actionType = "free_text";
@@ -627,7 +610,6 @@ export class TurnPipeline {
       const partial = result.value;
       if (partial.actionType) actionType = partial.actionType;
       if (partial.text !== undefined) text = partial.text;
-      if (partial.choiceId !== undefined) choiceId = partial.choiceId;
       if (partial.targets) targets = [...partial.targets];
       if (partial.confidence !== undefined) confidence = partial.confidence;
       if (partial.extras) extras = { ...extras, ...partial.extras };
@@ -657,7 +639,6 @@ export class TurnPipeline {
               actionType,
               raw,
               text,
-              choiceId,
               targets,
               confidence,
               extras,
@@ -752,7 +733,6 @@ export class TurnPipeline {
       !this.index.actionTypes.has(actionType) &&
       actionType !== "noop" &&
       actionType !== "system" &&
-      actionType !== "choice" &&
       actionType !== "free_text"
     ) {
       return err(
@@ -764,7 +744,6 @@ export class TurnPipeline {
       actionType,
       raw,
       text,
-      choiceId,
       targets,
       confidence,
       extras,
@@ -777,8 +756,8 @@ export class TurnPipeline {
     reason: string,
     candidates: unknown[],
     ctx: ReturnType<typeof createTurnContext>,
-  ): Promise<Result<Choice[], Failure>> {
-    const options: Choice[] = [];
+  ): Promise<Result<DisambiguationOption[], Failure>> {
+    const options: DisambiguationOption[] = [];
     for (const owned of this.index.disambiguationProviders) {
       const result = await owned.value.provide(
         { reason, candidates },
@@ -1348,7 +1327,6 @@ export class TurnPipeline {
         playerAction,
         style,
         locale,
-        maxChoices: this.config.turn.playerChoicesEnabled ? 3 : 0,
         ...(history.length > 0 ? { history } : {}),
       },
       constraints: {
@@ -1390,14 +1368,6 @@ export class TurnPipeline {
 
     scratch.narrativeBrief = brief;
     scratch.narrativeProse = prose;
-    if (this.config.turn.playerChoicesEnabled) {
-      const drafts = result.data.choiceDrafts;
-      if (Array.isArray(drafts)) {
-        scratch.choiceDrafts.push(...(drafts as Choice[]));
-      }
-    } else {
-      scratch.choiceDrafts = [];
-    }
     this.tracer.recordNarrative(brief, prose);
     return ok(undefined);
   }
@@ -1406,7 +1376,6 @@ export class TurnPipeline {
     scratch: TurnScratch,
     ctx: ReturnType<typeof createTurnContext>,
   ): Promise<Result<void, Failure>> {
-    const intent = scratch.intent!;
     const draft = ctx.stateView;
     let prose = scratch.narrativeProse ?? "";
 
@@ -1422,43 +1391,6 @@ export class TurnPipeline {
       if (sections.length > 0) {
         prose = sections.map((s) => s.body).join("\n\n");
       }
-    }
-
-    let choices: Choice[] = [];
-    if (this.config.turn.playerChoicesEnabled) {
-      choices = [...scratch.choiceDrafts];
-      for (const owned of this.index.choiceContributors) {
-        const result = await owned.value.contribute(
-          { draft, intent },
-          this.moduleCtx(owned.moduleId, ctx),
-        );
-        if (!result.ok) return result;
-        for (const choice of result.value.choices) {
-          if (
-            this.index.choiceKinds.size > 0 &&
-            !this.index.choiceKinds.has(choice.kind)
-          ) {
-            scratch.warnings.push(`choice kind not in catalog: ${choice.kind}`);
-          }
-          choices.push(choice);
-        }
-      }
-
-      for (const owned of this.index.choiceFilters) {
-        const result = await owned.value.filter(
-          { choices, draft },
-          this.moduleCtx(owned.moduleId, ctx),
-        );
-        if (!result.ok) return result;
-        choices = result.value.choices;
-      }
-
-      const seen = new Set<string>();
-      choices = choices.filter((choice) => {
-        if (seen.has(choice.id)) return false;
-        seen.add(choice.id);
-        return true;
-      });
     }
 
     if (!prose) {
@@ -1492,7 +1424,6 @@ export class TurnPipeline {
       id: createPassageId(),
       turnId: scratch.turnId,
       prose,
-      choices,
       visibleState:
         Object.keys(visibleState).length > 0 ? visibleState : undefined,
     };
@@ -2139,15 +2070,11 @@ function buildPlayerActionBrief(
     (typeof normalized?.text === "string" && normalized.text.trim()) ||
     (typeof raw.text === "string" && raw.text.trim()) ||
     "";
-  const choiceId = normalized?.choiceId ?? raw.choiceId;
   const actionType = normalized?.actionType ?? raw.kind;
   return {
     kind: raw.kind,
     actionType,
     ...(textCandidate.length > 0 ? { text: textCandidate } : {}),
-    ...(typeof choiceId === "string" && choiceId.length > 0
-      ? { choiceId }
-      : {}),
     ...(normalized?.targets && normalized.targets.length > 0
       ? { targets: [...normalized.targets] }
       : {}),

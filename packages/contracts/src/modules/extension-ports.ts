@@ -7,7 +7,7 @@ import type {
   NormalizedAction,
   PlayerAction,
 } from "../turn/action.ts";
-import type { Choice, Passage } from "../turn/passage.ts";
+import type { Passage } from "../turn/passage.ts";
 import type { AgentTask } from "../agents/task.ts";
 import type { WorldState } from "../state/world-state.ts";
 import type { TurnKind } from "../turn/stages.ts";
@@ -51,8 +51,6 @@ export const CONTRIBUTION_PORT_IDS = [
   "NarrativeCritic",
   "PostNarrativeContributor",
   "PassageAssembler",
-  "ChoiceContributor",
-  "ChoiceFilter",
   "StatusPanelProvider",
   "LocalizationContributor",
   // Lifecycle
@@ -123,10 +121,20 @@ export interface IntentScorer {
   >;
 }
 
+/**
+ * Candidate clarification option for ambiguous entity resolution failures.
+ * Not a player-turn input surface — only failure details.
+ */
+export interface DisambiguationOption {
+  readonly id: string;
+  readonly label: string;
+  readonly payload?: JsonObject;
+}
+
 export interface DisambiguationProvider {
   provide: PortHandler<
     { reason: string; candidates: unknown[] },
-    { options: Choice[] }
+    { options: DisambiguationOption[] }
   >;
 }
 
@@ -315,20 +323,6 @@ export interface PassageAssembler {
   assemble: PortHandler<
     { prose: string; draft: WorldState },
     { sections: { slot: string; priority: number; body: string }[] }
-  >;
-}
-
-export interface ChoiceContributor {
-  contribute: PortHandler<
-    { draft: WorldState; intent: ActionIntent },
-    { choices: Choice[] }
-  >;
-}
-
-export interface ChoiceFilter {
-  filter: PortHandler<
-    { choices: readonly Choice[]; draft: WorldState },
-    { choices: Choice[] }
   >;
 }
 

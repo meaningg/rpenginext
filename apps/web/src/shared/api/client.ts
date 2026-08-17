@@ -19,12 +19,6 @@ export interface Passage {
   id: string;
   turnId: string;
   prose: string;
-  choices: Array<{
-    id: string;
-    label: string;
-    kind?: string;
-    enabled?: boolean;
-  }>;
   visibleState?: Record<string, unknown>;
 }
 

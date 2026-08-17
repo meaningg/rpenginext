@@ -15,7 +15,6 @@ describe("extractStreamingProse", () => {
   test("extracts complete prose from finished JSON", () => {
     const raw = JSON.stringify({
       prose: 'She whispers "wait".',
-      choiceDrafts: [],
       meta: { tone: "tense" },
     });
     expect(extractStreamingProse(raw)).toBe('She whispers "wait".');
@@ -23,12 +22,12 @@ describe("extractStreamingProse", () => {
 
   test("extracts partial prose while JSON is still streaming", () => {
     const raw =
-      '{"prose":"You step into the fog","choiceDrafts":[{"id":"x","label":"Go';
+      '{"prose":"You step into the fog","meta":{"t';
     expect(extractStreamingProse(raw)).toBe("You step into the fog");
   });
 
   test("returns empty string before prose value starts", () => {
-    expect(extractStreamingProse('{"choiceDrafts":[],"pro')).toBe("");
+    expect(extractStreamingProse('{,"pro')).toBe("");
     expect(extractStreamingProse('{"prose":')).toBe("");
   });
 

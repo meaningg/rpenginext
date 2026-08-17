@@ -11,9 +11,6 @@ import {
   type AgentToolHandler,
   type BriefPolicy,
   type CapabilityDefinition,
-  type ChoiceContributor,
-  type ChoiceFilter,
-  type ChoiceKindDefinition,
   type CliCommandProvider,
   type CommandDecorator,
   type CommandDefinition,
@@ -255,17 +252,6 @@ export function createRegisterContext(
         ),
       );
     },
-    registerChoiceKind(def: ChoiceKindDefinition) {
-      return track(
-        putUnique(
-          index.choiceKinds,
-          def.kind,
-          def,
-          "choice kind",
-          `choice-kind:${def.kind}`,
-        ),
-      );
-    },
     registerPublicProjector(def: PublicProjectorDefinition) {
       const check = requireRegister(`public-projector:${def.id}`);
       if (!check.ok) return track(check);
@@ -438,12 +424,6 @@ export function createRegisterContext(
     },
     addPassageAssembler(handler: PassageAssembler) {
       return push(index.passageAssemblers, handler, "PassageAssembler");
-    },
-    addChoiceContributor(handler: ChoiceContributor) {
-      return push(index.choiceContributors, handler, "ChoiceContributor");
-    },
-    addChoiceFilter(handler: ChoiceFilter) {
-      return push(index.choiceFilters, handler, "ChoiceFilter");
     },
     addStatusPanelProvider(handler: StatusPanelProvider) {
       return push(index.statusPanelProviders, handler, "StatusPanelProvider");

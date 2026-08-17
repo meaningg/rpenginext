@@ -80,7 +80,7 @@ Flush file at end of turn (success or fail), so partial files are avoided (or wr
 ### 5.2 Player input
 
 - raw input
-- clientActionId / choice id
+- clientActionId
 - normalized action (JSON)
 - final intent (JSON)
 - guard decisions (pass/reject per guard id)
@@ -139,7 +139,6 @@ Always show:
 - style/policy fragments summary
 - critic results if any
 - final Passage prose
-- choices list
 - on reject: brief/prose partials if stage reached
 
 ### 5.8 Persistence

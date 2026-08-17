@@ -5,7 +5,6 @@ import type {
   AgentTaskTypeDefinition,
   AgentToolDefinition,
   CapabilityDefinition,
-  ChoiceKindDefinition,
   CommandDefinition,
   ConfigSchemaDefinition,
   ConflictKeyDefinition,
@@ -24,8 +23,6 @@ import type {
   AgentTaskContributor,
   AgentToolHandler,
   BriefPolicy,
-  ChoiceContributor,
-  ChoiceFilter,
   CliCommandProvider,
   CommandDecorator,
   CommandValidator,
@@ -84,7 +81,6 @@ export interface ModuleRegisterContext {
   registerAgentTool(def: AgentToolDefinition): Result<void, Failure>;
   registerActionType(def: ActionTypeDefinition): Result<void, Failure>;
   registerIntentType(def: IntentTypeDefinition): Result<void, Failure>;
-  registerChoiceKind(def: ChoiceKindDefinition): Result<void, Failure>;
   registerPublicProjector(def: PublicProjectorDefinition): Result<void, Failure>;
   registerMemoryKind(def: MemoryKindDefinition): Result<void, Failure>;
   registerCapability(def: CapabilityDefinition | string): Result<void, Failure>;
@@ -127,8 +123,6 @@ export interface ModuleRegisterContext {
   addNarrativeCritic(handler: NarrativeCritic): Result<void, Failure>;
   addPostNarrativeContributor(handler: PostNarrativeContributor): Result<void, Failure>;
   addPassageAssembler(handler: PassageAssembler): Result<void, Failure>;
-  addChoiceContributor(handler: ChoiceContributor): Result<void, Failure>;
-  addChoiceFilter(handler: ChoiceFilter): Result<void, Failure>;
   addStatusPanelProvider(handler: StatusPanelProvider): Result<void, Failure>;
   addLocalizationContributor(handler: LocalizationContributor): Result<void, Failure>;
   addSessionBootstrap(handler: SessionBootstrap): Result<void, Failure>;

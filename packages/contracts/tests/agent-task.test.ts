@@ -28,7 +28,7 @@ describe("agent tasks", () => {
 
     const output = parseNarrativeWriteOutput({
       prose: "You push open the tavern door.",
-      choiceDrafts: [{ id: "look", label: "Look around" }],
+      meta: { tone: "calm" },
     });
     expect(output.success).toBe(true);
   });

@@ -8,9 +8,6 @@ import type {
   AgentToolHandler,
   BriefPolicy,
   CapabilityDefinition,
-  ChoiceContributor,
-  ChoiceFilter,
-  ChoiceKindDefinition,
   CliCommandProvider,
   CommandDecorator,
   CommandDefinition,
@@ -83,7 +80,6 @@ export class ContributionIndex {
   readonly agentTools = new Map<string, Owned<AgentToolDefinition>>();
   readonly actionTypes = new Map<string, Owned<ActionTypeDefinition>>();
   readonly intentTypes = new Map<string, Owned<IntentTypeDefinition>>();
-  readonly choiceKinds = new Map<string, Owned<ChoiceKindDefinition>>();
   readonly publicProjectors: Owned<PublicProjectorDefinition>[] = [];
   readonly memoryKinds = new Map<string, Owned<MemoryKindDefinition>>();
   readonly capabilities = new Set<string>();
@@ -123,8 +119,6 @@ export class ContributionIndex {
   readonly narrativeCritics: Owned<NarrativeCritic>[] = [];
   readonly postNarrativeContributors: Owned<PostNarrativeContributor>[] = [];
   readonly passageAssemblers: Owned<PassageAssembler>[] = [];
-  readonly choiceContributors: Owned<ChoiceContributor>[] = [];
-  readonly choiceFilters: Owned<ChoiceFilter>[] = [];
   readonly statusPanelProviders: Owned<StatusPanelProvider>[] = [];
   readonly localizationContributors: Owned<LocalizationContributor>[] = [];
   readonly sessionBootstraps: Owned<SessionBootstrap>[] = [];
@@ -178,8 +172,6 @@ export class ContributionIndex {
       this.narrativeCritics,
       this.postNarrativeContributors,
       this.passageAssemblers,
-      this.choiceContributors,
-      this.choiceFilters,
       this.statusPanelProviders,
       this.localizationContributors,
       this.sessionBootstraps,

@@ -31,14 +31,14 @@ AI предлагает. Модули помогают и ограничиваю
 | Core | владеть state, валидировать, commit/rollback хода, оркестрировать pipeline | знать бизнес-детали NPC/фандома/сюжета |
 | Module | читать разрешённый state, предлагать команды, давать guards/context, описывать agent tasks | писать в world state в обход command bus; обходить pipeline |
 | Agent (LLM) | возвращать structured proposal и prose по brief | мутировать state; быть source of truth |
-| Player | отправлять action / choice | напрямую менять facts мира |
+| Player | отправлять free-text action | напрямую менять facts мира |
 
 ## 3. Игровой UX (целевой)
 
 Модель ощущений: **turn-based RP book**.
 
 1. Игрок видит **Passage** (страницу): нарратив + статусные подсказки (опционально).
-2. Игрок вводит **free-text Action** (меню choices по умолчанию **выключено** — `turn.playerChoicesEnabled: false`).
+2. Игрок вводит **free-text Action**.
 3. Движок выполняет **один атомарный Turn**.
 4. Игрок получает новый Passage.
 

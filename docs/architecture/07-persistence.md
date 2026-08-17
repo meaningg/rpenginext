@@ -66,7 +66,7 @@ Successful COMMIT must not leave divergent memory vs DB:
 |--------|------------|
 | WorldState snapshot checkpoints | module ephemeral caches |
 | Journal accepted commands | agent raw prompts (optional debug store) |
-| Passage prose + choices | capability graph (from manifests at boot) |
+| Passage prose | capability graph (from manifests at boot) |
 | module list+versions | — |
 
 ## 6. Migration

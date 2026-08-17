@@ -17,7 +17,6 @@ describe("turn result & passage", () => {
         id: "pas_1",
         turnId: "trn_1",
         prose: "Hello, world.",
-        choices: [{ id: "c1", label: "Continue" }],
       },
       acceptedCommands: [],
       warnings: [],
@@ -45,15 +44,13 @@ describe("turn result & passage", () => {
     });
     expect(missingFailure.success).toBe(false);
 
-    const badAction = parsePlayerAction({ kind: "choice" });
-    // choice without choiceId is still structurally ok at schema layer
-    expect(badAction.success).toBe(true);
+    const badAction = parsePlayerAction({ kind: "unknown" });
+    expect(badAction.success).toBe(false);
 
     const emptyPassage = parsePassage({
-      id: "pas",
+      id: "",
       turnId: "trn",
       prose: "x",
-      choices: [{ id: "", label: "x" }],
     });
     expect(emptyPassage.success).toBe(false);
   });

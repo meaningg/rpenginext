@@ -22,7 +22,7 @@
 |----|------|
 | Регистрируете slice/commands/ports | Владеет state, atomic commit/rollback |
 | Предлагаете `StateCommand[]` | Валидирует, dry-apply, commit |
-| Кормите brief / choices | Пишет prose через agents, собирает Passage |
+| Кормите brief | Пишет prose через agents, собирает Passage |
 | Observe после commit | Не даёт AFTER менять truth |
 
 **Инвариант:** AI и модули *предлагают*. Core *проверяет и атомарно фиксирует*.
@@ -151,7 +151,6 @@ const manifest: ModuleManifest = {
     "Guard",
     "TransitionContributor",
     "NarrativeContextProvider",
-    "ChoiceContributor",
   ],
 
   // Layer B — каждый addInterceptor должен быть здесь
@@ -213,7 +212,7 @@ Legacy поле `extensionPoints` мержится в `contributes` (см. `effe
 | `registerMigration` | slice `fromVersion → toVersion` (на load) |
 | `registerAgentTaskType` | новый LLM/mock task type + schemas |
 | `registerAgentTool` | schema tool (+ `addAgentToolHandler`) |
-| `registerActionType` / `registerIntentType` / `registerChoiceKind` | vocabulary |
+| `registerActionType` / `registerIntentType` | vocabulary |
 | `registerPublicProjector` | redacted view в `passage.visibleState` |
 | `registerReadModel` | `get(state, args)` селектор |
 | `registerTemplate` | named fallback strings для host |
@@ -291,7 +290,7 @@ ctx.addInterceptor({
 | PROPOSE | `TransitionContributor`, `CommandDecorator` |
 | VALIDATE | `CommandValidator`, `Invariant` (port), `ConflictResolver`, `DraftSimulator` |
 | NARRATE | `NarrativeContextProvider`, `NarrativeStyleProvider`, `BriefPolicy`, `PromptFragmentProvider`, `NarrativeCritic` |
-| PRESENT | `PassageAssembler`, `ChoiceContributor`, `ChoiceFilter`, `StatusPanelProvider`, `LocalizationContributor` |
+| PRESENT | `PassageAssembler`, `StatusPanelProvider`, `LocalizationContributor` |
 | AFTER | `AfterCommitHook`, `SystemTurnScheduler` (только schedule) |
 | Session | `SessionBootstrap`, `SessionHydrator`, `TurnSetup`, `TurnTeardown`, `OnTurnRejected` |
 | Host | `HelpProvider`, `DebugDumper`, `CliCommandProvider`, `SaveMetadataProvider` |
@@ -470,16 +469,6 @@ ctx.addNarrativeStyleProvider({
 ctx.addBriefPolicy({
   contribute() {
     return ok({ denyMention: ["secretFlag"], allowMention: [] });
-  },
-});
-
-ctx.addChoiceContributor({
-  contribute({ draft }, turnCtx) {
-    return ok({
-      choices: [
-        { id: "example.look", label: "Look around", kind: "default", enabled: true },
-      ],
-    });
   },
 });
 
@@ -739,7 +728,7 @@ Mock LLM:
 import { MockAgentScript } from "@rpengineext/core";
 
 const script = new MockAgentScript()
-  .fixed("narrative.write", { prose: "…", choiceDrafts: [] })
+  .fixed("narrative.write", { prose: "…" })
   .fixed("example.classify", { label: "ok" });
 
 await createTestEngine({ modules: […], mockAgentScript: script });
@@ -824,7 +813,6 @@ await createTestEngine({ modules: […], mockAgentScript: script });
 | Спросить LLM | `registerAgentTaskType` + `AgentTaskContributor` / `Planner` |
 | Дать tool | `registerAgentTool` + `addAgentToolHandler` |
 | Влиять на текст | `NarrativeContextProvider` + style/brief/prompt fragments |
-| Кнопки игроку | `ChoiceContributor` (+ `registerChoiceKind`) |
 | Строка статуса в CLI | `StatusPanelProvider` / `PublicProjector` |
 | Вклиниться между стадиями | `addInterceptor` |
 | Сиды новой игры | `SessionBootstrap` |

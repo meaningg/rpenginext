@@ -1,7 +1,7 @@
 /**
  * Extracts player-facing narrative prose from a partial LLM output buffer.
  *
- * Live `narrative.write` streams JSON (`{"prose":"...","choiceDrafts":[]}`).
+ * Live `narrative.write` streams JSON (`{"prose":"...","meta"?:{...}}`).
  * Mock streams may already emit plain prose. Both are supported.
  *
  * @param raw - cumulative stream text so far

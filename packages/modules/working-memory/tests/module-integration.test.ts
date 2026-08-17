@@ -29,7 +29,6 @@ function capturingLlm(store: LlmCompletionRequest[]): LlmPort {
       return ok({
         text: JSON.stringify({
           prose: `Story after: ${request.messages.at(-1)?.content?.slice(0, 40) ?? ""}`,
-          choiceDrafts: [],
         }),
       });
     },
@@ -145,7 +144,7 @@ describe("working-memory module integration", () => {
     expect(slice?.entries ?? []).toHaveLength(0);
   });
 
-  test("choice action does not append pair", async () => {
+  test("empty free_text is rejected and does not append pair", async () => {
     const created = await createTestEngine({
       modules: [createWorkingMemoryModule({ windowPairs: 4 })],
       moduleConfig: { working_memory: { windowPairs: 4 } },
@@ -157,25 +156,23 @@ describe("working-memory module integration", () => {
     expect(session.ok).toBe(true);
     if (!session.ok) return;
 
-    // First free_text so session is healthy
     const first = await session.value.submitAction({
       kind: "free_text",
       text: "start",
     });
     expect(first.status).toBe("committed");
 
-    const choiceTurn = await session.value.submitAction({
-      kind: "choice",
-      choiceId: "continue",
+    const rejected = await session.value.submitAction({
+      kind: "free_text",
+      text: "",
     });
-    // choice may commit with mock narrative
-    if (choiceTurn.status === "committed") {
-      const state = created.value.runtime.getSessionState(
-        session.value.sessionId,
-      );
-      const slice = state?.slices[SLICE_NAME] as { entries: unknown[] };
-      // only the free_text pair
-      expect(slice.entries).toHaveLength(1);
-    }
+    expect(rejected.status).toBe("rejected");
+
+    const state = created.value.runtime.getSessionState(
+      session.value.sessionId,
+    );
+    const slice = state?.slices[SLICE_NAME] as { entries: unknown[] };
+    // only the successful free_text pair
+    expect(slice.entries).toHaveLength(1);
   });
 });

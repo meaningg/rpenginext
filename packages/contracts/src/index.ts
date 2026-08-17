@@ -114,8 +114,6 @@ export {
 } from "./turn/action.ts";
 
 export {
-  type Choice,
-  ChoiceSchema,
   type PublicView,
   type Passage,
   PassageSchema,
@@ -164,6 +162,7 @@ export {
   type EntityResolver,
   type IntentContributor,
   type IntentScorer,
+  type DisambiguationOption,
   type DisambiguationProvider,
   type GuardDecision,
   type Guard,
@@ -189,8 +188,6 @@ export {
   type NarrativeCritic,
   type PostNarrativeContributor,
   type PassageAssembler,
-  type ChoiceContributor,
-  type ChoiceFilter,
   type StatusPanelProvider,
   type LocalizationContributor,
   type SessionBootstrap,
@@ -220,7 +217,6 @@ export type {
   AgentToolDefinition,
   ActionTypeDefinition,
   IntentTypeDefinition,
-  ChoiceKindDefinition,
   PublicProjectorDefinition,
   MemoryKindDefinition,
   ReadModelDefinition,

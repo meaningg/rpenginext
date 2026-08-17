@@ -58,7 +58,7 @@ describe("ResponsesLlmPort", () => {
         }
         expect(body.text).toBeUndefined();
         return new Response(
-          JSON.stringify({ output_text: '{"prose":"ok","choiceDrafts":[]}' }),
+          JSON.stringify({ output_text: '{"prose":"ok"}' }),
           { status: 200 },
         );
       }) as typeof fetch,

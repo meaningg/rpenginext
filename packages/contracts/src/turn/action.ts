@@ -8,9 +8,8 @@ import { JsonObjectSchema, type JsonObject } from "../json.ts";
  */
 export const PlayerActionSchema = z.object({
   clientActionId: IdStringSchema.optional(),
-  kind: z.enum(["free_text", "choice", "system"]).default("free_text"),
+  kind: z.enum(["free_text", "system"]).default("free_text"),
   text: z.string().optional(),
-  choiceId: z.string().min(1).optional(),
   payload: JsonObjectSchema.optional(),
 });
 
@@ -23,7 +22,6 @@ export const NormalizedActionSchema = z.object({
   actionType: z.string().min(1),
   raw: PlayerActionSchema,
   text: z.string().optional(),
-  choiceId: z.string().optional(),
   targets: z.array(z.string().min(1)).default([]),
   confidence: z.number().min(0).max(1).optional(),
   extras: JsonObjectSchema.default({}),

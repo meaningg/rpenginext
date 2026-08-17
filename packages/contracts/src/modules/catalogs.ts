@@ -80,11 +80,6 @@ export interface IntentTypeDefinition {
   readonly description?: string;
 }
 
-export interface ChoiceKindDefinition {
-  readonly kind: string;
-  readonly payloadSchema?: z.ZodType<JsonObject>;
-}
-
 export interface PublicProjectorDefinition {
   readonly id: string;
   project(state: WorldState): JsonObject;

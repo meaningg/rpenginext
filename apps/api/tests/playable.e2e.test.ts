@@ -64,12 +64,11 @@ describe("playable e2e (HTTP book loop)", () => {
         templateId: string;
         passage: {
           prose: string;
-          choices: Array<{ id: string; label: string }>;
         } | null;
       };
       openingTurn?: {
         status: string;
-        passage?: { prose: string; choices: Array<{ id: string }> };
+        passage?: { prose: string };
       };
     };
     const sessionId = created.session.sessionId;
@@ -77,7 +76,6 @@ describe("playable e2e (HTTP book loop)", () => {
     expect(created.session.templateId).toBe("demo.hello");
     expect(created.openingTurn?.status).toBe("committed");
     expect(created.session.passage?.prose.length).toBeGreaterThan(10);
-    expect(created.session.passage?.choices ?? []).toEqual([]);
 
     // 4) GET session + passage
     const getRes = await fetch(`${baseUrl}/v1/sessions/${sessionId}`, {
@@ -154,7 +152,7 @@ describe("playable e2e (HTTP book loop)", () => {
     expect(jobBody.job.result?.status).toBe("committed");
     expect(jobBody.job.result?.passage?.prose.length).toBeGreaterThan(0);
 
-    // 6) Free-text only: no choices; choice actions rejected; another free-text turn
+    // 6) Another free-text turn
     const passageRes = await fetch(
       `${baseUrl}/v1/sessions/${sessionId}/passage`,
       { headers: player.headers },
@@ -162,27 +160,9 @@ describe("playable e2e (HTTP book loop)", () => {
     const passageBody = (await passageRes.json()) as {
       passage: {
         prose: string;
-        choices: Array<{ id: string; label: string; enabled?: boolean }>;
       } | null;
     };
     expect(passageBody.passage?.prose.length).toBeGreaterThan(0);
-    expect(passageBody.passage?.choices ?? []).toEqual([]);
-
-    const choiceReject = await fetch(
-      `${baseUrl}/v1/sessions/${sessionId}/actions?wait=1`,
-      {
-        method: "POST",
-        headers: player.headers,
-        body: JSON.stringify({ kind: "choice", choiceId: "nope" }),
-      },
-    );
-    expect(choiceReject.ok).toBe(true);
-    const rejectedChoice = (await choiceReject.json()) as {
-      status: string;
-      failure?: { message: string };
-    };
-    expect(rejectedChoice.status).toBe("rejected");
-    expect(rejectedChoice.failure?.message.toLowerCase()).toContain("free_text");
 
     const freeRes = await fetch(
       `${baseUrl}/v1/sessions/${sessionId}/actions?wait=1`,
@@ -198,13 +178,12 @@ describe("playable e2e (HTTP book loop)", () => {
     expect(freeRes.ok).toBe(true);
     const freeTurn = (await freeRes.json()) as {
       status: string;
-      passage: { prose: string; choices: unknown[] };
+      passage: { prose: string };
       revision: number;
     };
     expect(freeTurn.status).toBe("committed");
     expect(freeTurn.revision).toBeGreaterThanOrEqual(2);
     expect(freeTurn.passage.prose.length).toBeGreaterThan(0);
-    expect(freeTurn.passage.choices ?? []).toEqual([]);
 
     // 7) Save
     const saveRes = await fetch(`${baseUrl}/v1/sessions/${sessionId}/save`, {

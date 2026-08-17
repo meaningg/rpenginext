@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { JsonObjectSchema } from "../json.ts";
-import { ChoiceSchema } from "../turn/passage.ts";
 
 /**
  * Built-in agent task type ids (v1).
@@ -39,8 +38,6 @@ export const NarrativeWriteInputSchema = z.object({
   playerAction: JsonObjectSchema.optional(),
   style: JsonObjectSchema.optional(),
   locale: z.string().min(1).optional(),
-  /** 0 = free-text only (no player choice menu). */
-  maxChoices: z.number().int().nonnegative().optional(),
   /**
    * Prior user/assistant pairs flattened as chat messages.
    * Expected order: user, assistant, user, assistant, …
@@ -56,7 +53,6 @@ export type NarrativeWriteInput = z.infer<typeof NarrativeWriteInputSchema>;
  */
 export const NarrativeWriteOutputSchema = z.object({
   prose: z.string().min(1),
-  choiceDrafts: z.array(ChoiceSchema).default([]),
   meta: JsonObjectSchema.optional(),
 });
 

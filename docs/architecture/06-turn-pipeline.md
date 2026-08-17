@@ -7,7 +7,7 @@
 
 ```text
 show Passage
-  → player submits Action/Choice
+  → player submits free-text Action
   → engine resolves ONE atomic Turn
   → show new Passage OR rejection message (state unchanged)
 ```
@@ -131,7 +131,6 @@ Fallback-passage-with-kept-state **запрещён** в v1.
 
 #### 8. PRESENT
 
-- `ChoiceContributor` modules;
 - assemble `Passage` artifact (still not published);
 - prepare public view payload.
 - **Materialize (pre-commit window, not a separate StageId):** after passage is built,
@@ -251,7 +250,7 @@ PLAN: npc.intent for Elena + nearby witnesses
 PROPOSE: relation delta, knowledge flags, inventory none
 VALIDATE: dry-apply commands onto draft
 NARRATE: brief from draft; if LLM fails → FULL ROLLBACK
-PRESENT: choices [ask more, leave, ...]
+PRESENT: assemble passage prose
 COMMIT: publish state + passage + journal together
 AFTER: metrics only
 ```
@@ -271,7 +270,7 @@ AFTER: metrics only
 | PROPOSE | TransitionContributor, CommandDecorator |
 | VALIDATE | CommandValidator, Invariant, ConflictResolver, DraftSimulator |
 | NARRATE | NarrativeContextProvider, NarrativeStyleProvider, PromptFragmentProvider, BriefPolicy, NarrativeCritic |
-| PRESENT (+ materialize) | PassageAssembler, ChoiceContributor, ChoiceFilter, StatusPanelProvider, PostNarrativeContributor |
+| PRESENT (+ materialize) | PassageAssembler, StatusPanelProvider, PostNarrativeContributor |
 | AFTER | AfterCommitHook, SystemTurnScheduler (schedule only) |
 
 Catalog registrations (`registerCommand`, `registerSlice`, …) работают across stages and are the main way to add domain mechanics without new stages.

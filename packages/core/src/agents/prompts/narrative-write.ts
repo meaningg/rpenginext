@@ -3,7 +3,7 @@ import type { AgentTask, JsonObject, LlmMessage } from "@rpengineext/contracts";
 /**
  * Builds chat messages for `narrative.write` LLM calls.
  *
- * @param task - agent task (input: brief/style/locale/maxChoices/history)
+ * @param task - agent task (input: brief/style/locale/history)
  */
 export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
   const input = task.input;
@@ -13,23 +13,17 @@ export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
     typeof input.locale === "string" && input.locale.trim().length > 0
       ? input.locale.trim()
       : "en";
-  const rawMax = input.maxChoices;
-  const maxChoices =
-    typeof rawMax === "number" && Number.isFinite(rawMax) && rawMax >= 0
-      ? Math.floor(rawMax)
-      : 0;
-  const choicesEnabled = maxChoices > 0;
   const history = normalizeHistory(input.history);
   const playerAction = resolvePlayerAction(input, brief);
 
   const languageRule = [
     `Locale: ${locale}.`,
-    `Write ALL player-facing text (prose${choicesEnabled ? " and choiceDrafts labels" : ""}) in the language of locale "${locale}".`,
+    `Write ALL player-facing text (prose) in the language of locale "${locale}".`,
     "Do not switch to English unless the locale is en or an en-* variant.",
     "JSON keys stay in English; only string values shown to the player are localized.",
   ].join(" ");
 
-  const gmRules = [
+  const system = [
     "You are the game master (GM) for a turn-based interactive role-playing story.",
     "Narrate the immediate, coherent outcome of the player's CURRENT action only.",
     "The current action is brief.playerAction (and restated above the task JSON when present).",
@@ -38,27 +32,12 @@ export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
     "Honor continuity: location, characters, tone, and open threads from history and brief.",
     "Do not invent world facts, items, locations, or NPC knowledge beyond the brief and established history.",
     "Do not include secrets that the brief marks as forbidden.",
-  ];
-
-  const system = choicesEnabled
-    ? [
-        ...gmRules,
-        "Output MUST be a single JSON object (no markdown fences) with this shape:",
-        '{ "prose": string (non-empty), "choiceDrafts": [ { "id": string, "label": string, "kind"?: string, "enabled"?: boolean } ], "meta"?: object }',
-        languageRule,
-        `Prefer at most ${maxChoices} choiceDrafts (may be empty).`,
-        "prose is player-facing story text. choiceDrafts are optional short next-step labels.",
-      ].join("\n")
-    : [
-        ...gmRules,
-        "The player always responds with FREE TEXT only — never multiple-choice options.",
-        "Do NOT suggest menu choices, numbered options, or 'what will you do' choice lists.",
-        "Output MUST be a single JSON object (no markdown fences) with this shape:",
-        '{ "prose": string (non-empty), "choiceDrafts": [], "meta"?: object }',
-        languageRule,
-        "choiceDrafts MUST be an empty array.",
-        "prose is player-facing story text only; the player will type their next action freely.",
-      ].join("\n");
+    "The player replies with free text on every turn.",
+    "Output MUST be a single JSON object (no markdown fences) with this shape:",
+    '{ "prose": string (non-empty), "meta"?: object }',
+    languageRule,
+    "prose is player-facing story text only.",
+  ].join("\n");
 
   const userPayload = {
     taskType: "narrative.write",
@@ -67,8 +46,6 @@ export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
     brief,
     style,
     locale,
-    maxChoices,
-    playerInputMode: choicesEnabled ? "choices_allowed" : "free_text_only",
   };
 
   return [
@@ -87,6 +64,7 @@ export function buildNarrativeWriteMessages(task: AgentTask): LlmMessage[] {
  * @param base - original messages
  * @param previousText - model output that failed validation
  * @param issues - human-readable validation issues
+ * @param hints - optional extra repair hints
  */
 export function buildNarrativeWriteRepairMessages(
   base: readonly LlmMessage[],
@@ -97,7 +75,7 @@ export function buildNarrativeWriteRepairMessages(
   const lines = [
     "Your previous JSON failed schema validation.",
     "Fix and return ONLY valid JSON for narrative.write.",
-    'Required shape: { "prose": string, "choiceDrafts": [] (empty unless maxChoices>0), "meta"?: object }.',
+    'Required shape: { "prose": string (non-empty), "meta"?: object }.',
     `Validation issues: ${issues}`,
   ];
   if (hints.length > 0) {
@@ -140,18 +118,10 @@ function formatNarrativeUserContent(
     playerAction && typeof playerAction.text === "string"
       ? playerAction.text.trim()
       : "";
-  const choiceId =
-    playerAction && typeof playerAction.choiceId === "string"
-      ? playerAction.choiceId
-      : "";
 
   if (text.length > 0) {
     lines.push("CURRENT PLAYER ACTION (resolve this now):");
     lines.push(text);
-    lines.push("");
-  } else if (choiceId.length > 0) {
-    lines.push("CURRENT PLAYER CHOICE (resolve this now):");
-    lines.push(choiceId);
     lines.push("");
   } else {
     lines.push(

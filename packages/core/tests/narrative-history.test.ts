@@ -43,8 +43,8 @@ describe("narrative.write history messages", () => {
     expect(messages[0]?.role).toBe("system");
     expect(messages[0]?.content).toContain("game master");
     expect(messages[0]?.content).toContain("CURRENT action");
-    expect(messages[0]?.content).toContain("FREE TEXT");
-    expect(messages[0]?.content).toContain('"choiceDrafts": []');
+    expect(messages[0]?.content).toContain("free text");
+    expect(messages[0]?.content).toContain('"prose": string');
     expect(messages[0]?.content).toContain('language of locale "en"');
     expect(messages[1]).toEqual({ role: "user", content: "hello" });
     expect(messages[2]).toEqual({ role: "assistant", content: "Hi there." });
@@ -52,7 +52,6 @@ describe("narrative.write history messages", () => {
     expect(messages[3]?.content).toContain("CURRENT PLAYER ACTION");
     expect(messages[3]?.content).toContain("open the door");
     expect(messages[3]?.content).toContain("narrative.write");
-    expect(messages[3]?.content).toContain("free_text_only");
     // Prior history line must not be mistaken for the current action JSON text field alone.
     expect(messages[3]?.content).toContain('"text": "open the door"');
   });
@@ -70,7 +69,6 @@ describe("narrative.write history messages", () => {
           },
         },
         locale: "ru",
-        maxChoices: 0,
       },
       constraints: {
         timeoutMs: 1000,

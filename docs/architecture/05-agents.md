@@ -64,7 +64,7 @@ AgentResult =
 
 | type | Когда | Output (смысл) | Меняет state? |
 |------|--------|----------------|---------------|
-| `narrative.write` | narrate stage | prose + optional choice drafts | нет напрямую; fail ⇒ rollback turn |
+| `narrative.write` | narrate stage | prose | нет напрямую; fail ⇒ rollback turn |
 | `action.interpret` | normalize/intent | structured player intent | no |
 | `npc.intent` (example) | plan | intended actions per active NPC | через later commands |
 | `npc.voice` (example) | narrate/plan | line/tone for NPC | no |
@@ -84,7 +84,7 @@ Modules могут добавлять task types, если:
 2) validate dry-apply on draft
 3) NarrativeBrief built from DRAFT state + context providers
 4) narrative.write produces prose; on failure → FULL TURN ROLLBACK
-5) choices/passage assembled in artifacts
+5) passage assembled in artifacts
 6) single COMMIT publishes state + passage + journal together
 ```
 

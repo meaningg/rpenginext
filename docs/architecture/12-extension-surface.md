@@ -35,7 +35,6 @@
 | `registerAgentTool(def)` | tool for orchestrator allowlist | `canon.search` |
 | `registerActionType(def)` | known normalized action kinds + schema | `speak`, `move`, `use_item` |
 | `registerIntentType(def)` | intent vocabulary | `social.speak_to` |
-| `registerChoiceKind(def)` | typed choice payloads for UI/CLI | `move_to`, `dialog_option` |
 | `registerPublicProjector(def)` | redacted view for player status panel | HP, known NPCs |
 | `registerMemoryKind(def)` | kinds of memory items | `scene_summary` |
 | `registerCapability(id)` | provides for graph | `capability:npc` |
@@ -150,8 +149,6 @@ Named ports (слой C) остаются для мест, где нужен **t
 | `NarrativeCritic` | narrate | post-LLM structured QA (continuity) | any hard fail → turn fail (rollback) |
 | `PostNarrativeContributor` | present→commit (materialize) | emit StateCommands after passage prose is known | concat commands; progressive dry-apply |
 | `PassageAssembler` | present | contribute sections to passage body model | ordered sections by slot/priority |
-| `ChoiceContributor` | present | choices | concat + dedupe by id |
-| `ChoiceFilter` | present | hide/disable choices | ordered filters |
 | `StatusPanelProvider` | present | sidebar/status lines for CLI/UI | concat by slot |
 | `LocalizationContributor` | present | string tables for module UI bits | merge by locale key |
 
@@ -187,7 +184,6 @@ Named ports (слой C) остаются для мест, где нужен **t
 | Подмешать LLM | `registerAgentTaskType` + `AgentTaskContributor` / `Planner` |
 | Инструмент поиска | `registerAgentTool` |
 | Влиять на текст | `NarrativeContextProvider` + `PromptFragmentProvider` + `NarrativeStyleProvider` |
-| Кнопки игроку | `ChoiceContributor` + `registerChoiceKind` |
 | Статус в CLI | `StatusPanelProvider` / `PublicProjector` |
 | Пост-обработка memory | commands pre-commit **или** `SystemTurnScheduler` |
 | Вклиниться «между» стадиями | `StageInterceptor before/after` |
@@ -217,7 +213,6 @@ Named ports (слой C) остаются для мест, где нужен **t
     "Planner",
     "TransitionContributor",
     "NarrativeContextProvider",
-    "ChoiceContributor",
     "StatusPanelProvider"
   ],
   "interceptors": [
@@ -245,7 +240,7 @@ Strict mode: implementation without manifest entry → boot fail.
 - новый gameplay domain;
 - новый LLM task type;
 - новые поля state;
-- новые choices/status lines;
+- новые status lines;
 - «хочу хук на 50ms раньше narrate» → interceptor.
 
 ---

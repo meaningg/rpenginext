@@ -33,8 +33,6 @@ describe("llm narrative path", () => {
       ok({
         text: JSON.stringify({
           prose: "The lantern flares. A real LLM path writes this line.",
-          // Even if the model emits drafts, free-text mode strips them from passage.
-          choiceDrafts: [{ id: "go", label: "Go on", kind: "default", enabled: true }],
         }),
         usage: { promptTokens: 3, completionTokens: 5, totalTokens: 8 },
       }),
@@ -59,7 +57,6 @@ describe("llm narrative path", () => {
     expect(result.status).toBe("committed");
     if (result.status !== "committed") return;
     expect(result.passage.prose).toContain("lantern");
-    expect(result.passage.choices).toEqual([]);
     expect(llm.calls.length).toBeGreaterThanOrEqual(1);
     expect(llm.calls[0]?.model).toBe("fake-model");
     expect(llm.calls[0]?.responseFormat).toBe("json");
@@ -140,7 +137,6 @@ describe("llm narrative path", () => {
       return ok({
         text: JSON.stringify({
           prose: "Repaired narrative after bad JSON.",
-          choiceDrafts: [],
         }),
       });
     });

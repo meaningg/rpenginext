@@ -19,5 +19,5 @@ Open `http://127.0.0.1:5173`. Vite proxies `/v1` and `/health` to the API.
 - local player identity in `localStorage`
 - story template gallery
 - session resume list
-- passage + choices + free-text
+- passage + free-text actions
 - SSE turn progress and draft narrative stream (cleared on reject; replaced on commit)
