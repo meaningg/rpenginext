@@ -8,18 +8,18 @@
 
 > Истина мира принадлежит core. AI предлагает. Commit атомарный.
 
-## Status
+## Статус
 
 Сейчас: **Phase 3 — persistence + real narrative path**.  
-`bun:sqlite` saves, Responses API `LlmPort`, filesystem turn traces, CLI book loop.  
-Next: Phase 4 — hardening (replay tool, migrations, richer CLI UX).
+Сохранения через `bun:sqlite`, `LlmPort` на Responses API, filesystem turn traces, CLI book loop.  
+Далее: Phase 4 — hardening (инструмент replay, миграции, более удобный CLI UX).
 
-## Documentation (source of truth)
+## Документация (источник истины)
 
 Начните здесь:
 
-| Doc | Description |
-|-----|-------------|
+| Документ | Описание |
+|----------|----------|
 | [docs/architecture/00-overview.md](./docs/architecture/00-overview.md) | Обзор системы |
 | [docs/architecture/01-principles.md](./docs/architecture/01-principles.md) | Принципы и запреты |
 | [docs/architecture/02-core.md](./docs/architecture/02-core.md) | Границы core |
@@ -37,7 +37,7 @@ Next: Phase 4 — hardening (replay tool, migrations, richer CLI UX).
 | [docs/modules/README.md](./docs/modules/README.md) | Гайд автора модуля |
 | [docs/adr/0001-contracted-pipeline.md](./docs/adr/0001-contracted-pipeline.md) | ADR: выбор CPA |
 
-## Architecture in one paragraph
+## Архитектура в одном абзаце
 
 Host принимает действие игрока → **TurnPipeline** на **draft** нормализует ввод, модули валидируют/планируют, LLM/modules предлагают `StateCommand`s → dry-apply → narrative по draft-brief → сборка `Passage` → **один COMMIT** (state + passage + journal в `bun:sqlite`) **или полный откат** при любой ошибке. Модули — по манифесту и extension points, без правок core.
 
@@ -48,15 +48,15 @@ Player Action
     → COMMIT (all) | ROLLBACK (all)
 ```
 
-Working memory (always-on in CLI): env `RP_WORKING_MEMORY_WINDOW` = N **pairs**
-injected into `narrative.write` as chat history; full archive lives in slice `working_memory`.
+Working memory (всегда включена в CLI): env `RP_WORKING_MEMORY_WINDOW` = N **пар**,
+которые подмешиваются в `narrative.write` как история чата; полный архив живёт в slice `working_memory`.
 
-v1 hosts: **CLI** + **HTTP API** (`apps/api`) + **Web UI** (`apps/web`).  
-v1 persistence: **bun:sqlite**.  
-v1 debug: core пишет подробные **turn `.md` traces** (state diff, LLM I/O, tool calls).  
+Хосты v1: **CLI** + **HTTP API** (`apps/api`) + **Web UI** (`apps/web`).  
+Персистентность v1: **bun:sqlite**.  
+Отладка v1: core пишет подробные **turn `.md` traces** (state diff, LLM I/O, tool calls).  
 Доменные modules — отдельными задачами.
 
-## Dev scaffold
+## Dev-окружение
 
 ```bash
 bun install
@@ -66,45 +66,45 @@ bun run cli:hello --mock --fixture
 bun run cli:book --mock
 ```
 
-Web UI (two terminals, localhost):
+Web UI (два терминала, localhost):
 
 ```bash
 bun run api:mock          # http://127.0.0.1:8787
-bun run web               # http://127.0.0.1:5173 (proxies /v1 → API)
+bun run web               # http://127.0.0.1:5173 (проксирует /v1 → API)
 ```
 
-Live LLM (after copying `.env.example` → `.env`):
+Живая LLM (после копирования `.env.example` → `.env`):
 
 ```bash
 cp .env.example .env
-# set RP_LLM_API_KEY, RP_LLM_BASE_URL, RP_LLM_MODEL
+# задать RP_LLM_API_KEY, RP_LLM_BASE_URL, RP_LLM_MODEL
 bun run cli:hello
 bun run cli:book
 bun run api
 bun run web
-# resume: bun run apps/cli/src/main.ts --session <id> --repl
+# продолжить: bun run apps/cli/src/main.ts --session <id> --repl
 ```
 
-Stack target: **Bun + TypeScript** monorepo (`packages/*`, `packages/*/*`, `apps/*`).
+Целевой стек: монорепо **Bun + TypeScript** (`packages/*`, `packages/*/*`, `apps/*`).
 
-### Workspace packages
+### Пакеты workspace
 
-| Package | Status | Role |
-|---------|--------|------|
-| [`@rpengineext/logger`](./packages/logger) | ready | structured pino logger (pretty/JSON, child bindings, redact) |
-| [`@rpengineext/contracts`](./packages/contracts) | ready (types/schemas) | public ports, manifest, state/turn/agent schemas, extension surface |
+| Пакет | Статус | Роль |
+|-------|--------|------|
+| [`@rpengineext/logger`](./packages/logger) | ready | структурированный pino logger (pretty/JSON, child bindings, redact) |
+| [`@rpengineext/contracts`](./packages/contracts) | ready (types/schemas) | публичные ports, манифест, схемы state/turn/agent, extension surface |
 | [`@rpengineext/core`](./packages/core) | ready (Phase 3) | registry, state kernel, turn pipeline, agents, turn tracer |
-| [`@rpengineext/persistence-sqlite`](./packages/persistence/sqlite) | ready | bun:sqlite `PersistencePort` + atomic `commitTurn` |
+| [`@rpengineext/persistence-sqlite`](./packages/persistence/sqlite) | ready | bun:sqlite `PersistencePort` + атомарный `commitTurn` |
 | [`@rpengineext/agents-responses`](./packages/agents/responses) | ready | Responses API `LlmPort` (`POST /v1/responses`) |
 | [`@rpengineext/cli`](./apps/cli) | ready | hello turn / REPL book loop, save/load |
-| [`@rpengineext/api`](./apps/api) | ready | REST + SSE host, multi-player local sessions |
+| [`@rpengineext/api`](./apps/api) | ready | REST + SSE host, локальные multi-player сессии |
 | [`@rpengineext/web`](./apps/web) | ready | React + Tailwind book UI |
-| [`@rpengineext/host-bootstrap`](./packages/host-bootstrap) | ready | shared CLI/API engine wiring |
-| [`@rpengineext/content-stories`](./packages/content-stories) | ready | story template catalog (`data/stories`) |
-| [`@rpengineext/module-working-memory`](./packages/modules/working-memory) | ready | last-N chat pairs for narrative + full pair archive in session state |
-| product modules (npc/plot/…) | planned | Phase 5+ separate tasks |
+| [`@rpengineext/host-bootstrap`](./packages/host-bootstrap) | ready | общая wiring движка для CLI/API |
+| [`@rpengineext/content-stories`](./packages/content-stories) | ready | каталог шаблонов историй (`data/stories`) |
+| [`@rpengineext/module-working-memory`](./packages/modules/working-memory) | ready | последние N пар чата для narrative + полный архив пар в session state |
+| product modules (npc/plot/…) | planned | Phase 5+ отдельными задачами |
 
-## Contributing modules (later)
+## Как вносить модули (позже)
 
 Когда contracts опубликованы в репо:
 
@@ -114,6 +114,6 @@ Stack target: **Bun + TypeScript** monorepo (`packages/*`, `packages/*/*`, `apps
 4. Не вызывать LLM SDK напрямую.
 5. Покрыть success/reject/edge тестами.
 
-## License
+## Лицензия
 
 Private / TBD.
