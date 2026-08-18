@@ -8,12 +8,6 @@
 
 > Истина мира принадлежит core. AI предлагает. Commit атомарный.
 
-
-Сейчас: **Phase 4 complete** + **Module SDK (CBMD)** — hosts (CLI + API + Web),
-persistence, turn traces, first-party modules on `@rpengineext/module-sdk`.  
-Далее: Phase 5+ — product modules по отдельным задачам; CLI UX polish; optional safety hooks.  
-Core меняется только через ADR. Модули — через sdk, без правок core.
-
 ## Документация (источник истины)
 
 Начните здесь:
