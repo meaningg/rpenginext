@@ -1,0 +1,36 @@
+{
+  "name": "@rpengineext/module-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Author-facing Module SDK (CBMD): defineModule, capabilities, test harness",
+  "exports": {
+    ".": "./src/index.ts",
+    "./test": "./src/test/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@rpengineext/contracts": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@rpengineext/core": "workspace:*",
+    "@rpengineext/logger": "workspace:*",
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@rpengineext/core": "^0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@rpengineext/core": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

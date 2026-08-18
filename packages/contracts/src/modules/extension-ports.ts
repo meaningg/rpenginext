@@ -284,7 +284,12 @@ export interface OutputRepairHintProvider {
 
 export interface TransitionContributor {
   contribute: PortHandler<
-    { intent: ActionIntent; planArtifacts: JsonObject },
+    {
+      intent: ActionIntent;
+      planArtifacts: JsonObject;
+      rawAction?: PlayerAction;
+      turnKind?: TurnKind;
+    },
     { commands: StateCommand[] }
   >;
 }
@@ -413,7 +418,12 @@ export interface OnTurnRejected {
 
 export interface AfterCommitHook {
   afterCommit: PortHandler<
-    { passage: Passage; acceptedCommands: readonly StateCommand[] },
+    {
+      passage: Passage;
+      acceptedCommands: readonly StateCommand[];
+      rawAction: PlayerAction;
+      turnKind: TurnKind;
+    },
     void
   >;
 }

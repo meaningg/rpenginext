@@ -4,6 +4,7 @@ import {
   effectiveContributes,
   err,
   failure,
+  MODULE_IR_VERSION,
   ok,
   parseModuleManifest,
   type Failure,
@@ -39,6 +40,8 @@ export interface ModuleRegistryOptions {
   readonly contractsVersion?: string;
   readonly failOnMissingCapability?: boolean;
   readonly strictManifest?: boolean;
+  /** Host moduleConfig forwarded into ModuleRegisterContext at install. */
+  readonly moduleConfig?: import("@rpengineext/contracts").JsonObject;
 }
 
 /**
@@ -50,6 +53,7 @@ export class ModuleRegistry {
   private readonly contractsVersion: string;
   private readonly failOnMissingCapability: boolean;
   private readonly strictManifest: boolean;
+  private readonly moduleConfig: import("@rpengineext/contracts").JsonObject;
   private loaded: LoadedModule[] = [];
   private index = new ContributionIndex();
   private started = false;
@@ -64,6 +68,7 @@ export class ModuleRegistry {
     this.contractsVersion = options.contractsVersion ?? CONTRACTS_VERSION;
     this.failOnMissingCapability = options.failOnMissingCapability !== false;
     this.strictManifest = options.strictManifest === true;
+    this.moduleConfig = options.moduleConfig ?? {};
   }
 
   /**
@@ -210,18 +215,68 @@ export class ModuleRegistry {
         {
           strictManifest: this.strictManifest,
           effectiveContributes: effectiveContributes(manifest),
+          moduleConfig: this.moduleConfig,
         },
       );
       try {
-        const result = mod.register(bundle.ctx);
-        if (result && typeof result === "object" && "ok" in result && !result.ok) {
-          return err(result.error);
+        /**
+         * Foundation load path: CompiledModule IR installer from module-sdk.
+         * Fallback `register()` is for core-internal fixtures only.
+         */
+        if (mod.compiled) {
+          const ir = mod.compiled.ir;
+          if (ir.irVersion !== MODULE_IR_VERSION) {
+            return err(
+              failure(
+                "ENGINE_MISMATCH",
+                `module ${manifest.id} IR v${ir.irVersion} unsupported (engine supports v${MODULE_IR_VERSION})`,
+                { causedBy: [manifest.id] },
+              ),
+            );
+          }
+          if (ir.manifest.id !== manifest.id) {
+            return err(
+              failure(
+                "REGISTRATION_INVALID",
+                `module ${manifest.id} IR manifest id mismatch`,
+                { causedBy: [manifest.id] },
+              ),
+            );
+          }
+          if (ir.manifest.version !== manifest.version) {
+            return err(
+              failure(
+                "REGISTRATION_INVALID",
+                `module ${manifest.id} IR manifest version mismatch`,
+                { causedBy: [manifest.id] },
+              ),
+            );
+          }
+          mod.compiled.install(bundle.ctx);
+          this.log.info(
+            {
+              moduleId: manifest.id,
+              irVersion: ir.irVersion,
+              sdkVersion: ir.sdkVersion,
+              loadPath: "compiled-ir",
+            },
+            "module installed via IR loader",
+          );
+        } else {
+          const result = mod.register(bundle.ctx);
+          if (result && typeof result === "object" && "ok" in result && !result.ok) {
+            return err(result.error);
+          }
+          this.log.info(
+            { moduleId: manifest.id, loadPath: "register-fixture" },
+            "module registered (core fixture path; not author API)",
+          );
         }
       } catch (error) {
         return err(
           failure(
             "REGISTRATION_INVALID",
-            `module ${manifest.id} register() threw`,
+            `module ${manifest.id} install/register threw`,
             { details: String(error), causedBy: [manifest.id] },
           ),
         );

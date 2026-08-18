@@ -55,30 +55,31 @@ Goldens are the safety net for “core stable, modules evolve”.
 
 ## 5. Module test harness
 
-Published today: **`@rpengineext/core/testing`**.
+Author guide: [../modules/README.md](../modules/README.md) (§ тесты).
 
-Primary entry:
+Published:
 
-- `createTestEngine({ modules, mocks, … })` — in-memory persistence, mock agents, no network
-- helpers: `createFixtureHelloModule`, `MemoryTraceSink`, `InMemoryPersistence`, `createDefaultMockAgentScript`
+- **`@rpengineext/core/testing`** — `createTestEngine({ modules, moduleConfig, … })`
+- **`@rpengineext/module-sdk/test`** — optional `testModule` harness
+- Compat gate: `bun run test:compat` (frozen sdk fixtures vs current core)
 
-Typical module test:
+Typical module test (≥3: success / reject / edge):
 
 ```ts
 import { createTestEngine } from "@rpengineext/core/testing";
 import { createMyModule } from "../src/index.ts";
 
-const bundle = await createTestEngine({
+const created = await createTestEngine({
   modules: [createMyModule()],
 });
-// submitAction → assert TurnResult / state slice
+// startSession → submitAction → assert TurnResult / state slice / mod.ir
 ```
 
-Authors must not need full app UI. Use `core` as **devDependency** only.
+Authors must not need full app UI. Production dep: **module-sdk** only; `core` = devDependency.
 
 ## 6. CI policy (target)
 
-- PR: unit + contract + golden + replay + mock e2e.
+- PR: unit + contract + golden + replay + mock e2e + **`test:compat`**.
 - Live LLM: manual/nightly only (`bun run test:e2e:live`, `smoke:play:live`).
 - Coverage: not vanity 100%; critical kernel paths mandatory.
 

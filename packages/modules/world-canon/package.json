@@ -12,10 +12,11 @@
     "typecheck": "bunx tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@rpengineext/contracts": "workspace:*",
+    "@rpengineext/module-sdk": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@rpengineext/contracts": "workspace:*",
     "@rpengineext/core": "workspace:*",
     "@rpengineext/logger": "workspace:*",
     "@types/bun": "latest",

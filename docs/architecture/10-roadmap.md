@@ -1,7 +1,7 @@
 # Roadmap
 
-> **Статус:** Phase 4 complete + core finalize pass (wiring / permissions / agent queue / repair hints)  
-> Phase 5+ next: product modules on frozen contracts (explicit tasks only). Core changes only via ADR.
+> **Статус:** Phase 4 complete + **Module SDK / CBMD** (ADR 0004)  
+> Phase 5+ next: product modules on `@rpengineext/module-sdk` (explicit tasks only). Core changes only via ADR.
 
 ## Decisions locked
 
@@ -89,11 +89,17 @@
 
 ## Phase 5+ — Further product modules (separate tasks only)
 
-Shipped first-party (not “future examples”):
+Shipped first-party (not “future examples”), all on **module-sdk**:
 
 - `working-memory`, `character`, `world-canon`
+- Author path: `@rpengineext/module-sdk` (`defineModule`)
 
-When requested explicitly, one **new** module per task, against frozen contracts:
+### Deferred core (not blocking modules)
+
+- [ ] [ADR 0005](../adr/0005-moments-native-core.md) — moments-native core runtime
+  (replace ports bus invocation with IR moments; authors unchanged)
+
+When requested explicitly, one **new** module per task, against module-sdk:
 
 - candidates: npc, plot-controller, richer fandom-canon/RAG, summarizer, …
 

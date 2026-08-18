@@ -7,11 +7,14 @@ import { DEFAULT_WINDOW_PAIRS } from "./constants.ts";
 /**
  * Validated host config section for working-memory.
  */
-export const WorkingMemoryConfigSchema = z
+export const WorkingMemoryConfigObjectSchema = z
   .object({
     windowPairs: z.number().int().positive().default(DEFAULT_WINDOW_PAIRS),
   })
-  .strict() as unknown as z.ZodType<JsonObject>;
+  .strict();
+
+export const WorkingMemoryConfigSchema =
+  WorkingMemoryConfigObjectSchema as unknown as z.ZodType<JsonObject>;
 
 export type WorkingMemoryConfig = {
   readonly windowPairs: number;
@@ -34,7 +37,6 @@ export function resolveWorkingMemoryConfig(options?: {
 
 /**
  * Reads `RP_WORKING_MEMORY_WINDOW` from an env bag.
- * Invalid/missing values fall back to {@link DEFAULT_WINDOW_PAIRS}.
  *
  * @param env - process env
  */

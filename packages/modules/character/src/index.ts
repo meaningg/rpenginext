@@ -1,45 +1,35 @@
-import {
-  type AgentTaskTypeDefinition,
-  type AgentToolDefinition,
-  type CommandDefinition,
-  type Module,
-  type SliceDefinition,
-} from "@rpengineext/contracts";
+import { defineModule, deny } from "@rpengineext/module-sdk";
+import type { AgentTask, JsonObject } from "@rpengineext/contracts";
+import { z } from "zod";
 
-import { buildOutfitSyncMessages } from "./agents/outfit-sync-messages.ts";
-import { applySeed } from "./apply/seed.ts";
-import { applySetOutfit } from "./apply/set-outfit.ts";
 import {
+  CAPABILITY_ID,
   COMMAND_TYPES,
+  CONFIG_KEY,
+  EXTRAS_OUTFIT_PROPOSAL,
   MODULE_ID,
+  NARRATIVE_NAMESPACE,
   SLICE_NAME,
+  SYSTEM_REASON_OUTFIT_SYNC,
   TASK_TYPES,
   TOOL_IDS,
 } from "./constants.ts";
-import { createNarrativeContextProvider } from "./handlers/narrative-context.ts";
-import { createOutfitSyncTaskContributor } from "./handlers/outfit-sync-contributor.ts";
-import { createNarrativePromptContributor } from "./handlers/prompt-contributor.ts";
-import { createSessionBootstrap } from "./handlers/session-bootstrap.ts";
-import { createStatusPanelProvider } from "./handlers/status-panel.ts";
-import { createSystemTurnScheduler } from "./handlers/system-scheduler.ts";
-import { createTransitionContributor } from "./handlers/transition-contributor.ts";
-import { createUpdateOutfitToolHandler } from "./handlers/update-outfit-tool.ts";
-import { characterManifest } from "./manifest.ts";
+import { buildOutfitSyncMessages } from "./outfit-sync-messages.ts";
 import {
-  OutfitSyncInputJsonSchema,
-  OutfitSyncOutputJsonSchema,
-  UPDATE_OUTFIT_PARAMETERS_JSON,
-  UpdateOutfitArgsJsonSchema,
-  UpdateOutfitResultJsonSchema,
-} from "./schema/agents.ts";
-import {
-  SeedCharacterPayloadJsonSchema,
-  SetOutfitPayloadJsonSchema,
-} from "./schema/commands.ts";
-import {
-  CharacterSliceJsonSchema,
+  CharacterSliceSchema,
   createEmptyCharacterSlice,
-} from "./schema/slice.ts";
+  OutfitSyncInputSchema,
+  OutfitSyncOutputSchema,
+  parseCharacterSlice,
+  SeedCharacterPayloadSchema,
+  SetOutfitPayloadSchema,
+  StoryCharacterSchema,
+  UPDATE_OUTFIT_PARAMETERS_JSON,
+  UpdateOutfitArgsSchema,
+  UpdateOutfitResultSchema,
+  type CharacterSlice,
+  type StoryCharacter,
+} from "./schema.ts";
 
 export {
   CAPABILITY_ID,
@@ -53,83 +43,190 @@ export {
   TASK_TYPES,
   TOOL_IDS,
 } from "./constants.ts";
-export type { CharacterSlice } from "./schema/slice.ts";
-export type { StoryCharacter } from "./schema/commands.ts";
-export { parseCharacterSlice, createEmptyCharacterSlice } from "./schema/slice.ts";
-export { StoryCharacterSchema } from "./schema/commands.ts";
-export { buildOutfitSyncMessages } from "./agents/outfit-sync-messages.ts";
+export {
+  createEmptyCharacterSlice,
+  parseCharacterSlice,
+  StoryCharacterSchema,
+  type CharacterSlice,
+  type StoryCharacter,
+} from "./schema.ts";
+export { buildOutfitSyncMessages } from "./outfit-sync-messages.ts";
 
 /**
- * Creates the player-character product module.
+ * Creates the player-character product module (sdk / CBMD).
  */
-export function createCharacterModule(): Module {
-  const sliceDef: SliceDefinition = {
-    name: SLICE_NAME,
-    schemaVersion: 1,
-    schema: CharacterSliceJsonSchema,
-    initialValue: createEmptyCharacterSlice() as never,
-  };
-
-  const seedCommand: CommandDefinition = {
-    type: COMMAND_TYPES.seed,
-    slice: SLICE_NAME,
-    payloadSchema: SeedCharacterPayloadJsonSchema,
-    apply: applySeed,
-  };
-
-  const setOutfitCommand: CommandDefinition = {
-    type: COMMAND_TYPES.setOutfit,
-    slice: SLICE_NAME,
-    payloadSchema: SetOutfitPayloadJsonSchema,
-    apply: applySetOutfit,
-  };
-
-  const outfitSyncTask: AgentTaskTypeDefinition = {
-    type: TASK_TYPES.outfitSync,
-    inputSchema: OutfitSyncInputJsonSchema,
-    outputSchema: OutfitSyncOutputJsonSchema,
+export function createCharacterModule() {
+  return defineModule({
+    id: MODULE_ID,
+    version: "0.1.0",
+    title: "Player Character",
     description:
-      "Decide whether PC outfit changed this turn; may call character.update_outfit",
-    defaultConstraints: {
-      timeoutMs: 20_000,
-      maxRepairAttempts: 1,
-      maxToolRounds: 3,
-      optional: true,
-      tools: [TOOL_IDS.updateOutfit],
+      "Seeds PC from story JSON, injects into narrative prompt, background outfit sync via tool-calling agent",
+    priority: 20,
+    provides: [CAPABILITY_ID],
+
+    state: {
+      name: SLICE_NAME,
+      schemaVersion: 1,
+      schema: CharacterSliceSchema,
+      initial: createEmptyCharacterSlice(),
+      ops: {
+        seed: {
+          payload: SeedCharacterPayloadSchema,
+          apply: (_s, p): CharacterSlice => ({
+            schemaVersion: 1,
+            present: true,
+            name: p.name.trim(),
+            appearance: p.appearance.trim(),
+            features: p.features.trim(),
+            outfit: p.outfit.trim(),
+          }),
+        },
+        set_outfit: {
+          payload: SetOutfitPayloadSchema,
+          apply: (s, p): CharacterSlice => {
+            const current = s as CharacterSlice;
+            if (!current.present) {
+              deny("COMMAND_INVALID", "cannot set outfit: character not present");
+            }
+            const outfit = p.outfit.trim();
+            if (!outfit) {
+              deny("COMMAND_INVALID", "outfit must be a non-empty string");
+            }
+            return { ...current, outfit };
+          },
+        },
+      },
     },
-    buildMessages: buildOutfitSyncMessages,
-  };
 
-  const updateOutfitTool: AgentToolDefinition = {
-    id: TOOL_IDS.updateOutfit,
-    description:
-      "Set the player character outfit to a full single-string description",
-    argsSchema: UpdateOutfitArgsJsonSchema,
-    resultSchema: UpdateOutfitResultJsonSchema,
-    parametersJsonSchema: UPDATE_OUTFIT_PARAMETERS_JSON,
-  };
-
-  return {
-    manifest: characterManifest,
-    register(ctx) {
-      ctx.registerSlice(sliceDef);
-      ctx.registerCommand(seedCommand);
-      ctx.registerCommand(setOutfitCommand);
-      ctx.registerAgentTaskType(outfitSyncTask);
-      ctx.registerAgentTool(updateOutfitTool);
-      ctx.registerCapability(characterManifest.provides[0]!);
-
-      ctx.addSessionBootstrap(createSessionBootstrap());
-      ctx.addNarrativeContextProvider(createNarrativeContextProvider());
-      ctx.addNarrativePromptContributor(createNarrativePromptContributor());
-      ctx.addSystemTurnScheduler(createSystemTurnScheduler());
-      ctx.addAgentTaskContributor(createOutfitSyncTaskContributor());
-      ctx.addTransitionContributor(createTransitionContributor());
-      ctx.addAgentToolHandler(createUpdateOutfitToolHandler());
-      ctx.addStatusPanelProvider(createStatusPanelProvider());
-
-      ctx.log.info({ moduleId: MODULE_ID }, "character module registered");
-      return;
+    seed: {
+      fromMeta: "character",
+      parse: StoryCharacterSchema,
+      apply: (value, ctx) => {
+        const c = value as StoryCharacter;
+        ctx.op(
+          "seed",
+          {
+            name: c.name.trim(),
+            appearance: c.appearance.trim(),
+            features: c.features.trim(),
+            outfit: c.outfit.trim(),
+          },
+          "seed player character from story template",
+        );
+      },
     },
-  };
+
+    narrative: {
+      system: ({ slice }) => {
+        const s = slice as CharacterSlice;
+        if (!s.present) return null;
+        return {
+          id: "character.profile",
+          channel: "system",
+          title: "PLAYER CHARACTER",
+          priority: 20,
+          text: [
+            `Name: ${s.name}`,
+            `Appearance: ${s.appearance}`,
+            `Traits / features: ${s.features}`,
+            `Current outfit: ${s.outfit}`,
+            "Keep the character consistent with this description unless the current action changes something.",
+          ].join("\n"),
+        };
+      },
+      brief: ({ slice }) => {
+        const s = slice as CharacterSlice;
+        if (!s.present) return { present: false };
+        return {
+          present: true,
+          name: s.name,
+          appearance: s.appearance,
+          features: s.features,
+          outfit: s.outfit,
+        };
+      },
+    },
+
+    turn: {
+      committed(ctx) {
+        if (ctx.turnKind !== "player") return;
+        const action = ctx.action;
+        if (!action || action.kind !== "free_text") return;
+        const userText = action.text?.trim() ?? "";
+        if (!userText) return;
+        const prose = ctx.passage?.prose.trim() ?? "";
+        if (!prose) return;
+        const slice = ctx.slice as CharacterSlice;
+        if (!slice.present) return;
+
+        ctx.scheduleSystem({
+          reason: SYSTEM_REASON_OUTFIT_SYNC,
+          mode: "background",
+          payload: {
+            sourceTurnId: ctx.passage!.turnId,
+            userText,
+            prose,
+            characterBefore: {
+              name: slice.name,
+              appearance: slice.appearance,
+              features: slice.features,
+              outfit: slice.outfit,
+            },
+          },
+        });
+      },
+    },
+
+    ai: {
+      tasks: {
+        outfit_sync: {
+          description:
+            "Decide whether PC outfit changed this turn; may call character.update_outfit",
+          input: OutfitSyncInputSchema as unknown as z.ZodType<JsonObject>,
+          output: OutfitSyncOutputSchema as unknown as z.ZodType<JsonObject>,
+          optional: true,
+          timeoutMs: 20_000,
+          maxRepairAttempts: 1,
+          maxToolRounds: 3,
+          temperature: 0.2,
+          tools: ["update_outfit"],
+          runOn: { systemReason: SYSTEM_REASON_OUTFIT_SYNC },
+          messages: (input, task) =>
+            buildOutfitSyncMessages({
+              ...task,
+              input,
+            } as AgentTask),
+        },
+      },
+      tools: {
+        update_outfit: {
+          description:
+            "Set the player character outfit to a full single-string description",
+          args: UpdateOutfitArgsSchema as unknown as z.ZodType<JsonObject>,
+          result: UpdateOutfitResultSchema as unknown as z.ZodType<JsonObject>,
+          parametersJsonSchema: UPDATE_OUTFIT_PARAMETERS_JSON,
+          handler: (args, ctx) => {
+            const outfit = String(args.outfit ?? "").trim();
+            if (!outfit) {
+              deny("SCHEMA_INVALID", "outfit must be non-empty");
+            }
+            ctx.proposeOp("set_outfit", { outfit }, SYSTEM_REASON_OUTFIT_SYNC);
+            return { ok: true as const, outfit };
+          },
+        },
+      },
+    },
+
+    host: {
+      status: ({ slice }) => {
+        const s = slice as CharacterSlice;
+        if (!s.present) return [];
+        return [
+          { slot: "character.name", text: `Character: ${s.name}` },
+          { slot: "character.outfit", text: `Outfit: ${s.outfit}` },
+        ];
+      },
+    },
+  });
 }

@@ -1,7 +1,8 @@
 # Extension Surface (v1 — wide freeze)
 
-> **Статус:** normative  
-> **Цель:** модули закрывают почти любую доменную фичу **без** правок core.  
+> **Статус:** normative **for core maintainers / sdk binder**  
+> **Не author API.** Авторы модулей используют `@rpengineext/module-sdk` ([ADR 0004](../adr/0004-module-sdk-cbmd.md), [../modules/README.md](../modules/README.md)).  
+> **Цель этого документа:** runtime ports, в которые sdk компилирует capabilities.  
 > Core меняется только если не хватает *механизма*, а не *контента*.
 
 ## 1. Почему «просто длинный список хуков» недостаточен

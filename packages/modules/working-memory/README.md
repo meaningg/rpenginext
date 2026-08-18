@@ -1,6 +1,8 @@
 # `@rpengineext/module-working-memory`
 
-First product module: **working memory** for narrative continuity.
+First product module: **working memory** for narrative continuity.  
+Built with **`@rpengineext/module-sdk`** (`defineModule`).  
+**Как писать свой модуль:** [`docs/modules/README.md`](../../../docs/modules/README.md) (рецепт afterProse + history).
 
 ## What it does
 
@@ -36,10 +38,11 @@ await createEngine({
 });
 ```
 
-## Pipeline hooks
+## SDK capabilities
 
-- `NarrativeContextProvider` → namespace `working_memory` with `history` (core lifts into LLM messages).
-- `PostNarrativeContributor` → `working_memory.append_pair` after passage is built, before COMMIT.
+- `narrative.history` + `brief` → last-N pairs for `narrative.write`
+- `turn.afterProse` → `append_pair` op before COMMIT
+- `host.readModels` → debug selectors
 
 ## Non-goals (v1)
 

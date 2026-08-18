@@ -9,16 +9,12 @@
 > Истина мира принадлежит core. AI предлагает. Commit атомарный.
 
 
-<<<<<<< Updated upstream
-## Документация
-=======
-Сейчас: **Phase 4 complete** — extension surface, permissions, hosts (CLI + API + Web),
-persistence, turn traces, first-party modules.  
+Сейчас: **Phase 4 complete** + **Module SDK (CBMD)** — hosts (CLI + API + Web),
+persistence, turn traces, first-party modules on `@rpengineext/module-sdk`.  
 Далее: Phase 5+ — product modules по отдельным задачам; CLI UX polish; optional safety hooks.  
-Core меняется только через ADR.
+Core меняется только через ADR. Модули — через sdk, без правок core.
 
 ## Документация (источник истины)
->>>>>>> Stashed changes
 
 Начните здесь:
 
@@ -36,16 +32,18 @@ Core меняется только через ADR.
 | [docs/architecture/09-testing.md](./docs/architecture/09-testing.md) | Тесты |
 | [docs/architecture/10-roadmap.md](./docs/architecture/10-roadmap.md) | Фазы внедрения |
 | [docs/architecture/11-repository-structure.md](./docs/architecture/11-repository-structure.md) | Структура репо |
-| [docs/architecture/12-extension-surface.md](./docs/architecture/12-extension-surface.md) | Поверхность расширений для модулей |
+| [docs/architecture/12-extension-surface.md](./docs/architecture/12-extension-surface.md) | Internal runtime ports (maintainers; не author API) |
 | [docs/architecture/13-turn-tracing.md](./docs/architecture/13-turn-tracing.md) | Markdown-трейсы хода (core debug/AI control) |
-| [docs/modules/README.md](./docs/modules/README.md) | Гайд автора модуля |
+| [docs/modules/README.md](./docs/modules/README.md) | **Как сделать модуль** — пошагово + рецепты |
 | [docs/adr/0001-contracted-pipeline.md](./docs/adr/0001-contracted-pipeline.md) | ADR: выбор CPA |
 | [docs/adr/0002-web-host-and-streaming.md](./docs/adr/0002-web-host-and-streaming.md) | ADR: API + Web + SSE |
 | [docs/adr/0003-tool-calling-and-background-system-turns.md](./docs/adr/0003-tool-calling-and-background-system-turns.md) | ADR: tools + background system turns |
+| [docs/adr/0004-module-sdk-cbmd.md](./docs/adr/0004-module-sdk-cbmd.md) | ADR: Module SDK / CBMD author path |
+| [docs/adr/0005-moments-native-core.md](./docs/adr/0005-moments-native-core.md) | ADR: moments-native core (deferred) |
 
 ## Архитектура в одном абзаце
 
-Host принимает действие игрока → **TurnPipeline** на **draft** нормализует ввод, модули валидируют/планируют, LLM/modules предлагают `StateCommand`s → dry-apply → narrative по draft-brief → сборка `Passage` → **один COMMIT** (state + passage + journal в `bun:sqlite`) **или полный откат** при любой ошибке. Модули — по манифесту и extension points, без правок core.
+Host принимает действие игрока → **TurnPipeline** на **draft** нормализует ввод, модули валидируют/планируют, LLM/modules предлагают `StateCommand`s → dry-apply → narrative по draft-brief → сборка `Passage` → **один COMMIT** (state + passage + journal в `bun:sqlite`) **или полный откат** при любой ошибке. Модули пишутся через **`@rpengineext/module-sdk`** (`defineModule` / capabilities); core не правится под gameplay.
 
 ```text
 Player Action
@@ -112,6 +110,8 @@ bun run web
 | [`@rpengineext/cli`](./apps/cli) | ready | hello turn / REPL book loop, save/load |
 | [`@rpengineext/api`](./apps/api) | ready | REST + SSE host, локальные multi-player сессии |
 | [`@rpengineext/web`](./apps/web) | ready | React + Tailwind book UI |
+| [`@rpengineext/module-sdk`](./packages/module-sdk) | ready | **единственный** author API модулей (`defineModule`) |
+| [`@rpengineext/create-module`](./packages/create-module) | ready | scaffold: `bun run create-module <id>` |
 | [`@rpengineext/host-bootstrap`](./packages/host-bootstrap) | ready | общая wiring движка для CLI/API |
 | [`@rpengineext/content-stories`](./packages/content-stories) | ready | каталог шаблонов историй (`data/stories`) |
 | [`@rpengineext/module-working-memory`](./packages/modules/working-memory) | ready | последние N пар чата для narrative + полный архив пар в session state |
@@ -119,23 +119,40 @@ bun run web
 | [`@rpengineext/module-world-canon`](./packages/modules/world-canon) | ready | immutable world canon → narrative system prompt |
 | further product modules (npc/plot/…) | planned | Phase 5+ отдельными задачами |
 
-<<<<<<< Updated upstream
-## Как вносить модули 
+## Как сделать модуль (кратко)
 
-1. Читать `docs/modules/README.md`.
-2. Копировать template.
-3. Зависеть только от `contracts` (+ `shared`).
-4. Не вызывать LLM SDK напрямую.
-5. Покрыть success/reject/edge тестами.
-=======
-## Как вносить модули
+**Полный гайд:** [`docs/modules/README.md`](./docs/modules/README.md) — шаги, рецепты, `ctx`, чеклист.
 
-1. Читать [`docs/modules/README.md`](./docs/modules/README.md) и [`writing-modules-for-core.md`](./docs/modules/writing-modules-for-core.md).
-2. Копировать [`docs/modules/_template.md`](./docs/modules/_template.md).
-3. Зависеть только от `@rpengineext/contracts` (core — только devDependency для тестов).
-4. Не вызывать LLM SDK напрямую; state — только через `StateCommand`.
-5. Покрыть success / reject / edge тестами через `@rpengineext/core/testing`.
->>>>>>> Stashed changes
+```bash
+# 1. каркас
+bun run create-module mood
+# recipes: state | seed-narrative | guard | full
+# bun run create-module lore --recipe seed-narrative
+
+bun install
+bun test packages/modules/mood
+```
+
+```ts
+// 2. суть — packages/modules/<id>/src/index.ts
+import { defineModule, deny } from "@rpengineext/module-sdk";
+
+export function createMoodModule() {
+  return defineModule({
+    id: "mood",
+    version: "0.1.0",
+    title: "Mood",
+    state: { /* schema + ops */ },
+    turn: { change(ctx) { ctx.op("bump", { by: 1 }); } },
+    narrative: { system: ({ slice }) => `...` },
+  });
+}
+```
+
+3. Подключить фабрику в host (`host-bootstrap` / CLI / API).  
+4. Тесты: success / reject / edge.  
+5. Зависимость только **`@rpengineext/module-sdk`** (не core internals, не LLM SDK).  
+6. Шаблон: [`docs/modules/_template.md`](./docs/modules/_template.md) · ADR: [0004](./docs/adr/0004-module-sdk-cbmd.md).
 
 ## Licence
 

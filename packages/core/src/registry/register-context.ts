@@ -80,6 +80,8 @@ import type { ContributionIndex, Owned } from "./contribution-index.ts";
 export interface CreateRegisterContextOptions {
   readonly strictManifest?: boolean;
   readonly effectiveContributes?: readonly string[];
+  /** Host engine moduleConfig bag at boot. */
+  readonly moduleConfig?: import("@rpengineext/contracts").JsonObject;
 }
 
 export interface RegisterContextBundle {
@@ -188,6 +190,7 @@ export function createRegisterContext(
   const ctx: ModuleRegisterContext = {
     manifest,
     log,
+    moduleConfig: options.moduleConfig ?? {},
 
     registerSlice(def: SliceDefinition) {
       return track(

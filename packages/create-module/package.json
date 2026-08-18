@@ -1,0 +1,21 @@
+{
+  "name": "@rpengineext/create-module",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Scaffold a new rpengineext module on @rpengineext/module-sdk",
+  "bin": {
+    "create-rp-module": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "bun run src/main.ts",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

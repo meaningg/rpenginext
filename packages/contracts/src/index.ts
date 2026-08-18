@@ -239,6 +239,29 @@ export {
 
 export type { ModuleRegisterContext } from "./modules/register-context.ts";
 
+export {
+  MODULE_IR_VERSION,
+  type ModuleIrVersion,
+  type CompiledOpIr,
+  type CompiledSliceIr,
+  type CompiledMomentsIr,
+  type CompiledAiTaskIr,
+  type CompiledAiToolIr,
+  type CompiledModuleIR,
+  type CompiledModule,
+} from "./modules/compiled-ir.ts";
+
+export {
+  MODULE_OP_PROPOSALS_EXTRAS_KEY,
+  MODULE_SYSTEM_SCHEDULES_EXTRAS_PREFIX,
+  type ModuleOpProposal,
+  type ModuleSystemScheduleProposal,
+  enqueueModuleOpProposal,
+  takeModuleOpProposals,
+  setModuleSystemSchedules,
+  takeModuleSystemSchedules,
+} from "./modules/module-proposals.ts";
+
 export type {
   ModuleLifecycleContext,
   Module,

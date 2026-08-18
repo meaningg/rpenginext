@@ -1,16 +1,20 @@
 # Module System
 
 > **Статус:** normative  
-> **Цель:** разные авторы пишут modules параллельно, опираясь только на docs + `contracts`.
+> **Цель:** разные авторы пишут modules параллельно **без** изучения core.  
+> **Author path:** `@rpengineext/module-sdk` (`defineModule` / CBMD) — см. [ADR 0004](../adr/0004-module-sdk-cbmd.md).  
+> Этот документ описывает **runtime**-контракт после compile. Авторам модулей читать [../modules/README.md](../modules/README.md).
 
 ## 1. Что такое module
 
-**Module** — изолированный пакет расширения runtime, который:
+**Module (author)** — `defineModule({ identity + capabilities })` из `@rpengineext/module-sdk`.
 
-1. Объявляет манифест (identity, engines, provides/requires, permissions, priority).
-2. Регистрирует contribution’ы в fixed extension points.
-3. Может иметь namespaced state slice schema.
-4. Может описывать agent tasks / tools.
+**Module (runtime)** — скомпилированный объект для core:
+
+1. Манифест (identity, engines, provides/requires, permissions, priority) — **выводится sdk**.
+2. Contribution’ы в fixed extension points — **биндит sdk**, не автор.
+3. Namespaced state slice + named ops → commands.
+4. Optional agent tasks / tools.
 5. Не управляет lifecycle сессии и не commit’ит state сам.
 
 Игрок modules не видит напрямую — только их эффект в правилах мира и качестве истории.
@@ -182,28 +186,25 @@ Registry отвергает module, если handler пытается сдела
 
 ```text
 modules/<id>/
-  package.json
-  module.manifest.json
+  package.json          # dep: @rpengineext/module-sdk
   README.md
   src/
-    index.ts            # createModule(): Module
-    handlers/
-    schema/             # state slice zod/json-schema
-    agents/             # task specs (optional)
-    __tests__/
-  docs/
-    gameplay.md         # optional player-facing effects
+    index.ts            # export createXxxModule() => defineModule(...)
+    schema.ts           # zod slice/ops (optional split)
+  tests/
+    module.test.ts
 ```
 
 Автор модуля обязан:
 
-1. Зависеть только от `@rpengineext/contracts` (core — devDependency для тестов).
-2. Покрыть ≥3 unit tests на сервис/основной handler set (success, reject, edge) — см. project rules.
+1. Зависеть от `@rpengineext/module-sdk` (не от core internals; core — только для тестов через sdk/test).
+2. Покрыть ≥3 tests (success, reject, edge).
 3. Не обещать side effects вне atomic turn model.
-4. Документировать commands, permissions, agent tasks.
+4. Не вызывать LLM SDK напрямую.
 
-См. практический гайд: [../modules/writing-modules-for-core.md](../modules/writing-modules-for-core.md)  
-(index: [../modules/README.md](../modules/README.md)).
+Гайд автора (пошагово + рецепты): [../modules/README.md](../modules/README.md).  
+Scaffold: `bun run create-module <id>`.  
+Шаблон: [../modules/_template.md](../modules/_template.md).
 
 ## 10. Official vs community modules
 

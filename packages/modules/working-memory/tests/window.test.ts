@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { WorkingMemoryPair } from "../src/schema/pair.ts";
+import type { WorkingMemoryPair } from "../src/schema.ts";
 import {
   buildPromptHistory,
   flattenPairsToHistory,

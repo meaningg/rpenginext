@@ -1,6 +1,8 @@
 # `@rpengineext/module-character`
 
-Player character module for story-driven RP.
+Player character module for story-driven RP.  
+Built with **`@rpengineext/module-sdk`** (`defineModule`).  
+**Как писать свой модуль:** [`docs/modules/README.md`](../../../docs/modules/README.md) (рецепт AI + background system turn).
 
 ## What it does
 
@@ -25,13 +27,13 @@ Player character module for story-driven RP.
 
 Host must put this object on `session.meta.character` (API does this from the template).
 
-## Pipeline
+## Capabilities used
 
-1. `SessionBootstrap` → `character.seed`
-2. Player turn `NarrativeContextProvider` + `NarrativePromptContributor`
-3. Player COMMIT → schedule `character.outfit_sync` (`mode: background`)
-4. Return passage immediately
-5. Background system turn: tool-calling agent → `character.set_outfit` if needed
+1. `seed` from `meta.character` → op `seed`
+2. `narrative.system` + `brief`
+3. `turn.committed` → `scheduleSystem(outfit_sync, background)`
+4. `ai.tasks.outfit_sync` + `ai.tools.update_outfit` → op `set_outfit`
+5. `host.status`
 
 ## Non-goals (v1)
 

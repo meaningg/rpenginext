@@ -1,30 +1,34 @@
-import {
-  ok,
-  type CommandDefinition,
-  type Module,
-  type SliceDefinition,
-} from "@rpengineext/contracts";
+import { defineModule } from "@rpengineext/module-sdk";
+import type { JsonObject, JsonValue, WorldState } from "@rpengineext/contracts";
+import { z } from "zod";
 
-import { applyAppendPair } from "./apply/append-pair.ts";
 import {
   resolveWorkingMemoryConfig,
   WorkingMemoryConfigSchema,
+  type WorkingMemoryConfig,
 } from "./config.ts";
 import {
+  CAPABILITY_ID,
   COMMAND_TYPES,
   CONFIG_KEY,
+  DEFAULT_WINDOW_PAIRS,
   MODULE_ID,
+  NARRATIVE_NAMESPACE,
   SLICE_NAME,
 } from "./constants.ts";
-import { createNarrativeContextProvider } from "./handlers/narrative-context.ts";
-import { createPostNarrativeContributor } from "./handlers/post-narrative.ts";
-import { workingMemoryManifest } from "./manifest.ts";
-import { createWorkingMemoryReadModels } from "./read-models.ts";
-import { AppendPairPayloadJsonSchema } from "./schema/commands.ts";
 import {
+  AppendPairPayloadSchema,
   createEmptyWorkingMemorySlice,
-  WorkingMemorySliceJsonSchema,
-} from "./schema/slice.ts";
+  parseWorkingMemorySlice,
+  WorkingMemorySliceSchema,
+  type WorkingMemorySlice,
+} from "./schema.ts";
+import {
+  buildPromptHistory,
+  flattenPairsToHistory,
+  selectLastPairs,
+  type HistoryMessage,
+} from "./selectors/window.ts";
 
 export {
   CAPABILITY_ID,
@@ -47,8 +51,12 @@ export {
   selectLastPairs,
   type HistoryMessage,
 } from "./selectors/window.ts";
-export type { WorkingMemoryPair } from "./schema/pair.ts";
-export type { WorkingMemorySlice } from "./schema/slice.ts";
+export type { WorkingMemoryPair } from "./schema.ts";
+export type { WorkingMemorySlice } from "./schema.ts";
+export {
+  createEmptyWorkingMemorySlice,
+  parseWorkingMemorySlice,
+} from "./schema.ts";
 
 export interface CreateWorkingMemoryModuleOptions {
   /**
@@ -59,59 +67,130 @@ export interface CreateWorkingMemoryModuleOptions {
 }
 
 /**
- * Creates the working-memory product module.
+ * Creates the working-memory product module (sdk / CBMD).
  *
  * @param options - factory options (windowPairs from host env)
  */
 export function createWorkingMemoryModule(
   options: CreateWorkingMemoryModuleOptions = {},
-): Module {
+) {
   const config = resolveWorkingMemoryConfig(options);
 
-  const sliceDef: SliceDefinition = {
-    name: SLICE_NAME,
-    schemaVersion: 1,
-    schema: WorkingMemorySliceJsonSchema,
-    initialValue: createEmptyWorkingMemorySlice() as never,
-  };
+  return defineModule(
+    {
+      id: MODULE_ID,
+      version: "0.1.0",
+      title: "Working Memory",
+      description:
+        "Stores all player free_text ↔ narrative pairs and injects last N pairs into narrative.write",
+      priority: 10,
+      provides: [CAPABILITY_ID],
 
-  const appendCommand: CommandDefinition = {
-    type: COMMAND_TYPES.appendPair,
-    slice: SLICE_NAME,
-    payloadSchema: AppendPairPayloadJsonSchema,
-    apply: applyAppendPair,
-  };
-
-  return {
-    manifest: workingMemoryManifest,
-    register(ctx) {
-      ctx.registerSlice(sliceDef);
-      ctx.registerCommand(appendCommand);
-      ctx.registerConfigSchema({
+      config: {
         key: CONFIG_KEY,
-        schema: WorkingMemoryConfigSchema,
-      });
-      ctx.registerCapability(workingMemoryManifest.provides[0]!);
+        schema: WorkingMemoryConfigSchema as unknown as z.ZodType<JsonObject>,
+        defaults: { windowPairs: config.windowPairs } as JsonObject,
+      },
 
-      for (const rm of createWorkingMemoryReadModels(config)) {
-        ctx.registerReadModel(rm);
-      }
+      state: {
+        name: SLICE_NAME,
+        schemaVersion: 1,
+        schema: WorkingMemorySliceSchema,
+        initial: createEmptyWorkingMemorySlice(),
+        ops: {
+          append_pair: {
+            payload: AppendPairPayloadSchema,
+            apply: (s, p): WorkingMemorySlice => {
+              const current = s as WorkingMemorySlice;
+              return {
+                schemaVersion: 1,
+                entries: [
+                  ...current.entries,
+                  {
+                    turnId: p.turnId,
+                    user: p.user,
+                    assistant: p.assistant,
+                    createdAt: p.createdAt,
+                  },
+                ],
+              };
+            },
+          },
+        },
+      },
 
-      ctx.addNarrativeContextProvider(createNarrativeContextProvider(config));
-      ctx.addPostNarrativeContributor(createPostNarrativeContributor());
+      turn: {
+        afterProse(ctx) {
+          if (ctx.turnKind !== "player") return;
+          const action = ctx.action;
+          if (!action || action.kind !== "free_text") return;
+          const user = action.text?.trim() ?? "";
+          if (!user) return;
+          const assistant = ctx.passage?.prose.trim() ?? "";
+          if (!assistant) return;
+          ctx.op(
+            "append_pair",
+            {
+              turnId: ctx.passage!.turnId,
+              user,
+              assistant,
+              createdAt: new Date().toISOString(),
+            },
+            "working-memory pair for free_text turn",
+          );
+        },
+      },
 
-      ctx.log.info(
-        { moduleId: MODULE_ID, windowPairs: config.windowPairs },
-        "working-memory module registered",
-      );
-      return;
+      narrative: {
+        history: ({ slice, config: cfg }) => {
+          const s = slice as WorkingMemorySlice;
+          const windowPairs =
+            typeof (cfg as WorkingMemoryConfig).windowPairs === "number"
+              ? (cfg as WorkingMemoryConfig).windowPairs
+              : config.windowPairs;
+          return buildPromptHistory(s.entries, windowPairs);
+        },
+        brief: ({ slice, config: cfg }) => {
+          const s = slice as WorkingMemorySlice;
+          const windowPairs =
+            typeof (cfg as WorkingMemoryConfig).windowPairs === "number"
+              ? (cfg as WorkingMemoryConfig).windowPairs
+              : config.windowPairs;
+          return {
+            windowPairs,
+            totalPairs: s.entries.length,
+          };
+        },
+      },
+
+      host: {
+        readModels: {
+          "working_memory.window": (state: WorldState, _args, cfg) => {
+            const s = parseWorkingMemorySlice(state.slices[SLICE_NAME]);
+            const windowPairs =
+              typeof (cfg as WorkingMemoryConfig).windowPairs === "number"
+                ? (cfg as WorkingMemoryConfig).windowPairs
+                : config.windowPairs;
+            const history = buildPromptHistory(s.entries, windowPairs);
+            return {
+              windowPairs,
+              totalPairs: s.entries.length,
+              history: history as unknown as JsonValue,
+            };
+          },
+          "working_memory.all": (state: WorldState) => {
+            const s = parseWorkingMemorySlice(state.slices[SLICE_NAME]);
+            return {
+              schemaVersion: s.schemaVersion,
+              entries: s.entries as unknown as JsonValue,
+              totalPairs: s.entries.length,
+            };
+          },
+        },
+      },
     },
-  };
-}
-
-/**
- * No-op helper kept for tree-shaking-friendly re-exports in tests.
- */
-export function workingMemoryOk(): typeof ok {
-  return ok;
+    {
+      factoryConfig: { windowPairs: config.windowPairs } as JsonObject,
+    },
+  );
 }

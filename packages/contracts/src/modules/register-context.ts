@@ -1,4 +1,5 @@
 import type { Result, Failure } from "../result.ts";
+import type { JsonObject } from "../json.ts";
 import type { TurnLogger } from "../turn/context.ts";
 import type {
   ActionTypeDefinition,
@@ -72,6 +73,10 @@ import type { ModuleManifest } from "./manifest.ts";
 export interface ModuleRegisterContext {
   readonly manifest: ModuleManifest;
   readonly log: TurnLogger;
+  /**
+   * Host `engine.config.moduleConfig` bag at boot (foundation: live config for modules).
+   */
+  readonly moduleConfig: JsonObject;
 
   // --- Layer A: catalogs ---------------------------------------------------
   registerSlice(def: SliceDefinition): Result<void, Failure>;

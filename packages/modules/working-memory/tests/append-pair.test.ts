@@ -1,83 +1,64 @@
 import { describe, expect, test } from "bun:test";
 
-import { createEmptyWorldState } from "@rpengineext/contracts";
+import { createTestEngine } from "@rpengineext/core/testing";
 
-import { applyAppendPair } from "../src/apply/append-pair.ts";
-import { COMMAND_TYPES, SLICE_NAME } from "../src/constants.ts";
-import { createEmptyWorkingMemorySlice } from "../src/schema/slice.ts";
+import {
+  createWorkingMemoryModule,
+  SLICE_NAME,
+} from "../src/index.ts";
+import {
+  AppendPairPayloadSchema,
+  createEmptyWorkingMemorySlice,
+  type WorkingMemorySlice,
+} from "../src/schema.ts";
 
-describe("working_memory.append_pair apply", () => {
-  test("success: appends pair to empty slice", () => {
-    const state = {
-      ...createEmptyWorldState("2026-01-01T00:00:00.000Z"),
-      slices: {
-        [SLICE_NAME]: createEmptyWorkingMemorySlice() as never,
-      },
-    };
-    const result = applyAppendPair(state, {
-      commandId: "cmd_1",
-      type: COMMAND_TYPES.appendPair,
-      slice: SLICE_NAME,
-      payload: {
-        turnId: "trn_1",
-        user: "hello",
-        assistant: "Once upon a time…",
-        createdAt: "2026-01-01T00:00:01.000Z",
-      },
-      source: { kind: "module", id: "working-memory" },
+describe("working_memory.append_pair", () => {
+  test("success: payload schema accepts pair", () => {
+    const parsed = AppendPairPayloadSchema.safeParse({
+      turnId: "trn_1",
+      user: "hello",
+      assistant: "Once upon a time…",
+      createdAt: "2026-01-01T00:00:01.000Z",
     });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    const slice = result.value.slices[SLICE_NAME] as {
-      entries: { user: string; assistant: string }[];
-    };
-    expect(slice.entries).toHaveLength(1);
-    expect(slice.entries[0]?.user).toBe("hello");
-    expect(slice.entries[0]?.assistant).toBe("Once upon a time…");
+    expect(parsed.success).toBe(true);
   });
 
   test("error: rejects empty user", () => {
-    const state = createEmptyWorldState("2026-01-01T00:00:00.000Z");
-    const result = applyAppendPair(state, {
-      commandId: "cmd_2",
-      type: COMMAND_TYPES.appendPair,
-      slice: SLICE_NAME,
-      payload: {
-        turnId: "trn_1",
-        user: "",
-        assistant: "prose",
-        createdAt: "2026-01-01T00:00:01.000Z",
-      },
-      source: { kind: "module", id: "working-memory" },
+    const parsed = AppendPairPayloadSchema.safeParse({
+      turnId: "trn_1",
+      user: "",
+      assistant: "prose",
+      createdAt: "2026-01-01T00:00:01.000Z",
     });
-    expect(result.ok).toBe(false);
+    expect(parsed.success).toBe(false);
   });
 
-  test("edge: appends multiple pairs without trimming", () => {
-    let state = {
-      ...createEmptyWorldState("2026-01-01T00:00:00.000Z"),
-      slices: {
-        [SLICE_NAME]: createEmptyWorkingMemorySlice() as never,
-      },
-    };
-    for (let i = 1; i <= 5; i++) {
-      const next = applyAppendPair(state, {
-        commandId: `cmd_${i}`,
-        type: COMMAND_TYPES.appendPair,
-        slice: SLICE_NAME,
-        payload: {
-          turnId: `trn_${i}`,
-          user: `u${i}`,
-          assistant: `a${i}`,
-          createdAt: `2026-01-01T00:00:0${i}.000Z`,
+  test("edge: module appends pairs across turns", async () => {
+    const created = await createTestEngine({
+      modules: [createWorkingMemoryModule({ windowPairs: 3 })],
+      config: {
+        moduleConfig: {
+          working_memory: { windowPairs: 3 },
         },
-        source: { kind: "module", id: "working-memory" },
+      },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const session = await created.value.engine.startSession();
+    expect(session.ok).toBe(true);
+    if (!session.ok) return;
+
+    for (let i = 1; i <= 3; i++) {
+      const turn = await session.value.submitAction({
+        kind: "free_text",
+        text: `hello ${i}`,
       });
-      expect(next.ok).toBe(true);
-      if (!next.ok) return;
-      state = next.value as typeof state;
+      expect(turn.status).toBe("committed");
     }
-    const slice = state.slices[SLICE_NAME] as { entries: unknown[] };
-    expect(slice.entries).toHaveLength(5);
+
+    const state = created.value.runtime.getSessionState(session.value.sessionId);
+    const slice = state?.slices[SLICE_NAME] as WorkingMemorySlice;
+    expect(slice.entries.length).toBe(3);
+    expect(createEmptyWorkingMemorySlice().entries).toHaveLength(0);
   });
 });

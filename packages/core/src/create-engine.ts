@@ -75,6 +75,7 @@ export async function createEngine(
     contractsVersion: CONTRACTS_VERSION,
     failOnMissingCapability: config.modules.failOnMissingCapability,
     strictManifest: config.modules.strictManifest,
+    moduleConfig: config.moduleConfig,
   });
 
   const boot = await registry.boot(options.modules ?? []);

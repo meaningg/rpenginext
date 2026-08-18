@@ -9,9 +9,11 @@
         "@rpengineext/content-stories": "workspace:*",
         "@rpengineext/contracts": "workspace:*",
         "@rpengineext/core": "workspace:*",
+        "@rpengineext/create-module": "workspace:*",
         "@rpengineext/host-bootstrap": "workspace:*",
         "@rpengineext/logger": "workspace:*",
         "@rpengineext/module-character": "workspace:*",
+        "@rpengineext/module-sdk": "workspace:*",
         "@rpengineext/module-working-memory": "workspace:*",
         "@rpengineext/module-world-canon": "workspace:*",
         "@rpengineext/persistence-sqlite": "workspace:*",
@@ -122,6 +124,17 @@
         "typescript": "^5",
       },
     },
+    "packages/create-module": {
+      "name": "@rpengineext/create-module",
+      "version": "0.1.0",
+      "bin": {
+        "create-rp-module": "./src/main.ts",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5",
+      },
+    },
     "packages/host-bootstrap": {
       "name": "@rpengineext/host-bootstrap",
       "version": "0.1.0",
@@ -153,14 +166,35 @@
         "typescript": "^5",
       },
     },
-    "packages/modules/character": {
-      "name": "@rpengineext/module-character",
+    "packages/module-sdk": {
+      "name": "@rpengineext/module-sdk",
       "version": "0.1.0",
       "dependencies": {
         "@rpengineext/contracts": "workspace:*",
         "zod": "^4.4.3",
       },
       "devDependencies": {
+        "@rpengineext/core": "workspace:*",
+        "@rpengineext/logger": "workspace:*",
+        "@types/bun": "latest",
+        "typescript": "^5",
+      },
+      "peerDependencies": {
+        "@rpengineext/core": "^0.1.0",
+      },
+      "optionalPeers": [
+        "@rpengineext/core",
+      ],
+    },
+    "packages/modules/character": {
+      "name": "@rpengineext/module-character",
+      "version": "0.1.0",
+      "dependencies": {
+        "@rpengineext/module-sdk": "workspace:*",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@rpengineext/contracts": "workspace:*",
         "@rpengineext/core": "workspace:*",
         "@rpengineext/logger": "workspace:*",
         "@types/bun": "latest",
@@ -171,10 +205,11 @@
       "name": "@rpengineext/module-working-memory",
       "version": "0.1.0",
       "dependencies": {
-        "@rpengineext/contracts": "workspace:*",
+        "@rpengineext/module-sdk": "workspace:*",
         "zod": "^4.4.3",
       },
       "devDependencies": {
+        "@rpengineext/contracts": "workspace:*",
         "@rpengineext/core": "workspace:*",
         "@rpengineext/logger": "workspace:*",
         "@types/bun": "latest",
@@ -185,10 +220,11 @@
       "name": "@rpengineext/module-world-canon",
       "version": "0.1.0",
       "dependencies": {
-        "@rpengineext/contracts": "workspace:*",
+        "@rpengineext/module-sdk": "workspace:*",
         "zod": "^4.4.3",
       },
       "devDependencies": {
+        "@rpengineext/contracts": "workspace:*",
         "@rpengineext/core": "workspace:*",
         "@rpengineext/logger": "workspace:*",
         "@types/bun": "latest",
@@ -376,11 +412,15 @@
 
     "@rpengineext/core": ["@rpengineext/core@workspace:packages/core"],
 
+    "@rpengineext/create-module": ["@rpengineext/create-module@workspace:packages/create-module"],
+
     "@rpengineext/host-bootstrap": ["@rpengineext/host-bootstrap@workspace:packages/host-bootstrap"],
 
     "@rpengineext/logger": ["@rpengineext/logger@workspace:packages/logger"],
 
     "@rpengineext/module-character": ["@rpengineext/module-character@workspace:packages/modules/character"],
+
+    "@rpengineext/module-sdk": ["@rpengineext/module-sdk@workspace:packages/module-sdk"],
 
     "@rpengineext/module-working-memory": ["@rpengineext/module-working-memory@workspace:packages/modules/working-memory"],
 

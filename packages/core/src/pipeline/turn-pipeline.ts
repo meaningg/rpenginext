@@ -1084,7 +1084,12 @@ export class TurnPipeline {
 
     for (const owned of this.index.transitionContributors) {
       const result = await owned.value.contribute(
-        { intent, planArtifacts: scratch.planArtifacts },
+        {
+          intent,
+          planArtifacts: scratch.planArtifacts,
+          rawAction: scratch.rawAction,
+          turnKind: scratch.kind,
+        },
         this.moduleCtx(owned.moduleId, ctx),
       );
       if (!result.ok) return result;
@@ -1840,6 +1845,8 @@ export class TurnPipeline {
           {
             passage: scratch.passage,
             acceptedCommands: scratch.acceptedCommands,
+            rawAction: scratch.rawAction,
+            turnKind: scratch.kind,
           },
           this.moduleCtx(owned.moduleId, ctx),
         );

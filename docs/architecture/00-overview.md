@@ -68,12 +68,14 @@ AI предлагает. Модули помогают и ограничиваю
 | [09-testing.md](./09-testing.md) | Тестовая стратегия |
 | [10-roadmap.md](./10-roadmap.md) | Фазы внедрения |
 | [11-repository-structure.md](./11-repository-structure.md) | Дерево репозитория |
-| [12-extension-surface.md](./12-extension-surface.md) | Широкая поверхность расширений (A/B/C) |
+| [12-extension-surface.md](./12-extension-surface.md) | Ports bus (maintainers; **не** author API) |
 | [13-turn-tracing.md](./13-turn-tracing.md) | Core: markdown-трейсы хода для дебага/AI control |
-| [../modules/writing-modules-for-core.md](../modules/writing-modules-for-core.md) | **Как писать модули** (практика) |
-| [../modules/README.md](../modules/README.md) | Index docs автора модуля |
+| [../modules/README.md](../modules/README.md) | **Как сделать модуль** — пошагово + рецепты |
+| [../modules/_template.md](../modules/_template.md) | Копипаста скелета |
 | [../adr/0001-contracted-pipeline.md](../adr/0001-contracted-pipeline.md) | ADR выбора архитектуры |
 | [../adr/0002-web-host-and-streaming.md](../adr/0002-web-host-and-streaming.md) | ADR: API + Web + SSE |
+| [../adr/0004-module-sdk-cbmd.md](../adr/0004-module-sdk-cbmd.md) | ADR: Module SDK / CBMD |
+| [../adr/0005-moments-native-core.md](../adr/0005-moments-native-core.md) | ADR: moments-native core (deferred) |
 | [../adr/0003-tool-calling-and-background-system-turns.md](../adr/0003-tool-calling-and-background-system-turns.md) | ADR: tools + background turns |
 
 ## 5. Высокоуровневая схема
@@ -148,7 +150,7 @@ Turn = **full-atomic** транзакция:
 | Аудитория | Читать сначала |
 |-----------|----------------|
 | Архитектор / maintainer core | 00 → 01 → 02 → 04 → 06 → ADR |
-| Автор модуля | 01 → 03 → [writing-modules-for-core](../modules/writing-modules-for-core.md) → 12 → 04 → 09 |
+| **Автор модуля** | **[modules/README](../modules/README.md)** → эталоны `packages/modules/*` → ADR 0004 (по желанию). **Не** начинать с 12-extension-surface. |
 | Автор agent/provider | 05 → 06 → contracts (task schemas) |
 | Host/UI | 00 → 06 → 07 → 08 |
 
