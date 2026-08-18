@@ -3,7 +3,7 @@
 Static world-canon module for story-driven RP.
 
 Built with **`@rpengineext/module-sdk`** (`defineModule`).  
-**Как писать свой модуль:** [`docs/modules/README.md`](../../../docs/modules/README.md) (рецепт seed + narrative).
+**Как писать свой модуль:** [`docs/modules/README.md`](../../../docs/modules/README.md) · рецепт: [`recipes.md` §1](../../../docs/modules/recipes.md#1-seed--system-prompt) · [sdk-reference](../../../docs/modules/sdk-reference.md).
 
 ## What it does
 

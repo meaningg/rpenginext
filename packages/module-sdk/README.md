@@ -2,29 +2,75 @@
 
 **Единственный public path** для авторов модулей.
 
-> **Полный гайд (пошагово, по-русски, с рецептами):**  
-> [`docs/modules/README.md`](../../docs/modules/README.md)
-
 Тебе **не** нужно знать: pipeline stages, ports, `ModuleRegisterContext`, ручные `StateCommand`.
+
+---
+
+## Документация (RU)
+
+| Документ | Содержание |
+|----------|------------|
+| [`docs/modules/README.md`](../../docs/modules/README.md) | Старт за 5 минут |
+| [`docs/modules/sdk-reference.md`](../../docs/modules/sdk-reference.md) | **Полный** каталог capabilities, `ctx`, lifecycle |
+| [`docs/modules/recipes.md`](../../docs/modules/recipes.md) | Паттерны без Zod-шума |
+| [`docs/modules/schemas.md`](../../docs/modules/schemas.md) | Как писать Zod-схемы |
+| [ADR 0004](../../docs/adr/0004-module-sdk-cbmd.md) | Почему так устроено |
 
 ---
 
 ## Установка (workspace)
 
-```bash
-# dependency модуля
-"@rpengineext/module-sdk": "workspace:*"
+```json
+{
+  "dependencies": {
+    "@rpengineext/module-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@rpengineext/core": "workspace:*"
+  }
+}
 ```
 
-Тесты: devDependency `@rpengineext/core` (или harness `@rpengineext/module-sdk/test`).
+Тесты: `@rpengineext/core/testing` или harness `@rpengineext/module-sdk/test`.
+
+---
+
+## Scaffold
+
+```bash
+bun run create-module my-feature
+bun run create-module lore --recipe seed-narrative
+# recipes: state | seed-narrative | guard | full
+```
+
+---
+
+## Capabilities (обзор)
+
+| Блок | Зачем |
+|------|--------|
+| `state` | slice + `ops` + migrations |
+| `seed` | new game из `session.meta` |
+| `rules` | `guard` / `soft` / `invariant` |
+| `turn` | `change` · `afterProse` · `committed` · `rejected` · `load` |
+| `narrative` | system/user · brief · history · style |
+| `ai` | tasks + tools (без своего LLM SDK) |
+| `host` | status · help · readModels |
+| `config` | секция `moduleConfig` |
+| `access` | read чужих slice (write чужих — нельзя) |
+
+Тот же смысл через `capabilities: [stateCap(…), narrativeCap(…)]`.
+
+Поля, моменты, `ctx` — только в [sdk-reference](../../docs/modules/sdk-reference.md).
 
 ---
 
 ## Самый короткий пример
 
+Логика без Zod-шума (схемы — [schemas.md](../../docs/modules/schemas.md)):
+
 ```ts
 import { defineModule, deny } from "@rpengineext/module-sdk";
-import { z } from "zod";
 
 export function createMoodModule() {
   return defineModule({
@@ -32,17 +78,12 @@ export function createMoodModule() {
     version: "0.1.0",
     title: "Mood",
     state: {
-      schema: z
-        .object({
-          schemaVersion: z.literal(1),
-          level: z.number().int(),
-        })
-        .strict(),
-      initial: { schemaVersion: 1 as const, level: 0 },
+      schema: MoodSliceSchema,
+      initial: { schemaVersion: 1, level: 0 },
       ops: {
         bump: (s, p: { by?: number }) => ({
           ...s,
-          level: s.level + (Number(p.by) || 1),
+          level: s.level + (p.by ?? 1),
         }),
       },
     },
@@ -67,52 +108,27 @@ export function createMoodModule() {
 
 ---
 
-## Scaffold
-
-```bash
-bun run create-module my-feature
-bun run create-module lore --recipe seed-narrative
-# recipes: state | seed-narrative | guard | full
-```
-
----
-
-## Capabilities (кратко)
-
-| Блок | Зачем |
-|------|--------|
-| `state` | slice + `ops` + migrations |
-| `seed` | new game из `session.meta` |
-| `rules` | `guard` / `soft` / `invariant` |
-| `turn` | `change` · `afterProse` · `committed` · `rejected` · `load` |
-| `narrative` | system/user · brief · history · style |
-| `ai` | tasks + tools (без своего LLM SDK) |
-| `host` | status · help · readModels |
-| `config` | секция `moduleConfig` |
-| `access` | read чужих slice (write чужих — нельзя) |
-
-Тот же смысл через `capabilities: [stateCap(…), narrativeCap(…)]`.
-
----
-
 ## `ctx` в двух словах
 
-- `ctx.op("name", payload)` — изменить **свой** мир  
-- `deny(code, msg)` — отменить ход  
-- `ctx.scheduleSystem(…)` — только из `committed`  
-- `ctx.proposeOp` — в tool handler (то же, что op, через proposal protocol)
+| API | Смысл |
+|-----|--------|
+| `ctx.op("name", payload?)` | изменить **свой** мир |
+| `deny(code, msg)` | отменить ход / op |
+| `ctx.scheduleSystem(…)` | только из `committed` |
+| `ctx.proposeOp` | в tool handler (= `op`) |
+| `ctx.readSlice` | чужой slice при `access.read` |
 
 ---
 
 ## Тесты
 
 ```ts
-import { createTestEngine } from "@rpengineext/core/testing";
-// или
 import { testModule } from "@rpengineext/module-sdk/test";
+// или
+import { createTestEngine } from "@rpengineext/core/testing";
 ```
 
-Минимум: success / reject / edge. См. гайд.
+Минимум: success / reject / edge.
 
 ---
 
@@ -126,7 +142,7 @@ import { testModule } from "@rpengineext/module-sdk/test";
 
 ---
 
-## Для maintainers (не для авторов модулей)
+## Maintainers
 
 ```text
 defineModule
@@ -135,7 +151,7 @@ defineModule
   → core ModuleRegistry
 ```
 
-- `bun run test:compat` — не ломать sdk↔core  
-- ADR: [0004](../../docs/adr/0004-module-sdk-cbmd.md), deferred core: [0005](../../docs/adr/0005-moments-native-core.md)
+- `bun run test:compat` — не ломать sdk ↔ core  
+- Deferred core moments: [ADR 0005](../../docs/adr/0005-moments-native-core.md)
 
 Semver: additive capability fields = minor; breaking author/IR = major.

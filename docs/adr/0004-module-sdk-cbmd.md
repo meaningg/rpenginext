@@ -43,7 +43,7 @@ That contradicted the product goal: **add gameplay without studying core**.
 
 - First-party modules use sdk only; raw port registration is not an author guide path.
 - IR is goldenable / inspectable (`module.ir`) for debug and compat CI.
-- Docs: author guide = sdk + recipes; `12-extension-surface` = maintainer/internal.
+- Docs: author path = `docs/modules/` (README + sdk-reference + recipes + schemas); `12-extension-surface` = maintainer/internal.
 - Scaffold: `bun run create-module <id>`.
 - Future pipeline refactors rebind IR install without author source changes; IR
   version bumps are explicit.

@@ -1,6 +1,10 @@
 # Шаблон модуля (скопируй)
 
-Полный гайд: [README.md](./README.md).  
+- Старт: [README.md](./README.md)
+- Каталог SDK: [sdk-reference.md](./sdk-reference.md)
+- Рецепты: [recipes.md](./recipes.md)
+- Zod: [schemas.md](./schemas.md)
+
 Или сразу: `bun run create-module <id>`.
 
 ## `src/index.ts`
@@ -23,6 +27,7 @@ export function createExampleModule() {
     priority: 100,
     provides: ["capability:example"],
 
+    // В реальном модуле вынеси schema в src/schema.ts — см. schemas.md
     state: {
       schema: z
         .object({

@@ -2,7 +2,7 @@
 
 Player character module for story-driven RP.  
 Built with **`@rpengineext/module-sdk`** (`defineModule`).  
-**Как писать свой модуль:** [`docs/modules/README.md`](../../../docs/modules/README.md) (рецепт AI + background system turn).
+**Как писать свой модуль:** [`docs/modules/README.md`](../../../docs/modules/README.md) · рецепт AI: [`recipes.md` §6](../../../docs/modules/recipes.md#6-ai--фоновый-system-turn) · [sdk-reference](../../../docs/modules/sdk-reference.md).
 
 ## What it does
 

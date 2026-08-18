@@ -1,20 +1,28 @@
 # Как писать модули
 
-Документ перенесён и упрощён.
+Документация разбита на несколько файлов (reference-first).
 
-## → [README.md](./README.md)
+## Старт
 
-Там пошагово:
+→ **[README.md](./README.md)** — 5 минут, scaffold, чеклист
 
-1. Scaffold (`bun run create-module`)  
-2. Минимальный `defineModule`  
-3. Тесты  
-4. Подключение к host  
-5. Рецепты: seed, memory, guard, config, AI  
+## Понять весь SDK
 
-Шаблон: [_template.md](./_template.md)  
-Пакет: [`@rpengineext/module-sdk`](../../packages/module-sdk/README.md)  
-Решение: [ADR 0004](../adr/0004-module-sdk-cbmd.md)
+→ **[sdk-reference.md](./sdk-reference.md)** — capabilities, `ctx`, lifecycle, запреты
+
+## Паттерны
+
+→ **[recipes.md](./recipes.md)** — seed, memory, guard, config, AI, …
+
+## Схемы
+
+→ **[schemas.md](./schemas.md)** — Zod для state/config/AI
+
+## Прочее
+
+- Шаблон: [_template.md](./_template.md)  
+- Пакет: [`@rpengineext/module-sdk`](../../packages/module-sdk/README.md)  
+- Решение: [ADR 0004](../adr/0004-module-sdk-cbmd.md)
 
 ### Эталоны
 

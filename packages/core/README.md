@@ -66,5 +66,7 @@ semantics, atomicity, security boundary) with an ADR.
 
 ## Module authors
 
-- `docs/modules/writing-modules-for-core.md` — how to write modules against this core
-- `docs/modules/_template.md` — starter manifest + factory + tests
+- `docs/modules/README.md` — start here
+- `docs/modules/sdk-reference.md` — full SDK catalog (capabilities, ctx, lifecycle)
+- `docs/modules/recipes.md` / `schemas.md` — patterns and Zod
+- `docs/modules/_template.md` — copy-paste skeleton

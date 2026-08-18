@@ -206,5 +206,5 @@ Start the rewrite when **one or more** hold:
 - Runtime today: `packages/module-sdk/src/compile/bind-compiled-module.ts`
 - IR: `packages/contracts/src/modules/compiled-ir.ts`
 - Protocols: `packages/contracts/src/modules/module-proposals.ts`
-- Author guide: `docs/modules/README.md`
+- Author guide: `docs/modules/README.md` · SDK reference: `docs/modules/sdk-reference.md`
 - Ports (maintainer / current bus): `docs/architecture/12-extension-surface.md`

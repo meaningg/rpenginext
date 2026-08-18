@@ -19,4 +19,4 @@ bun run create-module lore --recipe seed-narrative
 3. Править `src/index.ts`
 4. Подключить фабрику в host (`host-bootstrap`)
 
-**Гайд:** [`docs/modules/README.md`](../../docs/modules/README.md)
+**Доки:** [`docs/modules/README.md`](../../docs/modules/README.md) · [sdk-reference](../../docs/modules/sdk-reference.md) · [recipes](../../docs/modules/recipes.md)

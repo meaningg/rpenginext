@@ -34,7 +34,10 @@ Core меняется только через ADR. Модули — через s
 | [docs/architecture/11-repository-structure.md](./docs/architecture/11-repository-structure.md) | Структура репо |
 | [docs/architecture/12-extension-surface.md](./docs/architecture/12-extension-surface.md) | Internal runtime ports (maintainers; не author API) |
 | [docs/architecture/13-turn-tracing.md](./docs/architecture/13-turn-tracing.md) | Markdown-трейсы хода (core debug/AI control) |
-| [docs/modules/README.md](./docs/modules/README.md) | **Как сделать модуль** — пошагово + рецепты |
+| [docs/modules/README.md](./docs/modules/README.md) | **Как сделать модуль** — старт |
+| [docs/modules/sdk-reference.md](./docs/modules/sdk-reference.md) | **SDK reference** — полный каталог capabilities / ctx |
+| [docs/modules/recipes.md](./docs/modules/recipes.md) | Рецепты модулей (без Zod-шума) |
+| [docs/modules/schemas.md](./docs/modules/schemas.md) | Zod-схемы state/config/AI |
 | [docs/adr/0001-contracted-pipeline.md](./docs/adr/0001-contracted-pipeline.md) | ADR: выбор CPA |
 | [docs/adr/0002-web-host-and-streaming.md](./docs/adr/0002-web-host-and-streaming.md) | ADR: API + Web + SSE |
 | [docs/adr/0003-tool-calling-and-background-system-turns.md](./docs/adr/0003-tool-calling-and-background-system-turns.md) | ADR: tools + background system turns |
@@ -121,7 +124,7 @@ bun run web
 
 ## Как сделать модуль (кратко)
 
-**Полный гайд:** [`docs/modules/README.md`](./docs/modules/README.md) — шаги, рецепты, `ctx`, чеклист.
+**Доки модулей:** [`docs/modules/README.md`](./docs/modules/README.md) (старт) · [`sdk-reference.md`](./docs/modules/sdk-reference.md) (весь SDK) · [`recipes.md`](./docs/modules/recipes.md) · [`schemas.md`](./docs/modules/schemas.md).
 
 ```bash
 # 1. каркас
@@ -152,7 +155,7 @@ export function createMoodModule() {
 3. Подключить фабрику в host (`host-bootstrap` / CLI / API).  
 4. Тесты: success / reject / edge.  
 5. Зависимость только **`@rpengineext/module-sdk`** (не core internals, не LLM SDK).  
-6. Шаблон: [`docs/modules/_template.md`](./docs/modules/_template.md) · ADR: [0004](./docs/adr/0004-module-sdk-cbmd.md).
+6. Шаблон: [`docs/modules/_template.md`](./docs/modules/_template.md) · reference: [`sdk-reference.md`](./docs/modules/sdk-reference.md) · ADR: [0004](./docs/adr/0004-module-sdk-cbmd.md).
 
 ## Licence
 

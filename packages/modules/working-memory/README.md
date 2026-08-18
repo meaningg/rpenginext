@@ -2,7 +2,7 @@
 
 First product module: **working memory** for narrative continuity.  
 Built with **`@rpengineext/module-sdk`** (`defineModule`).  
-**Как писать свой модуль:** [`docs/modules/README.md`](../../../docs/modules/README.md) (рецепт afterProse + history).
+**Как писать свой модуль:** [`docs/modules/README.md`](../../../docs/modules/README.md) · рецепт: [`recipes.md` §2](../../../docs/modules/recipes.md#2-память-хода-afterprose--history) · [sdk-reference](../../../docs/modules/sdk-reference.md).
 
 ## What it does
 

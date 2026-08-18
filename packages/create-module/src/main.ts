@@ -21,7 +21,7 @@ Examples:
   bun run create-module mood
   bun run create-module lore --recipe seed-narrative
 
-Full guide: docs/modules/README.md
+Docs: docs/modules/README.md · docs/modules/sdk-reference.md
 `);
 }
 
@@ -324,7 +324,8 @@ function readme(id: string, recipe: Recipe): string {
 
 Scaffolded with \`@rpengineext/create-module\` (recipe: \`${recipe}\`).
 
-Built on **\`@rpengineext/module-sdk\`** — see \`docs/modules/README.md\`.
+Built on **\`@rpengineext/module-sdk\`**.  
+Docs: \`docs/modules/README.md\` · \`docs/modules/sdk-reference.md\` · \`docs/modules/recipes.md\`.
 
 ## Dev
 
@@ -393,7 +394,7 @@ async function main(): Promise<void> {
   console.log(`next:
   bun install
   bun test packages/modules/${id}
-  # edit src/index.ts — see docs/modules/README.md
+  # edit src/index.ts — docs/modules/README.md + sdk-reference.md
   # wire createXxxModule() in host-bootstrap when ready
 `);
 }

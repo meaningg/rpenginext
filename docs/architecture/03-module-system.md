@@ -3,7 +3,7 @@
 > **Статус:** normative  
 > **Цель:** разные авторы пишут modules параллельно **без** изучения core.  
 > **Author path:** `@rpengineext/module-sdk` (`defineModule` / CBMD) — см. [ADR 0004](../adr/0004-module-sdk-cbmd.md).  
-> Этот документ описывает **runtime**-контракт после compile. Авторам модулей читать [../modules/README.md](../modules/README.md).
+> Этот документ описывает **runtime**-контракт после compile. Авторам модулей: [../modules/README.md](../modules/README.md) · [../modules/sdk-reference.md](../modules/sdk-reference.md).
 
 ## 1. Что такое module
 
