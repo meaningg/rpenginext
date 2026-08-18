@@ -8,13 +8,8 @@
 
 > Истина мира принадлежит core. AI предлагает. Commit атомарный.
 
-## Статус
 
-Сейчас: **Phase 3 — persistence + real narrative path**.  
-Сохранения через `bun:sqlite`, `LlmPort` на Responses API, filesystem turn traces, CLI book loop.  
-Далее: Phase 4 — hardening (инструмент replay, миграции, более удобный CLI UX).
-
-## Документация (источник истины)
+## Документация
 
 Начните здесь:
 
@@ -104,9 +99,7 @@ bun run web
 | [`@rpengineext/module-working-memory`](./packages/modules/working-memory) | ready | последние N пар чата для narrative + полный архив пар в session state |
 | product modules (npc/plot/…) | planned | Phase 5+ отдельными задачами |
 
-## Как вносить модули (позже)
-
-Когда contracts опубликованы в репо:
+## Как вносить модули 
 
 1. Читать `docs/modules/README.md`.
 2. Копировать template.
@@ -114,6 +107,6 @@ bun run web
 4. Не вызывать LLM SDK напрямую.
 5. Покрыть success/reject/edge тестами.
 
-## Лицензия
+## Licence
 
 Private / TBD.
