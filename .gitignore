@@ -6,8 +6,15 @@ out
 dist
 *.tgz
 
-# local runtime data (saves, turn traces)
-data/
+# local runtime data (saves, traces, host/engine sqlite, private stories)
+/data/**
+!/data/stories/
+/data/stories/**
+# only public example templates are tracked
+!/data/stories/README.md
+!/data/stories/demo.hello.json
+!/data/stories/demo.book.json
+
 packages/core/.tmp-test-traces/
 
 # code coverage

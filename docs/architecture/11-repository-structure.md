@@ -1,40 +1,37 @@
 # Repository Structure
 
-> **Статус:** normative target layout  
-> Сейчас репозиторий — early scaffold; структура ниже — цель при имплементации.
+> **Статус:** normative (current monorepo layout)
 
-## 1. Target monorepo
+## 1. Monorepo layout
 
 ```text
 rpengineext/
   apps/
     cli/                         # player/dev host
     api/                         # HTTP REST + SSE host
-    web/                         # React + Tailwind UI
+    web/                         # React + Tailwind UI (API only)
   packages/
     contracts/                   # public schemas & ports (semver heart)
-    core/                        # stable engine
+    core/                        # stable engine (+ core/testing export)
+    logger/                      # structured pino logger
     host-bootstrap/              # shared CLI/API composition root
     content-stories/             # story template catalog loader
-    shared/                      # pure helpers
     agents/
       responses/                 # Responses API LlmPort
     persistence/
       sqlite/                    # bun:sqlite driver (v1)
     modules/
-      working-memory/
-      npc/
-      plot-controller/
-      fandom-canon/
-      summarizer/
-    testing/                     # test runtime helpers
+      working-memory/            # first-party
+      character/                 # first-party
+      world-canon/               # first-party
+      # further product modules (npc, plot, …) — separate tasks
   data/
-    stories/                     # JSON story templates
+    stories/                     # JSON templates (examples tracked; private gitignored)
+    # runtime: *.sqlite, traces/ — always local / gitignored
   docs/
-    architecture/                # this set
+    architecture/
     adr/
     modules/
-  scripts/
   package.json                   # workspace root
   README.md
   .rules
@@ -47,19 +44,26 @@ apps/cli, apps/api → host-bootstrap, core, modules(load), persistence, agents,
 apps/web → HTTP API only (no core/packages runtime imports)
 host-bootstrap → core, contracts, logger, persistence, agents, modules, content-stories
 content-stories → contracts
-core → contracts, shared
-modules/* → contracts, shared
-agents/* → contracts, shared
-persistence/* → contracts, shared
-contracts → (minimal/no deps)
+core → contracts, logger
+modules/* → contracts          (+ core only as devDependency for tests)
+agents/* → contracts, logger
+persistence/* → contracts
+contracts → zod (+ minimal)
+logger → (minimal)
 ```
 
 Forbidden:
 
-- `modules/*` → `core/src/**` internals
-- `core` → `modules/*` concrete packages (dynamic load via host registry only)
+- `modules/*` → `core/src/**` internals (use `@rpengineext/core/testing` in tests only)
+- `core` → `modules/*` concrete packages (host registry wires modules)
+- `apps/web` → any engine package
 
-## 3. contracts package content
+## 3. Shared utilities
+
+There is **no** separate `packages/shared`. Boundary primitives (`Result`, ids, errors, JSON types)
+live in `@rpengineext/contracts`.
+
+## 4. contracts package content
 
 ```text
 contracts/
@@ -67,36 +71,52 @@ contracts/
     index.ts
     ids.ts
     result.ts
+    errors.ts
+    json.ts
+    engine.ts
+    version.ts
     state/
-    commands/
-    modules/
-      manifest.ts
-      extension-points.ts
-      permissions.ts
+    modules/          # manifest, catalogs, ports, interceptors, permissions
     agents/
     turn/
     persistence/
     events/
+    tracing/
 ```
 
-## 4. core package content
+## 5. core package content
 
 ```text
 core/
   src/
     create-engine.ts
+    index.ts
+    version.ts
     registry/
     session/
     pipeline/
-      stages/
     state/
     agents/
     events/
     config/
-  src/testing/                   # optional export surface
+    host/
+    persistence/      # InMemoryPersistence + port usage
+    tracing/
+    util/
+    testing/          # @rpengineext/core/testing
 ```
 
-## 5. Why monorepo
+## 6. Story templates policy
+
+| Path | In git? |
+|------|---------|
+| `data/stories/demo.hello.json` | yes (example) |
+| `data/stories/demo.book.json` | yes (example) |
+| `data/stories/README.md` | yes |
+| other `data/stories/*.json` | **no** (private local) |
+| `data/*.sqlite*`, `data/traces/**` | **no** (runtime) |
+
+## 7. Why monorepo
 
 - single versioned contracts visible to all authors;
 - golden tests across core+modules;

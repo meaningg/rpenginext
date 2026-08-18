@@ -1,5 +1,5 @@
 /**
- * Root scaffold entry — prefer `bun run cli:hello` for the Phase 2 vertical slice.
+ * Root entry — prefer host scripts: `bun run cli`, `bun run api`, `bun run web`.
  */
 import { createLogger } from "@rpengineext/logger";
 import { CORE_VERSION } from "@rpengineext/core";
@@ -14,5 +14,5 @@ const log = createLogger({
 
 log.info(
   { coreVersion: CORE_VERSION, contractsVersion: CONTRACTS_VERSION },
-  "rpengineext — run: bun run cli:hello",
+  "rpengineext — run: bun run cli | bun run api | bun run web",
 );

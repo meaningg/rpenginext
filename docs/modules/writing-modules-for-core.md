@@ -1,7 +1,7 @@
 # Как писать модули для Core
 
 > **Аудитория:** авторы модулей (first-party и third-party)  
-> **Зависимости модуля:** только `@rpengineext/contracts` (+ опционально shared utilities)  
+> **Зависимости модуля:** только `@rpengineext/contracts` (`@rpengineext/core` — devDependency для `@rpengineext/core/testing`)  
 > **Нельзя:** импортировать internals `@rpengineext/core`, звать LLM SDK напрямую, мутировать world state в обход команд
 
 Этот документ — **практический** гайд: от манифеста до тестов на **текущем** runtime.  

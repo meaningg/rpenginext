@@ -3,13 +3,22 @@
 Движок пошаговой ролевой игры в формате интерактивной книги (**free-text** действия игрока).
 
 - **Core** — стабильное ядро: атомарные ходы, state, pipeline, оркестрация агентов.
-- **Modules** — независимые расширения (NPC, plot, fandom-canon, summarizer, …).
+- **Modules** — независимые расширения (working-memory, character, world-canon, …).
 - **Agents** — LLM пишет историю и предлагает поведение NPC; **не** владеет истиной мира.
 
 > Истина мира принадлежит core. AI предлагает. Commit атомарный.
 
 
+<<<<<<< Updated upstream
 ## Документация
+=======
+Сейчас: **Phase 4 complete** — extension surface, permissions, hosts (CLI + API + Web),
+persistence, turn traces, first-party modules.  
+Далее: Phase 5+ — product modules по отдельным задачам; CLI UX polish; optional safety hooks.  
+Core меняется только через ADR.
+
+## Документация (источник истины)
+>>>>>>> Stashed changes
 
 Начните здесь:
 
@@ -26,11 +35,13 @@
 | [docs/architecture/08-configuration.md](./docs/architecture/08-configuration.md) | Конфиг |
 | [docs/architecture/09-testing.md](./docs/architecture/09-testing.md) | Тесты |
 | [docs/architecture/10-roadmap.md](./docs/architecture/10-roadmap.md) | Фазы внедрения |
-| [docs/architecture/11-repository-structure.md](./docs/architecture/11-repository-structure.md) | Целевая структура репо |
+| [docs/architecture/11-repository-structure.md](./docs/architecture/11-repository-structure.md) | Структура репо |
 | [docs/architecture/12-extension-surface.md](./docs/architecture/12-extension-surface.md) | Поверхность расширений для модулей |
 | [docs/architecture/13-turn-tracing.md](./docs/architecture/13-turn-tracing.md) | Markdown-трейсы хода (core debug/AI control) |
 | [docs/modules/README.md](./docs/modules/README.md) | Гайд автора модуля |
 | [docs/adr/0001-contracted-pipeline.md](./docs/adr/0001-contracted-pipeline.md) | ADR: выбор CPA |
+| [docs/adr/0002-web-host-and-streaming.md](./docs/adr/0002-web-host-and-streaming.md) | ADR: API + Web + SSE |
+| [docs/adr/0003-tool-calling-and-background-system-turns.md](./docs/adr/0003-tool-calling-and-background-system-turns.md) | ADR: tools + background system turns |
 
 ## Архитектура в одном абзаце
 
@@ -43,13 +54,13 @@ Player Action
     → COMMIT (all) | ROLLBACK (all)
 ```
 
-Working memory (всегда включена в CLI): env `RP_WORKING_MEMORY_WINDOW` = N **пар**,
+Working memory (всегда включена в host): env `RP_WORKING_MEMORY_WINDOW` = N **пар**,
 которые подмешиваются в `narrative.write` как история чата; полный архив живёт в slice `working_memory`.
 
 Хосты v1: **CLI** + **HTTP API** (`apps/api`) + **Web UI** (`apps/web`).  
 Персистентность v1: **bun:sqlite**.  
 Отладка v1: core пишет подробные **turn `.md` traces** (state diff, LLM I/O, tool calls).  
-Доменные modules — отдельными задачами.
+First-party modules: working-memory, character, world-canon. Дальнейшие domain modules — отдельными задачами.
 
 ## Dev-окружение
 
@@ -82,13 +93,20 @@ bun run web
 
 Целевой стек: монорепо **Bun + TypeScript** (`packages/*`, `packages/*/*`, `apps/*`).
 
+### Story templates
+
+Каталог: `data/stories` (`RP_STORIES_DIR`).  
+В git лежат только **example** шаблоны (`demo.hello`, `demo.book`).  
+Любые другие JSON в этой папке — локальные/приватные и **не коммитятся**.  
+Подробности: [`data/stories/README.md`](./data/stories/README.md).
+
 ### Пакеты workspace
 
 | Пакет | Статус | Роль |
 |-------|--------|------|
 | [`@rpengineext/logger`](./packages/logger) | ready | структурированный pino logger (pretty/JSON, child bindings, redact) |
-| [`@rpengineext/contracts`](./packages/contracts) | ready (types/schemas) | публичные ports, манифест, схемы state/turn/agent, extension surface |
-| [`@rpengineext/core`](./packages/core) | ready (Phase 3) | registry, state kernel, turn pipeline, agents, turn tracer |
+| [`@rpengineext/contracts`](./packages/contracts) | ready | публичные ports, манифест, схемы state/turn/agent, extension surface |
+| [`@rpengineext/core`](./packages/core) | ready (Phase 4) | registry, state kernel, turn pipeline, agents, turn tracer, host surface |
 | [`@rpengineext/persistence-sqlite`](./packages/persistence/sqlite) | ready | bun:sqlite `PersistencePort` + атомарный `commitTurn` |
 | [`@rpengineext/agents-responses`](./packages/agents/responses) | ready | Responses API `LlmPort` (`POST /v1/responses`) |
 | [`@rpengineext/cli`](./apps/cli) | ready | hello turn / REPL book loop, save/load |
@@ -97,8 +115,11 @@ bun run web
 | [`@rpengineext/host-bootstrap`](./packages/host-bootstrap) | ready | общая wiring движка для CLI/API |
 | [`@rpengineext/content-stories`](./packages/content-stories) | ready | каталог шаблонов историй (`data/stories`) |
 | [`@rpengineext/module-working-memory`](./packages/modules/working-memory) | ready | последние N пар чата для narrative + полный архив пар в session state |
-| product modules (npc/plot/…) | planned | Phase 5+ отдельными задачами |
+| [`@rpengineext/module-character`](./packages/modules/character) | ready | PC seed, narrative injection, background outfit tool-agent |
+| [`@rpengineext/module-world-canon`](./packages/modules/world-canon) | ready | immutable world canon → narrative system prompt |
+| further product modules (npc/plot/…) | planned | Phase 5+ отдельными задачами |
 
+<<<<<<< Updated upstream
 ## Как вносить модули 
 
 1. Читать `docs/modules/README.md`.
@@ -106,6 +127,15 @@ bun run web
 3. Зависеть только от `contracts` (+ `shared`).
 4. Не вызывать LLM SDK напрямую.
 5. Покрыть success/reject/edge тестами.
+=======
+## Как вносить модули
+
+1. Читать [`docs/modules/README.md`](./docs/modules/README.md) и [`writing-modules-for-core.md`](./docs/modules/writing-modules-for-core.md).
+2. Копировать [`docs/modules/_template.md`](./docs/modules/_template.md).
+3. Зависеть только от `@rpengineext/contracts` (core — только devDependency для тестов).
+4. Не вызывать LLM SDK напрямую; state — только через `StateCommand`.
+5. Покрыть success / reject / edge тестами через `@rpengineext/core/testing`.
+>>>>>>> Stashed changes
 
 ## Licence
 

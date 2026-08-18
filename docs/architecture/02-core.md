@@ -26,7 +26,7 @@ Core **не** содержит:
 
 ```text
 core/
-  bootstrap/           # composition root helpers
+  create-engine.ts     # composition entry for hosts/tests
   registry/            # ModuleRegistry, CapabilityGraph
   session/             # SessionRuntime
   pipeline/            # TurnPipeline + stages
@@ -34,8 +34,11 @@ core/
   agents/              # AgentOrchestrator
   tracing/             # TurnTracer + markdown renderer (normative)
   events/              # EventBus (observe-only)
-  persistence/         # uses PersistencePort (impl outside)
-  config/              # typed config loader boundaries
+  persistence/         # InMemoryPersistence; port impl otherwise outside
+  host/                # HostSurface aggregation
+  config/              # typed config boundaries
+  testing/             # @rpengineext/core/testing
+  util/
 ```
 
 ### 2.1 ModuleRegistry
@@ -133,16 +136,15 @@ Core знает только `PersistencePort`:
 ## 3. Dependency direction
 
 ```text
-apps → core → contracts
+apps → host-bootstrap / core → contracts
 modules → contracts
-modules ↛ core internals
-core → contracts
+modules ↛ core internals (core only as test devDependency)
+core → contracts, logger
 agents adapters → contracts
 persistence impl → contracts
-shared ← used by all carefully (no domain policy)
 ```
 
-`modules` могут зависеть от `contracts` и `shared`, но **не** от private API core.
+`modules` зависят от `contracts`; boundary utilities (`Result`, ids) — в contracts, не в отдельном `shared`.
 
 ## 4. Core public surface
 

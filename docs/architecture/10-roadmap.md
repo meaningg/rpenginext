@@ -9,9 +9,11 @@
 |-------|----------|
 | Architecture | CPA (contracts + pipeline) |
 | Turn atomicity | **full-atomic** — any fatal failure rolls back to turn start |
-| Host v1 | CLI |
+| Hosts v1 | CLI + HTTP API (`apps/api`) + Web UI (`apps/web`) via `host-bootstrap` |
 | Persistence v1 | `bun:sqlite` |
-| Domain modules (npc/plot/canon/summary) | **out of scope** until separate tasks |
+| First-party modules (shipped) | working-memory, character, world-canon |
+| Further domain modules (npc/plot/summarizer/…) | **out of scope** until separate tasks |
+| Story templates in git | **examples only** (`demo.hello`, `demo.book`); other JSON local/private |
 | Narrative failure | fail turn + full rollback (no fallback-keep-state) |
 | Turn debug traces | **core** markdown dossiers (`.md`) |
 
@@ -85,16 +87,20 @@
 
 **Exit:** core matches normative extension surface + hardening; unit/integration tests green. ✅
 
-## Phase 5+ — Product modules (separate tasks only)
+## Phase 5+ — Further product modules (separate tasks only)
 
-When requested explicitly, one module per task, against frozen contracts:
+Shipped first-party (not “future examples”):
 
-- examples only until then: npc, plot-controller, fandom-canon, summarizer, …
+- `working-memory`, `character`, `world-canon`
+
+When requested explicitly, one **new** module per task, against frozen contracts:
+
+- candidates: npc, plot-controller, richer fandom-canon/RAG, summarizer, …
 
 ## Explicit non-goals until later
 
-- implementing example domain modules “by default”
-- multiplayer simultaneous turns
+- implementing large domain modules “by default” without a task
+- multiplayer simultaneous turns / shared world
 - graphical engine
 - marketplace
 - fallback passage that keeps mutated state

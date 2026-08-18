@@ -15,15 +15,23 @@
 
 Игрок modules не видит напрямую — только их эффект в правилах мира и качестве истории.
 
-## 2. Example modules (иллюстрация, не scope v1 core)
+## 2. First-party vs future modules
 
-Следующие id — **примеры** будущих расширений. Они **не** реализуются, пока не придёт отдельная задача:
+### Shipped in this monorepo (wired by `host-bootstrap`)
+
+| Module id | Package | Назначение |
+|-----------|---------|------------|
+| `working_memory` | `@rpengineext/module-working-memory` | last-N chat pairs + archive slice |
+| `character` | `@rpengineext/module-character` | PC seed, narrative injection, background outfit sync |
+| `world_canon` | `@rpengineext/module-world-canon` | immutable story canon → narrative system prompt |
+
+### Future examples (not implemented until separate task)
 
 | Module id (example) | Назначение |
 |---------------------|------------|
 | `npc` | сущности NPC, отношения, инициативы реплик/поведения |
 | `plot-controller` | акты, beats, gates, fail-forward |
-| `fandom-canon` | поиск/проверка канона, proposal канон-фактов кампании |
+| `fandom-canon` | RAG/поиск канона, proposal канон-фактов кампании |
 | `summarizer` | сжатие истории в memory items |
 
 Любой module (ваш или third-party) подключается одинаково: манифест + contracts.
@@ -189,7 +197,7 @@ modules/<id>/
 
 Автор модуля обязан:
 
-1. Зависеть только от `@rpengineext/contracts` (+ shared).
+1. Зависеть только от `@rpengineext/contracts` (core — devDependency для тестов).
 2. Покрыть ≥3 unit tests на сервис/основной handler set (success, reject, edge) — см. project rules.
 3. Не обещать side effects вне atomic turn model.
 4. Документировать commands, permissions, agent tasks.

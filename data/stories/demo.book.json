@@ -1,0 +1,27 @@
+{
+  "id": "demo.book",
+  "version": "0.1.0",
+  "title": "Open Book",
+  "synopsis": "Free-form interactive book. Write anything; the world answers one turn at a time.",
+  "tags": ["demo", "sandbox"],
+  "locale": "ru",
+  "seed": "demo-book",
+  "sessionMeta": {
+    "templateId": "demo.book",
+    "tone": "literary"
+  },
+  "narrativeStyle": {
+    "voice": "second_person",
+    "length": "medium"
+  },
+  "character": {
+    "name": "Алекс",
+    "appearance": "средний рост, тёмные волосы, серые глаза",
+    "features": "шрам на левой брови; говорит коротко и по делу",
+    "outfit": "чёрная кожаная куртка, тёмные джинсы, тяжёлые ботинки"
+  },
+  "worldCanon": "Это открытая литературная песочница от второго лица.\nМир подстраивается под действия игрока, но сохраняет внутреннюю логику и последствия.\nНе ломай тон современного приключенческого реализма без явной просьбы игрока: никакой внезапной высокой магии или sci-fi, пока это не введено в сцене.\nNPC имеют свои цели; мир не крутится только вокруг героя.",
+  "modules": {
+    "workingMemoryWindow": 8
+  }
+}

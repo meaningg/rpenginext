@@ -73,12 +73,14 @@ AI предлагает. Модули помогают и ограничиваю
 | [../modules/writing-modules-for-core.md](../modules/writing-modules-for-core.md) | **Как писать модули** (практика) |
 | [../modules/README.md](../modules/README.md) | Index docs автора модуля |
 | [../adr/0001-contracted-pipeline.md](../adr/0001-contracted-pipeline.md) | ADR выбора архитектуры |
+| [../adr/0002-web-host-and-streaming.md](../adr/0002-web-host-and-streaming.md) | ADR: API + Web + SSE |
+| [../adr/0003-tool-calling-and-background-system-turns.md](../adr/0003-tool-calling-and-background-system-turns.md) | ADR: tools + background turns |
 
 ## 5. Высокоуровневая схема
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│ app host (CLI / API / future UI)                                │
+│ app host (CLI / API / Web UI)                                   │
 └─────────────────────────────┬───────────────────────────────────┘
                               │ PlayerAction
                               ▼
@@ -102,13 +104,17 @@ AI предлагает. Модули помогают и ограничиваю
 
 | Пакет | Меняется | Назначение |
 |-------|----------|------------|
-| `contracts` | редко, semver | публичные типы, порты, schemas, extension points |
-| `core` | редко | runtime, pipeline, registry, state kernel, orchestrator |
-| `shared` | умеренно | result/error/id utilities без доменной политики |
-| `modules/*` | часто | независимые авторы |
+| `contracts` | редко, semver | публичные типы, порты, schemas, extension points, Result/ids |
+| `core` | редко | runtime, pipeline, registry, state kernel, orchestrator, tracing |
+| `logger` | умеренно | structured logging |
+| `host-bootstrap` | умеренно | composition root CLI/API |
+| `content-stories` | умеренно | loader каталога story JSON |
+| `modules/*` | часто | независимые авторы (+ first-party) |
 | `agents/*` | умеренно | провайдеры LLM и специализированные agent adapters |
 | `persistence/sqlite` | умеренно | bun:sqlite за PersistencePort |
-| `apps/*` | часто | способы запуска для игрока/дева |
+| `apps/*` | часто | CLI / API / Web |
+
+Отдельного пакета `shared` **нет** — boundary primitives живут в `contracts`.
 
 **Правило стабильности core:** если фичу можно сделать модулем — она не идёт в core.
 
@@ -129,12 +135,15 @@ Turn = **full-atomic** транзакция:
 - Hosts: **CLI**, **HTTP API** (`apps/api`), **Web UI** (`apps/web`)
 - Shared wiring: **`packages/host-bootstrap`**
 - Story templates: **`data/stories`** + **`packages/content-stories`**
+  - in git: example templates only (`demo.hello`, `demo.book`)
+  - private local JSON allowed beside them (gitignored)
 - Persistence: **`bun:sqlite`** (engine) + host identity db (`data/host.sqlite`)
 - Turn debug traces: **core** → `.md` dossiers (prompts, tools, state diff, rollback)
 - Progress: observe-only `EventBus` → API SSE (`turn.stage`, agent tasks, draft `llm.stream.delta`)
-- Product domain modules (npc/plot/…): **не в scope**, пока нет отдельной задачи
+- First-party modules: working-memory, character, world-canon
+- Further product modules (npc/plot/…): **не в scope**, пока нет отдельной задачи
 
-## 8. Для кого какая « Tolстая » документация
+## 8. Для кого какая «толстая» документация
 
 | Аудитория | Читать сначала |
 |-----------|----------------|

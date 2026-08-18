@@ -16,8 +16,8 @@
 | Contract | modules ↔ contracts | no | manifest, permissions, schemas |
 | Pipeline golden | core | mock orchestrator | input→commands→state→passage |
 | Replay | persistence | no | journal apply determinism |
-| Integration | app | mock/optional live | boot modules, save/load |
-| Live LLM (optional) | gated | yes | schema adherence smoke |
+| Integration | app / host-bootstrap | mock/optional live | boot modules, save/load, HTTP |
+| Live LLM (optional) | gated (`test:e2e:live`, smoke) | yes | schema adherence smoke |
 
 ## 3. Minimum bar (project rule aligned)
 
@@ -55,22 +55,36 @@ Goldens are the safety net for “core stable, modules evolve”.
 
 ## 5. Module test harness
 
-Core publishes (later implementation) `createTestRuntime({modules, mocks})` in a testing package or core/testing export:
+Published today: **`@rpengineext/core/testing`**.
 
-- run single turn;
-- inspect journal/commands;
-- no network.
+Primary entry:
 
-Authors must not need full app UI.
+- `createTestEngine({ modules, mocks, … })` — in-memory persistence, mock agents, no network
+- helpers: `createFixtureHelloModule`, `MemoryTraceSink`, `InMemoryPersistence`, `createDefaultMockAgentScript`
+
+Typical module test:
+
+```ts
+import { createTestEngine } from "@rpengineext/core/testing";
+import { createMyModule } from "../src/index.ts";
+
+const bundle = await createTestEngine({
+  modules: [createMyModule()],
+});
+// submitAction → assert TurnResult / state slice
+```
+
+Authors must not need full app UI. Use `core` as **devDependency** only.
 
 ## 6. CI policy (target)
 
-- PR: unit + contract + golden + replay.
-- Live LLM: manual/nightly only.
+- PR: unit + contract + golden + replay + mock e2e.
+- Live LLM: manual/nightly only (`bun run test:e2e:live`, `smoke:play:live`).
 - Coverage: not vanity 100%; critical kernel paths mandatory.
 
 ## 7. Non-flaky rules
 
 - sort arrays before compare;
 - freeze time/rng in tests via injected clock/rng;
-- never assert on exact full LLM prose in unit tests.
+- never assert on exact full LLM prose in unit tests;
+- do not require private story templates — only tracked examples (`demo.hello`, `demo.book`).

@@ -25,7 +25,8 @@ Constraints from CPA:
    - `packages/host-bootstrap` — shared composition root for CLI and API.
    - `apps/api` — Bun HTTP REST + SSE over `Engine` / `EventBus`.
    - `apps/web` — React + Tailwind UI talking only to API.
-   - `packages/content-stories` + `data/stories/*` — story template catalog.
+   - `packages/content-stories` + `data/stories/*` — story template catalog
+     (git tracks **example** templates only; private local JSON allowed beside them).
 
 2. **Identity (localhost v1)**
    - Local player id + bearer token stored in host-side sqlite (`data/host.sqlite`).

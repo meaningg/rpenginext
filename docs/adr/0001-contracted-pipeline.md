@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (design phase)
+Accepted (implemented through Phase 4)
 
 ## Context
 
@@ -31,8 +31,8 @@ Accepted (design phase)
 - modules via manifest/permissions/capabilities;
 - all LLM calls via `AgentOrchestrator`;
 - narrative works from draft brief and is inside the atomic boundary;
-- v1 host = CLI; v1 persistence = `bun:sqlite`;
-- example domain modules are not auto-implemented;
+- v1 hosts = CLI + HTTP API + Web (see ADR 0002); v1 persistence = `bun:sqlite`;
+- further domain modules are not auto-implemented without an explicit task;
 - `packages/contracts` is the stability boundary for multi-author development.
 
 ## Consequences
@@ -64,6 +64,8 @@ Accepted (design phase)
 
 ## Follow-ups
 
-- Implement contracts package (Phase 1).
-- Possibly ADR for Full-atomic narrative mode details.
-- Possibly ADR for soft-commit narrative invent loop (not v1).
+- [x] Implement contracts package (Phase 1) — `@rpengineext/contracts`
+- [x] Core pipeline + full-atomic turns (Phases 2–4)
+- [x] Web host, SSE, draft streaming — [ADR 0002](./0002-web-host-and-streaming.md)
+- [x] Tool-calling agents + background system turns — [ADR 0003](./0003-tool-calling-and-background-system-turns.md)
+- [ ] Possibly ADR for soft-commit narrative invent loop (not v1; still rejected)

@@ -1,0 +1,24 @@
+{
+  "id": "demo.hello",
+  "version": "0.1.0",
+  "title": "Hello Book",
+  "synopsis": "Короткое демо для mock и smoke-тестов. Сделай первый шаг в интерактивную книгу.",
+  "tags": ["demo", "tutorial"],
+  "locale": "ru",
+  "seed": "demo-hello",
+  "openingAction": {
+    "kind": "free_text",
+    "text": "hello"
+  },
+  "sessionMeta": {
+    "templateId": "demo.hello",
+    "tone": "friendly"
+  },
+  "narrativeStyle": {
+    "voice": "second_person",
+    "length": "short"
+  },
+  "modules": {
+    "workingMemoryWindow": 6
+  }
+}

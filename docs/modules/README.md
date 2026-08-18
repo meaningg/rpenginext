@@ -37,8 +37,11 @@ World changes = **commands only**. Turns are **full-atomic**.
 
 | Package | Role |
 |---------|------|
-| `@rpengineext/module-working-memory` | last-N chat history for `narrative.write` |
+| `@rpengineext/module-working-memory` | last-N chat history for `narrative.write` + archive slice |
 | `@rpengineext/module-character` | PC seed from story JSON, narrative injection, background outfit tool-agent |
+| `@rpengineext/module-world-canon` | immutable world canon text → narrative system prompt |
+
+Package READMEs: `packages/modules/*/README.md`.
 
 ## Quick checklist
 

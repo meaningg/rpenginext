@@ -96,7 +96,7 @@ LLM не может:
 
 ## 3. DRY / KISS / YAGNI
 
-- Повторяющиеся schema/result/error — только `contracts` / `shared`.
+- Повторяющиеся schema/result/error — только `contracts` (отдельного `shared` пакета нет).
 - Не строить universal workflow engine. Нужен **фиксированный turn pipeline** + modules.
 - Не добавлять extension point «на всякий случай». Новый point = ADR.
 
