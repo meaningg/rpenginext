@@ -36,17 +36,35 @@ export type SliceOpFn<TSlice, TPayload = JsonObject> = (
 ) => TSlice;
 
 /**
- * Op definition with optional payload schema.
+ * Minimal parser surface accepted for op payloads (Zod schemas satisfy this).
+ * Kept structural so object-form `apply` keeps contextual typing.
+ */
+export interface SliceOpPayloadSchema<TPayload = unknown> {
+  safeParse(data: unknown):
+    | { success: true; data: TPayload }
+    | { success: false; error: unknown };
+}
+
+/**
+ * Object-form op with optional payload schema.
+ *
+ * @typeParam TSlice - slice type
+ * @typeParam TPayload - payload type
+ */
+export interface SliceOpObjectDef<TSlice, TPayload = JsonObject> {
+  readonly payload?: SliceOpPayloadSchema<TPayload>;
+  readonly apply: SliceOpFn<TSlice, TPayload>;
+}
+
+/**
+ * Op definition: bare function or `{ payload, apply }` object.
  *
  * @typeParam TSlice - slice type
  * @typeParam TPayload - payload type
  */
 export type SliceOpDef<TSlice, TPayload = JsonObject> =
   | SliceOpFn<TSlice, TPayload>
-  | {
-      readonly payload?: z.ZodType<TPayload>;
-      readonly apply: SliceOpFn<TSlice, TPayload>;
-    };
+  | SliceOpObjectDef<TSlice, TPayload>;
 
 /**
  * Primary module state (one slice per module in v1).
@@ -60,6 +78,10 @@ export interface StateCapability<TSlice = JsonObject> {
   readonly schemaVersion?: number;
   readonly schema: z.ZodType<TSlice>;
   readonly initial: TSlice;
+  /**
+   * Named ops. Payload type defaults to `any` so authors may omit annotations;
+   * prefer `{ payload: schema, apply }` for runtime validation.
+   */
   readonly ops?: Readonly<Record<string, SliceOpDef<TSlice, any>>>;
   readonly migrations?: Readonly<
     Record<number, (oldSlice: unknown) => TSlice>

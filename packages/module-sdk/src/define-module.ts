@@ -34,11 +34,16 @@ export interface DefinedModule extends Module {
 /**
  * Defines a product module (only supported author entry point).
  *
+ * @typeParam TSlice - primary state slice type (inferred from definition)
+ * @typeParam TConfig - module config section type
  * @param def - module definition (capabilities and/or object sugar)
  * @param options - optional factory config snapshot
  */
-export function defineModule(
-  def: ModuleDefinition,
+export function defineModule<
+  TSlice = JsonObject,
+  TConfig extends JsonObject = JsonObject,
+>(
+  def: ModuleDefinition<TSlice, TConfig>,
   options: DefineModuleOptions = {},
 ): DefinedModule {
   const normalized = normalizeModuleDefinition(def);
@@ -71,11 +76,16 @@ export function defineModule(
 /**
  * Safe variant returning Result instead of throw.
  *
+ * @typeParam TSlice - primary state slice type (inferred from definition)
+ * @typeParam TConfig - module config section type
  * @param def - module definition
  * @param options - optional factory config
  */
-export function tryDefineModule(
-  def: ModuleDefinition,
+export function tryDefineModule<
+  TSlice = JsonObject,
+  TConfig extends JsonObject = JsonObject,
+>(
+  def: ModuleDefinition<TSlice, TConfig>,
   options: DefineModuleOptions = {},
 ): Result<DefinedModule, Failure> {
   try {

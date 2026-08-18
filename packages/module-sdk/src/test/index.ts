@@ -11,28 +11,21 @@ import { createTestEngine } from "@rpengineext/core/testing";
 
 export interface TestModuleOptions {
   readonly meta?: JsonObject;
-  readonly moduleConfig?: JsonObject;
+  readonly moduleConfig?: Readonly<Record<string, JsonObject>>;
   readonly llm?: LlmPort;
   readonly agentsMode?: "mock" | "llm";
   readonly seed?: string;
 }
 
+type TestEngineSuccess = Extract<
+  Awaited<ReturnType<typeof createTestEngine>>,
+  { ok: true }
+>["value"];
+
 export interface ModuleTestHarness {
   readonly module: Module;
-  readonly engine: Awaited<
-    ReturnType<typeof createTestEngine>
-  > extends { ok: true; value: infer V }
-    ? V extends { engine: infer E }
-      ? E
-      : never
-    : never;
-  readonly runtime: Awaited<
-    ReturnType<typeof createTestEngine>
-  > extends { ok: true; value: infer V }
-    ? V extends { runtime: infer R }
-      ? R
-      : never
-    : never;
+  readonly engine: TestEngineSuccess["engine"];
+  readonly runtime: TestEngineSuccess["runtime"];
   readonly sessionId: string;
   /**
    * Submit a free_text player action.
@@ -58,9 +51,7 @@ export async function testModule(
     modules: [module],
     ...(options.llm ? { llm: options.llm } : {}),
     ...(options.agentsMode ? { agentsMode: options.agentsMode } : {}),
-    ...(options.moduleConfig
-      ? { config: { moduleConfig: options.moduleConfig } }
-      : {}),
+    ...(options.moduleConfig ? { moduleConfig: options.moduleConfig } : {}),
   });
   if (!created.ok) return created;
 

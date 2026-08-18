@@ -347,7 +347,12 @@ export function bindCompiledModule(
           fromVersion: Number(fromRaw),
           toVersion: ir.slice.schemaVersion,
           migrate(oldValue) {
-            return migrate(oldValue) as JsonObject;
+            try {
+              return ok(migrate(oldValue) as JsonObject);
+            } catch (e) {
+              if (isModuleDenial(e)) return err(failure(e.code, e.message));
+              throw e;
+            }
           },
         });
       }

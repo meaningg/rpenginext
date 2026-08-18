@@ -28,6 +28,8 @@ import {
   UpdateOutfitArgsSchema,
   UpdateOutfitResultSchema,
   type CharacterSlice,
+  type SeedCharacterPayload,
+  type SetOutfitPayload,
   type StoryCharacter,
 } from "./schema.ts";
 
@@ -73,7 +75,7 @@ export function createCharacterModule() {
       ops: {
         seed: {
           payload: SeedCharacterPayloadSchema,
-          apply: (_s, p): CharacterSlice => ({
+          apply: (_s: CharacterSlice, p: SeedCharacterPayload): CharacterSlice => ({
             schemaVersion: 1,
             present: true,
             name: p.name.trim(),
@@ -84,16 +86,15 @@ export function createCharacterModule() {
         },
         set_outfit: {
           payload: SetOutfitPayloadSchema,
-          apply: (s, p): CharacterSlice => {
-            const current = s as CharacterSlice;
-            if (!current.present) {
+          apply: (s: CharacterSlice, p: SetOutfitPayload): CharacterSlice => {
+            if (!s.present) {
               deny("COMMAND_INVALID", "cannot set outfit: character not present");
             }
             const outfit = p.outfit.trim();
             if (!outfit) {
               deny("COMMAND_INVALID", "outfit must be a non-empty string");
             }
-            return { ...current, outfit };
+            return { ...s, outfit };
           },
         },
       },
@@ -135,7 +136,7 @@ export function createCharacterModule() {
           ].join("\n"),
         };
       },
-      brief: ({ slice }) => {
+      brief: ({ slice }): JsonObject => {
         const s = slice as CharacterSlice;
         if (!s.present) return { present: false };
         return {

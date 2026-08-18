@@ -21,6 +21,7 @@ import {
   createEmptyWorkingMemorySlice,
   parseWorkingMemorySlice,
   WorkingMemorySliceSchema,
+  type AppendPairPayload,
   type WorkingMemorySlice,
 } from "./schema.ts";
 import {
@@ -51,8 +52,7 @@ export {
   selectLastPairs,
   type HistoryMessage,
 } from "./selectors/window.ts";
-export type { WorkingMemoryPair } from "./schema.ts";
-export type { WorkingMemorySlice } from "./schema.ts";
+export type { AppendPairPayload, WorkingMemoryPair, WorkingMemorySlice } from "./schema.ts";
 export {
   createEmptyWorkingMemorySlice,
   parseWorkingMemorySlice,
@@ -100,21 +100,18 @@ export function createWorkingMemoryModule(
         ops: {
           append_pair: {
             payload: AppendPairPayloadSchema,
-            apply: (s, p): WorkingMemorySlice => {
-              const current = s as WorkingMemorySlice;
-              return {
-                schemaVersion: 1,
-                entries: [
-                  ...current.entries,
-                  {
-                    turnId: p.turnId,
-                    user: p.user,
-                    assistant: p.assistant,
-                    createdAt: p.createdAt,
-                  },
-                ],
-              };
-            },
+            apply: (s: WorkingMemorySlice, p: AppendPairPayload): WorkingMemorySlice => ({
+              schemaVersion: 1,
+              entries: [
+                ...s.entries,
+                {
+                  turnId: p.turnId,
+                  user: p.user,
+                  assistant: p.assistant,
+                  createdAt: p.createdAt,
+                },
+              ],
+            }),
           },
         },
       },

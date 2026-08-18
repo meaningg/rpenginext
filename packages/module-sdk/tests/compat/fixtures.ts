@@ -26,7 +26,10 @@ export function createCompatSeedNarrativeModule() {
       ops: {
         seed: {
           payload: z.object({ text: z.string().min(1) }).strict(),
-          apply: (_s, p: { text: string }) => ({
+          apply: (
+            _s: { schemaVersion: 1; present: boolean; text: string },
+            p: { text: string },
+          ) => ({
             schemaVersion: 1 as const,
             present: true,
             text: p.text.trim(),
@@ -160,7 +163,10 @@ export function createCompatConfigModule() {
         ops: {
           add: {
             payload: z.object({ by: z.number().int() }).strict(),
-            apply: (s, p: { by: number }) => ({
+            apply: (
+              s: { schemaVersion: 1; total: number },
+              p: { by: number },
+            ) => ({
               ...s,
               total: s.total + p.by,
             }),
@@ -196,7 +202,10 @@ export function createCompatToolModule() {
       ops: {
         set_mark: {
           payload: z.object({ mark: z.string().min(1) }).strict(),
-          apply: (s, p: { mark: string }) => ({ ...s, mark: p.mark }),
+          apply: (
+            s: { schemaVersion: 1; mark: string },
+            p: { mark: string },
+          ) => ({ ...s, mark: p.mark }),
         },
       },
     },

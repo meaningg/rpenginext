@@ -1,3 +1,5 @@
+import type { JsonObject } from "@rpengineext/contracts";
+
 import type { Capability } from "./capabilities.ts";
 import type {
   AiCapability,
@@ -14,8 +16,14 @@ import type {
 /**
  * Author module definition (sugar object and/or capabilities array).
  * Both forms normalize to the same capability list.
+ *
+ * @typeParam TSlice - primary state slice type (inferred from `state.initial` / schema)
+ * @typeParam TConfig - module config section type
  */
-export interface ModuleDefinition {
+export interface ModuleDefinition<
+  TSlice = JsonObject,
+  TConfig extends JsonObject = JsonObject,
+> {
   readonly id: string;
   readonly version: string;
   readonly title: string;
@@ -29,14 +37,14 @@ export interface ModuleDefinition {
   readonly capabilities?: readonly Capability[];
 
   /** Object sugar → capabilities (merged with `capabilities`). */
-  readonly state?: Omit<StateCapability, "kind">;
-  readonly seed?: Omit<SeedCapability, "kind">;
-  readonly rules?: Omit<RulesCapability, "kind">;
-  readonly turn?: Omit<TurnCapability, "kind">;
-  readonly narrative?: Omit<NarrativeCapability, "kind">;
-  readonly ai?: Omit<AiCapability, "kind">;
-  readonly host?: Omit<HostCapability, "kind">;
-  readonly config?: Omit<ConfigCapability, "kind">;
+  readonly state?: Omit<StateCapability<TSlice>, "kind">;
+  readonly seed?: Omit<SeedCapability<TSlice, TConfig>, "kind">;
+  readonly rules?: Omit<RulesCapability<TSlice, TConfig>, "kind">;
+  readonly turn?: Omit<TurnCapability<TSlice, TConfig>, "kind">;
+  readonly narrative?: Omit<NarrativeCapability<TSlice, TConfig>, "kind">;
+  readonly ai?: Omit<AiCapability<TSlice, TConfig>, "kind">;
+  readonly host?: Omit<HostCapability<TSlice, TConfig>, "kind">;
+  readonly config?: Omit<ConfigCapability<TConfig>, "kind">;
   readonly access?: Omit<AccessCapability, "kind">;
 }
 

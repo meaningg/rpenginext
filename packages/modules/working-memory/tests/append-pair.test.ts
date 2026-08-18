@@ -36,10 +36,8 @@ describe("working_memory.append_pair", () => {
   test("edge: module appends pairs across turns", async () => {
     const created = await createTestEngine({
       modules: [createWorkingMemoryModule({ windowPairs: 3 })],
-      config: {
-        moduleConfig: {
-          working_memory: { windowPairs: 3 },
-        },
+      moduleConfig: {
+        working_memory: { windowPairs: 3 },
       },
     });
     expect(created.ok).toBe(true);

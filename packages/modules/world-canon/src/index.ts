@@ -1,4 +1,5 @@
 import { defineModule } from "@rpengineext/module-sdk";
+import type { JsonObject } from "@rpengineext/contracts";
 import { z } from "zod";
 
 import {
@@ -60,7 +61,7 @@ export function createWorldCanonModule() {
       ops: {
         seed: {
           payload: z.object({ text: z.string().min(1).max(MAX_CANON_LENGTH) }).strict(),
-          apply: (_s, p: { text: string }): WorldCanonSlice => ({
+          apply: (_s: WorldCanonSlice, p: { text: string }): WorldCanonSlice => ({
             schemaVersion: 1,
             present: true,
             text: p.text.trim(),
@@ -94,7 +95,7 @@ export function createWorldCanonModule() {
           ].join("\n"),
         };
       },
-      brief: ({ slice }) => {
+      brief: ({ slice }): JsonObject => {
         const s = slice as WorldCanonSlice;
         if (!s.present) return { present: false };
         return { present: true, charCount: s.text.length };

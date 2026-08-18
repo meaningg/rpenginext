@@ -3,6 +3,7 @@ import {
   failure,
   ok,
   type Failure,
+  type JsonObject,
   type Result,
 } from "@rpengineext/contracts";
 
@@ -15,10 +16,15 @@ import type {
 /**
  * Expands object sugar into capabilities and validates cardinality rules.
  *
+ * @typeParam TSlice - author slice type (erased after normalize)
+ * @typeParam TConfig - author config type (erased after normalize)
  * @param def - author definition
  */
-export function normalizeModuleDefinition(
-  def: ModuleDefinition,
+export function normalizeModuleDefinition<
+  TSlice = JsonObject,
+  TConfig extends JsonObject = JsonObject,
+>(
+  def: ModuleDefinition<TSlice, TConfig>,
 ): Result<NormalizedModuleDefinition, Failure> {
   if (!def.id?.trim()) {
     return err(failure("SCHEMA_INVALID", "module id is required"));
@@ -32,15 +38,18 @@ export function normalizeModuleDefinition(
 
   const capabilities: Capability[] = [...(def.capabilities ?? [])];
 
-  if (def.state) capabilities.push({ kind: "state", ...def.state });
-  if (def.seed) capabilities.push({ kind: "seed", ...def.seed });
-  if (def.rules) capabilities.push({ kind: "rules", ...def.rules });
-  if (def.turn) capabilities.push({ kind: "turn", ...def.turn });
-  if (def.narrative) capabilities.push({ kind: "narrative", ...def.narrative });
-  if (def.ai) capabilities.push({ kind: "ai", ...def.ai });
-  if (def.host) capabilities.push({ kind: "host", ...def.host });
-  if (def.config) capabilities.push({ kind: "config", ...def.config });
-  if (def.access) capabilities.push({ kind: "access", ...def.access });
+  // Generic author types erase to the closed Capability union at the IR boundary.
+  if (def.state) capabilities.push({ kind: "state", ...def.state } as Capability);
+  if (def.seed) capabilities.push({ kind: "seed", ...def.seed } as Capability);
+  if (def.rules) capabilities.push({ kind: "rules", ...def.rules } as Capability);
+  if (def.turn) capabilities.push({ kind: "turn", ...def.turn } as Capability);
+  if (def.narrative) {
+    capabilities.push({ kind: "narrative", ...def.narrative } as Capability);
+  }
+  if (def.ai) capabilities.push({ kind: "ai", ...def.ai } as Capability);
+  if (def.host) capabilities.push({ kind: "host", ...def.host } as Capability);
+  if (def.config) capabilities.push({ kind: "config", ...def.config } as Capability);
+  if (def.access) capabilities.push({ kind: "access", ...def.access } as Capability);
 
   const stateCaps = capabilities.filter((c) => c.kind === "state");
   if (stateCaps.length > 1) {
