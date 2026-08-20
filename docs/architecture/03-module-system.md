@@ -38,23 +38,32 @@
 | `fandom-canon` | RAG/поиск канона, proposal канон-фактов кампании |
 | `summarizer` | сжатие истории в memory items |
 
-Любой module (ваш или third-party) подключается одинаково: манифест + contracts.
+Любой module (ваш или third-party) подключается одинаково: **`defineModule` → compiled Module** + host wiring (profile / `extraModules`). Runtime boundary types live in `contracts`; author API is **module-sdk** only.
 
 ## 3. Manifest (нормативная структура)
 
-Логический schema (имена полей стабильны):
+Логический schema (имена полей стабильны). **Авторы не пишут манифест вручную** — его выводит `defineModule` / module-sdk.
+
+`engines.core` / `engines.contracts`: ranges stamped by the **sdk** in use.
+
+| Era | Typical engines ranges |
+|-----|------------------------|
+| Current monorepo **0.x** | `^0.1.0` (see `MODULE_SDK_VERSION` / package versions) |
+| After **Module Platform 1.0** tag | `^1.0.0` (spec 01 / 07) |
+
+Example shape (illustrative module id; versions follow era above):
 
 ```json
 {
   "id": "npc",
-  "version": "1.2.0",
+  "version": "0.1.0",
   "displayName": "NPC System",
   "description": "NPC entities, relations, turn intents",
   "engines": {
-    "core": "^1.0.0",
-    "contracts": "^1.0.0"
+    "core": "^0.1.0",
+    "contracts": "^0.1.0"
   },
-  "priority": 100,
+  "priority": 40,
   "provides": ["capability:npc", "agent-task:npc.voice"],
   "requires": ["capability:state-core"],
   "permissions": [
@@ -69,15 +78,16 @@
       "schemaVersion": 1
     }
   ],
-  "extensionPoints": [
+  "contributes": [
     "Guard",
-    "Planner",
     "TransitionContributor",
     "NarrativeContextProvider",
     "AfterCommitHook"
   ]
 }
 ```
+
+Note: runtime field name is **`contributes`** (typed ports the compiled module installs). Authors still never register ports directly.
 
 ### Правила манифеста
 

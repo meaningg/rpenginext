@@ -31,7 +31,8 @@
 }
 ```
 
-Тесты: `@rpengineext/core/testing` или harness `@rpengineext/module-sdk/test`.
+Тесты авторов: **`@rpengineext/module-sdk/test`** (SoT).  
+`@rpengineext/core/testing` — advanced/maintainer escape only.
 
 ---
 
@@ -40,7 +41,8 @@
 ```bash
 bun run create-module my-feature
 bun run create-module lore --recipe seed-narrative
-# recipes: state | seed-narrative | guard | full
+# recipes now: state | seed-narrative | guard | full
+# Platform 1.0 also: ai-tool | access-read | migrate
 ```
 
 ---
@@ -112,11 +114,14 @@ export function createMoodModule() {
 
 | API | Смысл |
 |-----|--------|
-| `ctx.op("name", payload?)` | изменить **свой** мир |
+| `ctx.op("name", payload?)` | изменить **свой** мир (только write-allowed moments) |
 | `deny(code, msg)` | отменить ход / op |
 | `ctx.scheduleSystem(…)` | только из `committed` |
 | `ctx.proposeOp` | в tool handler (= `op`) |
 | `ctx.readSlice` | чужой slice при `access.read` |
+| `ctx.readModel(name)` | Platform 1.0: stable cross-module query (fail loud if unknown) |
+
+`committed` + `ctx.op` → **запрещено** (fail loud `MODULE_MOMENT_OP_FORBIDDEN` at Platform 1.0; не silent-drop).
 
 ---
 
@@ -124,11 +129,12 @@ export function createMoodModule() {
 
 ```ts
 import { testModule } from "@rpengineext/module-sdk/test";
-// или
-import { createTestEngine } from "@rpengineext/core/testing";
+
+const t = await testModule(createMoodModule());
+// t.ok → await t.value.turn("привет") → t.value.slice
 ```
 
-Минимум: success / reject / edge.
+Минимум: success / reject / edge. Полный harness API — [spec 02](../../docs/specs/02-testing-harness-stress-ci.md).
 
 ---
 
@@ -151,7 +157,9 @@ defineModule
   → core ModuleRegistry
 ```
 
-- `bun run test:compat` — не ломать sdk ↔ core  
-- Deferred core moments: [ADR 0005](../../docs/adr/0005-moments-native-core.md)
+- `bun run test:compat` — не ломать sdk ↔ core (dual-path guard until ADR 0005)  
+- Platform 1.0: `test:modules-stress`, `test:platform`, freeze docs — [specs](../../docs/specs/README.md)  
+- Deferred core moments-native: [ADR 0005](../../docs/adr/0005-moments-native-core.md)
 
-Semver: additive capability fields = minor; breaking author/IR = major.
+Semver: additive capability fields = minor; breaking author/IR / moment permissions = major.  
+Current version: **0.1.0** (stamp **1.0.0** only with Platform release gate).

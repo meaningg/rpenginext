@@ -55,33 +55,66 @@ Goldens are the safety net for “core stable, modules evolve”.
 
 ## 5. Module test harness
 
-Author guide: [../modules/README.md](../modules/README.md) (§ тесты).
+Author guide: [../modules/README.md](../modules/README.md) (§ тесты).  
+Platform bar: [../specs/02-testing-harness-stress-ci.md](../specs/02-testing-harness-stress-ci.md).
 
-Published:
+### Author SoT (required path)
 
-- **`@rpengineext/core/testing`** — `createTestEngine({ modules, moduleConfig, … })`
-- **`@rpengineext/module-sdk/test`** — optional `testModule` harness
-- Compat gate: `bun run test:compat` (frozen sdk fixtures vs current core)
+**`@rpengineext/module-sdk/test`** — primary author harness:
+
+- `testModule` / `testModules` (multi-module)
+- `turn` / `action` / `systemTurn` / `waitIdle`
+- `save` / `load`, slice helpers, asserts
+- `fixedProseLlm` / `scriptedToolLlm`
 
 Typical module test (≥3: success / reject / edge):
 
 ```ts
-import { createTestEngine } from "@rpengineext/core/testing";
+import { describe, expect, test } from "bun:test";
+import {
+  testModule,
+  expectCommitted,
+  expectRejected,
+} from "@rpengineext/module-sdk/test";
 import { createMyModule } from "../src/index.ts";
 
-const created = await createTestEngine({
-  modules: [createMyModule()],
+describe("my-module", () => {
+  test("success", async () => {
+    const t = await testModule(createMyModule());
+    expect(t.ok).toBe(true);
+    if (!t.ok) return;
+    const turn = await t.value.turn("смотрю вокруг");
+    expectCommitted(turn);
+  });
 });
-// startSession → submitAction → assert TurnResult / state slice / mod.ir
 ```
 
-Authors must not need full app UI. Production dep: **module-sdk** only; `core` = devDependency.
+### Advanced / maintainer escape
+
+- **`@rpengineext/core/testing`** — `createTestEngine({ modules, … })` for core/pipeline fixtures and cases the harness does not cover yet.
+- Authors should **not** need this for normal module work once Platform 1.0 harness DoD is green.
+
+### Gates
+
+| Script | Role |
+|--------|------|
+| `test:compat` | frozen sdk fixtures ↔ current core (**required** on sdk/core PRs; dual-path guard until ADR 0005) |
+| `test:modules-stress` | N≥30 noop multi-module + S-cases (Platform 1.0) |
+| `test:module-boundaries` | no module→module runtime deps |
+| `test:scaffold-smoke` | all create-module recipes |
+| `test:platform` | compat + stress + core + first-party |
+| `test:e2e` / `smoke:play:mock` | host mock path |
+
+*Scripts beyond `test:compat` / package tests are Platform 1.0 deliverables — see specs/02 and specs/07.*
+
+Authors must not need full app UI. Production runtime dep: **module-sdk** + **zod**; `core` = devDependency only.
 
 ## 6. CI policy (target)
 
-- PR: unit + contract + golden + replay + mock e2e + **`test:compat`**.
-- Live LLM: manual/nightly only (`bun run test:e2e:live`, `smoke:play:live`).
-- Coverage: not vanity 100%; critical kernel paths mandatory.
+- PR (sdk/core/modules): unit + contract + golden + **`test:compat`**; platform scripts as they land.
+- Release / `test:platform` gate: full sequence in [specs/07](../specs/07-release-and-versioning.md).
+- Live LLM: manual/nightly only (`bun run test:e2e:live`, `smoke:play:live`) — **not** a tag blocker.
+- Coverage: not vanity 100%; critical kernel + atomicity + author error codes mandatory.
 
 ## 7. Non-flaky rules
 

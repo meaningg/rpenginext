@@ -1,7 +1,8 @@
 # Roadmap
 
 > **Статус:** Phase 4 complete + **Module SDK / CBMD** (ADR 0004)  
-> Phase 5+ next: product modules on `@rpengineext/module-sdk` (explicit tasks only). Core changes only via ADR.
+> **Next platform work:** [Module Platform 1.0 specs](../specs/README.md) (freeze SDK, harness, multi-module CI, host composition, release gate).  
+> Phase 5+ product modules (npc/plot/…) — **after** platform 1.0, explicit tasks only. Core changes only via ADR.
 
 ## Decisions locked
 
@@ -87,6 +88,42 @@
 
 **Exit:** core matches normative extension surface + hardening; unit/integration tests green. ✅
 
+## Phase 4.5 — Module Platform 1.0 (production, before mass product modules)
+
+Goal: **production** platform so dozens of modules ship without core churn.
+**No MVP tag** — single full gate in specs.
+
+**Specs (normative workstream):** [`docs/specs/README.md`](../specs/README.md)
+
+| Spec | Theme |
+|------|--------|
+| [00](../specs/00-overview-and-release-gate.md) | Production release DoD, anti-scope, sprints |
+| [01](../specs/01-sdk-contract-freeze.md) | SDK contract freeze + semver/IR policy |
+| [02](../specs/02-testing-harness-stress-ci.md) | Harness, stress N≥30, atomicity, `test:platform` |
+| [03](../specs/03-author-errors.md) | Stable author-facing errors E01–E14 |
+| [04](../specs/04-host-composition.md) | Profiles, env, CLI+API module list, strict caps |
+| [05](../specs/05-scaffold-and-migrations.md) | All recipes + migrations + scaffold CI |
+| [06](../specs/06-inter-module-and-sdk-gaps.md) | Boundaries, conventions, `ctx.readModel` |
+| [07](../specs/07-release-and-versioning.md) | 1.0 stamp, docs freeze, production tag gate |
+
+Checklist summary:
+
+- [ ] Specs 01–06 `done`; [00](../specs/00-overview-and-release-gate.md) §8 production DoD complete
+- [ ] `MODULE_SDK_VERSION = 1.0.0` + normative author docs
+- [ ] `test:compat` + `test:modules-stress` + `test:module-boundaries` + `test:scaffold-smoke` + `test:platform` + `test:e2e` + `smoke:play:mock` green
+
+**Exit:** Module Platform **1.0 production** tagged per [07](../specs/07-release-and-versioning.md).
+
+**Deferred by design (not MVP cuts):** ADR 0005, `turn.plan`, marketplace, multiplayer, live-LLM CI blocker, domain modules as content.
+
+**Until ADR 0005:** sdk IR ↔ ports dual-path is load-bearing — `test:compat` + stress required on sdk/core changes.
+
+**Normative locks already in specs (implement in 4.5, do not re-open casually):**
+- `ctx.readModel` fail-loud unknown (`MODULE_READ_MODEL_UNKNOWN`)
+- `ctx.op` in write-forbidden moments fail-loud (`MODULE_MOMENT_OP_FORBIDDEN`, esp. `committed`)
+- host composition precedence + enabled∩disabled fail
+- author tests SoT = `@rpengineext/module-sdk/test`
+
 ## Phase 5+ — Further product modules (separate tasks only)
 
 Shipped first-party (not “future examples”), all on **module-sdk**:
@@ -102,6 +139,7 @@ Shipped first-party (not “future examples”), all on **module-sdk**:
 When requested explicitly, one **new** module per task, against module-sdk:
 
 - candidates: npc, plot-controller, richer fandom-canon/RAG, summarizer, …
+- Start these **after** Phase 4.5 production platform tag (fixture modules inside platform tests do not count as product modules).
 
 ## Explicit non-goals until later
 

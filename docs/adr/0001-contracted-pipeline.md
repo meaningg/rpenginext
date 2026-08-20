@@ -27,13 +27,14 @@ Accepted (implemented through Phase 4)
 
 - authoritative `StateKernel` + **full-atomic** turn (any fatal failure → rollback to turn start);
 - single late `COMMIT` publishes state + passage + journal together;
-- closed set of extension points;
+- closed set of extension points (engine-internal contribution bus);
 - modules via manifest/permissions/capabilities;
+- **author path (superseded detail):** product/external modules use `@rpengineext/module-sdk` / `defineModule` — see [ADR 0004](./0004-module-sdk-cbmd.md); authors do **not** learn pipeline stages or raw ports;
 - all LLM calls via `AgentOrchestrator`;
 - narrative works from draft brief and is inside the atomic boundary;
 - v1 hosts = CLI + HTTP API + Web (see ADR 0002); v1 persistence = `bun:sqlite`;
 - further domain modules are not auto-implemented without an explicit task;
-- `packages/contracts` is the stability boundary for multi-author development.
+- `packages/contracts` is the runtime stability boundary; **author** stability boundary is `module-sdk` (ADR 0004).
 
 ## Consequences
 
@@ -47,10 +48,11 @@ Accepted (implemented through Phase 4)
 
 ### Negative / costs
 
-- more boilerplate (manifests, schemas, commands);
+- more boilerplate (manifests, schemas, commands) — mitigated for authors by Module SDK (ADR 0004);
 - LLM cannot freely invent irreversible world facts in prose without commands;
-- new extension points require ADR discipline;
-- authors must learn pipeline stages.
+- new **engine** extension points require ADR discipline;
+- maintainers still reason about pipeline stages + ports; authors use moments/capabilities only;
+- until [ADR 0005](./0005-moments-native-core.md), sdk IR bind adapts onto ports bus (dual-path) — guarded by `test:compat` / stress.
 
 ### Neutral
 
@@ -68,4 +70,7 @@ Accepted (implemented through Phase 4)
 - [x] Core pipeline + full-atomic turns (Phases 2–4)
 - [x] Web host, SSE, draft streaming — [ADR 0002](./0002-web-host-and-streaming.md)
 - [x] Tool-calling agents + background system turns — [ADR 0003](./0003-tool-calling-and-background-system-turns.md)
+- [x] Module SDK author path — [ADR 0004](./0004-module-sdk-cbmd.md)
+- [ ] Module Platform 1.0 production tag — [docs/specs](../specs/README.md)
+- [ ] Moments-native core (optional) — [ADR 0005](./0005-moments-native-core.md)
 - [ ] Possibly ADR for soft-commit narrative invent loop (not v1; still rejected)
