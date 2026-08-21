@@ -7,6 +7,19 @@ import {
   type RefObject,
 } from "react";
 
+import { ensurePlayer } from "../../../entities/player/api.ts";
+import type { PlayerCredentials } from "../../../entities/player/model.ts";
+import {
+  getSession,
+  renameSession,
+  saveSession,
+} from "../../../entities/session/api.ts";
+import type { SessionView } from "../../../entities/session/model.ts";
+import {
+  openSessionEvents,
+  submitAction,
+} from "../../../entities/turn/api.ts";
+import type { Passage } from "../../../entities/turn/model.ts";
 import { stageLabel, COPY } from "../../../shared/config/copy.ts";
 import {
   createMessageId,
@@ -14,18 +27,9 @@ import {
   saveTranscript,
   type ChatMessage,
 } from "../../../shared/lib/chat-transcript.ts";
+import { toUserMessage } from "../../../shared/lib/errors.ts";
 import { extractStreamingProse } from "../../../shared/lib/extract-streaming-prose.ts";
-import {
-  ensurePlayer,
-  getSession,
-  openSessionEvents,
-  renameSession,
-  saveSession,
-  submitAction,
-  type Passage,
-  type PlayerCredentials,
-  type SessionView,
-} from "../../../shared/api/client.ts";
+import { isEnterKey } from "../../../shared/lib/hotkeys.ts";
 import {
   isInternalPassageProse,
   isPlayerTurnKind,
@@ -34,6 +38,8 @@ import {
 const NARRATIVE_TASK = "narrative.write";
 const DIALOGUE_PREFS_KEY = "rp.ui.dialogueOpen";
 const WIDE_MQ = "(min-width: 1280px)";
+/** Soft stall hint when a turn stays busy without stream progress. */
+const STALL_MS = 18_000;
 
 export interface UseSessionPlayResult {
   readonly session: SessionView | null;
@@ -53,6 +59,8 @@ export interface UseSessionPlayResult {
   readonly rename: (title: string) => Promise<void>;
   readonly onComposerKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   readonly focusMessage: (id: string) => void;
+  readonly focusComposer: () => void;
+  readonly applyExample: (example: string) => void;
   readonly clearError: () => void;
   readonly showTyping: boolean;
 }
@@ -80,6 +88,9 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
   const messagesRef = useRef<ChatMessage[]>([]);
   const rawDraftRef = useRef("");
   const finalizedTurnRef = useRef(false);
+  const pendingUserIdRef = useRef<string | null>(null);
+  const pendingTextRef = useRef<string | null>(null);
+  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -92,6 +103,22 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
     setDialogueOpenState(stored ?? wide);
   }, []);
 
+  const clearStallTimer = useCallback(() => {
+    if (stallTimerRef.current != null) {
+      clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = null;
+    }
+  }, []);
+
+  const armStallTimer = useCallback(() => {
+    clearStallTimer();
+    stallTimerRef.current = setTimeout(() => {
+      setStageHint((prev) => prev ?? COPY.play.stillWorking);
+    }, STALL_MS);
+  }, [clearStallTimer]);
+
+  useEffect(() => () => clearStallTimer(), [clearStallTimer]);
+
   const setDialogueOpen = useCallback((open: boolean) => {
     setDialogueOpenState(open);
     try {
@@ -100,6 +127,67 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
       /* ignore */
     }
   }, []);
+
+  const resizeComposer = useCallback((value: string) => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    if (value) {
+      el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+    }
+  }, []);
+
+  const restoreComposer = useCallback(
+    (value: string) => {
+      setText(value);
+      requestAnimationFrame(() => {
+        resizeComposer(value);
+        inputRef.current?.focus();
+        const el = inputRef.current;
+        if (el) {
+          const len = el.value.length;
+          el.setSelectionRange(len, len);
+        }
+      });
+    },
+    [resizeComposer],
+  );
+
+  /**
+   * Reject path: drop streaming draft, remove pending user bubble, restore text.
+   */
+  const rejectPendingTurn = useCallback(
+    (message: string) => {
+      clearStallTimer();
+      rawDraftRef.current = "";
+      finalizedTurnRef.current = true;
+      streamMsgIdRef.current = null;
+      setBusy(false);
+      setStageHint(null);
+      setError(message);
+
+      const pendingId = pendingUserIdRef.current;
+      const pendingText = pendingTextRef.current;
+      pendingUserIdRef.current = null;
+      pendingTextRef.current = null;
+
+      setMessages((prev) => {
+        const next = prev.filter(
+          (m) => !m.streaming && m.id !== pendingId,
+        );
+        messagesRef.current = next;
+        if (sessionId) saveTranscript(sessionId, next);
+        return next;
+      });
+
+      if (pendingText) {
+        restoreComposer(pendingText);
+      } else {
+        inputRef.current?.focus();
+      }
+    },
+    [clearStallTimer, restoreComposer, sessionId],
+  );
 
   const commitMessages = useCallback(
     (next: ChatMessage[]) => {
@@ -145,10 +233,11 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
       const prose = extractStreamingProse(rawDraftRef.current);
       if (prose) {
         setStageHint(null);
+        armStallTimer();
         upsertStreamingAssistant(prose);
       }
     },
-    [upsertStreamingAssistant],
+    [armStallTimer, upsertStreamingAssistant],
   );
 
   const finalizeAssistant = useCallback(
@@ -204,44 +293,53 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
       streamMsgIdRef.current = null;
       rawDraftRef.current = "";
       finalizedTurnRef.current = true;
+      pendingUserIdRef.current = null;
+      pendingTextRef.current = null;
+      clearStallTimer();
       commitMessages(next);
     },
-    [commitMessages],
+    [clearStallTimer, commitMessages],
   );
 
   const load = useCallback(async () => {
-    const p = await ensurePlayer();
-    setPlayer(p);
-    const view = await getSession(p, sessionId);
-    setSession(view);
+    try {
+      const p = await ensurePlayer();
+      setPlayer(p);
+      const view = await getSession(p, sessionId);
+      setSession(view);
 
-    const stored = loadTranscript(sessionId).filter(
-      (m) => !isInternalPassageProse(m.content),
-    );
-    if (stored.length > 0) {
-      messagesRef.current = stored;
-      setMessages(stored);
-      saveTranscript(sessionId, stored);
-      lastPassageIdRef.current = view.passage?.id ?? null;
-    } else if (
-      view.passage?.prose &&
-      !isInternalPassageProse(view.passage.prose)
-    ) {
-      const seed: ChatMessage = {
-        id: createMessageId("open"),
-        role: "assistant",
-        content: view.passage.prose,
-        createdAt: new Date().toISOString(),
-      };
-      messagesRef.current = [seed];
-      setMessages([seed]);
-      saveTranscript(sessionId, [seed]);
-      lastPassageIdRef.current = view.passage.id;
-    } else {
-      messagesRef.current = [];
-      setMessages([]);
+      const stored = loadTranscript(sessionId).filter(
+        (m) => !isInternalPassageProse(m.content),
+      );
+      if (stored.length > 0) {
+        messagesRef.current = stored;
+        setMessages(stored);
+        saveTranscript(sessionId, stored);
+        lastPassageIdRef.current = view.passage?.id ?? null;
+      } else if (
+        view.passage?.prose &&
+        !isInternalPassageProse(view.passage.prose)
+      ) {
+        const seed: ChatMessage = {
+          id: createMessageId("open"),
+          role: "assistant",
+          content: view.passage.prose,
+          createdAt: new Date().toISOString(),
+        };
+        messagesRef.current = [seed];
+        setMessages([seed]);
+        saveTranscript(sessionId, [seed]);
+        lastPassageIdRef.current = view.passage.id;
+      } else {
+        messagesRef.current = [];
+        setMessages([]);
+      }
+      setHydrated(true);
+      setError(null);
+    } catch (err) {
+      setError(toUserMessage(err));
+      setHydrated(true);
     }
-    setHydrated(true);
   }, [sessionId]);
 
   useEffect(() => {
@@ -252,13 +350,15 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
     setBusy(false);
     setError(null);
     setStageHint(null);
+    setText("");
     streamMsgIdRef.current = null;
     lastPassageIdRef.current = null;
     finalizedTurnRef.current = false;
-    void load().catch((err) =>
-      setError(err instanceof Error ? err.message : String(err)),
-    );
-  }, [load]);
+    pendingUserIdRef.current = null;
+    pendingTextRef.current = null;
+    clearStallTimer();
+    void load();
+  }, [load, clearStallTimer]);
 
   useEffect(() => {
     if (!player || !sessionId) return;
@@ -290,15 +390,20 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
         setError(null);
         setStageHint(COPY.stages.thinking);
         streamMsgIdRef.current = null;
+        armStallTimer();
       }
 
       if (ev.type === "turn.stage" && playerFacingTurn) {
         const label = stageLabel(ev.stage, ev.phase);
-        if (label) setStageHint(label);
+        if (label) {
+          setStageHint(label);
+          armStallTimer();
+        }
       }
 
       if (ev.type === "agent.task.started" && ev.taskType === NARRATIVE_TASK) {
         setStageHint(COPY.stages.writing);
+        armStallTimer();
       }
 
       if (
@@ -323,8 +428,11 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
             .catch(() => undefined);
           return;
         }
+        clearStallTimer();
         setBusy(false);
         setStageHint(null);
+        pendingUserIdRef.current = null;
+        pendingTextRef.current = null;
         void getSession(player, sessionId)
           .then((view) => {
             setSession(view);
@@ -340,36 +448,38 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
 
       if (ev.type === "turn.rejected") {
         if (!playerFacingTurn) return;
-        rawDraftRef.current = "";
-        finalizedTurnRef.current = true;
-        setBusy(false);
-        setStageHint(null);
-        streamMsgIdRef.current = null;
-        setError(ev.failure?.message ?? COPY.common.error);
-        setMessages((prev) => {
-          const next = prev.filter((m) => !m.streaming);
-          messagesRef.current = next;
-          return next;
-        });
+        const detail = ev.failure?.message?.trim();
+        rejectPendingTurn(
+          detail
+            ? `${COPY.play.rejected} ${detail}`
+            : COPY.play.rejected,
+        );
       }
     });
 
     return close;
-  }, [player, sessionId, appendStreamDelta, finalizeAssistant]);
+  }, [
+    player,
+    sessionId,
+    appendStreamDelta,
+    finalizeAssistant,
+    armStallTimer,
+    clearStallTimer,
+    rejectPendingTurn,
+  ]);
 
   const submit = useCallback(async () => {
     if (!player || !text.trim() || busy) return;
     const content = text.trim();
     setText("");
-    if (inputRef.current) {
-      inputRef.current.style.height = "auto";
-    }
+    resizeComposer("");
     setBusy(true);
     setError(null);
     rawDraftRef.current = "";
     finalizedTurnRef.current = false;
     setStageHint(COPY.stages.sending);
     streamMsgIdRef.current = null;
+    armStallTimer();
 
     const userMsg: ChatMessage = {
       id: createMessageId("user"),
@@ -377,6 +487,8 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
       content,
       createdAt: new Date().toISOString(),
     };
+    pendingUserIdRef.current = userMsg.id;
+    pendingTextRef.current = content;
     commitMessages([
       ...messagesRef.current.filter((m) => !m.streaming),
       userMsg,
@@ -393,48 +505,73 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
         if (!isInternalPassageProse(result.passage.prose)) {
           finalizeAssistant(result.passage.prose, result.passage.id);
         }
+        clearStallTimer();
         setBusy(false);
         setStageHint(null);
+        pendingUserIdRef.current = null;
+        pendingTextRef.current = null;
       } else if ("status" in result && result.status === "rejected") {
-        setError(result.failure.message);
-        setBusy(false);
-        setStageHint(null);
+        const detail = result.failure.message?.trim();
+        rejectPendingTurn(
+          detail
+            ? `${COPY.play.rejected} ${detail}`
+            : COPY.play.rejected,
+        );
       }
     } catch (err) {
-      setBusy(false);
-      setStageHint(null);
-      setError(err instanceof Error ? err.message : String(err));
+      rejectPendingTurn(toUserMessage(err));
     } finally {
       inputRef.current?.focus();
     }
-  }, [player, text, busy, sessionId, commitMessages, finalizeAssistant]);
+  }, [
+    player,
+    text,
+    busy,
+    sessionId,
+    commitMessages,
+    finalizeAssistant,
+    armStallTimer,
+    clearStallTimer,
+    rejectPendingTurn,
+    resizeComposer,
+  ]);
 
   const save = useCallback(async () => {
     if (!player) return null;
-    const saved = await saveSession(player, sessionId);
-    return { revision: saved.revision };
+    try {
+      const saved = await saveSession(player, sessionId);
+      return { revision: saved.revision };
+    } catch (err) {
+      throw new Error(toUserMessage(err));
+    }
   }, [player, sessionId]);
 
   const rename = useCallback(
     async (title: string) => {
       if (!player) return;
-      const next = await renameSession(player, sessionId, title);
-      setSession((prev) =>
-        prev
-          ? {
-              ...prev,
-              title: next.title,
-              updatedAt: next.updatedAt,
-            }
-          : prev,
-      );
+      try {
+        const next = await renameSession(player, sessionId, title);
+        setSession((prev) =>
+          prev
+            ? {
+                ...prev,
+                title: next.title,
+                updatedAt: next.updatedAt,
+              }
+            : prev,
+        );
+      } catch (err) {
+        throw new Error(toUserMessage(err));
+      }
     },
     [player, sessionId],
   );
 
   const onComposerKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.key === "Enter" && !event.shiftKey) {
+      const isMod = event.metaKey || event.ctrlKey;
+      // Use physical Enter (code) so numpad / any layout behaves the same.
+      if (isEnterKey(event) && (isMod || !event.shiftKey)) {
         event.preventDefault();
         void submit();
       }
@@ -448,6 +585,18 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
     const el = document.getElementById(`turn-${id}`);
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, []);
+
+  const focusComposer = useCallback(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const applyExample = useCallback(
+    (example: string) => {
+      if (busy) return;
+      restoreComposer(example);
+    },
+    [busy, restoreComposer],
+  );
 
   const showTyping = busy && !messages.some((m) => m.streaming);
 
@@ -469,6 +618,8 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
     rename,
     onComposerKeyDown,
     focusMessage,
+    focusComposer,
+    applyExample,
     clearError: () => setError(null),
     showTyping,
   };
