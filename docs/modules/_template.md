@@ -88,52 +88,31 @@ export function createExampleModule() {
 
 ## `tests/example.test.ts`
 
+Author SoT: `@rpengineext/module-sdk/test` (не `createTestEngine`).
+
 ```ts
 import { describe, expect, test } from "bun:test";
-import { createTestEngine } from "@rpengineext/core/testing";
+import { testModule } from "@rpengineext/module-sdk/test";
 import { createExampleModule } from "../src/index.ts";
 
 describe("example module", () => {
   test("success: ход коммитится и ставит flag", async () => {
-    const created = await createTestEngine({
-      modules: [createExampleModule()],
-    });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
+    const t = await testModule(createExampleModule());
+    expect(t.ok).toBe(true);
+    if (!t.ok) return;
 
-    const session = await created.value.engine.startSession();
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
-
-    const turn = await session.value.submitAction({
-      kind: "free_text",
-      text: "hello",
-    });
+    const turn = await t.value.turn("hello");
     expect(turn.status).toBe("committed");
-
-    const state = created.value.runtime.getSessionState(session.value.sessionId);
-    const slice = state?.slices.example as { flag: boolean };
-    expect(slice.flag).toBe(true);
+    expect((t.value.slice as { flag: boolean }).flag).toBe(true);
   });
 
   test("error: guard отклоняет nope", async () => {
-    const created = await createTestEngine({
-      modules: [createExampleModule()],
-    });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-    const session = await created.value.engine.startSession();
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
+    const t = await testModule(createExampleModule());
+    expect(t.ok).toBe(true);
+    if (!t.ok) return;
 
-    const before = created.value.runtime.getSessionState(session.value.sessionId);
-    const turn = await session.value.submitAction({
-      kind: "free_text",
-      text: "nope",
-    });
+    const turn = await t.value.turn("nope");
     expect(turn.status).toBe("rejected");
-    const after = created.value.runtime.getSessionState(session.value.sessionId);
-    expect(after?.meta.revision).toBe(before?.meta.revision);
   });
 
   test("edge: IR foundation", () => {
@@ -151,4 +130,5 @@ describe("example module", () => {
 2. Поля slice  
 3. Список ops  
 4. Откуда seed (если есть)  
-5. Ограничения v1  
+5. Public contract (provides/requires/slice/…) — Platform 1.0  
+6. Ограничения v1  

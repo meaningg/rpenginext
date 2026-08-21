@@ -6,6 +6,9 @@
 
 Все фрагменты живут **внутри** `defineModule({ … })`, если не сказано иное.
 
+Тесты авторов: `@rpengineext/module-sdk/test` (§10).  
+Scaffold recipes сейчас: `state | seed-narrative | guard | full`; Platform 1.0: + `ai-tool | access-read | migrate` ([spec 05](../specs/05-scaffold-and-migrations.md)).
+
 ---
 
 ## 1. Seed + system prompt
@@ -244,6 +247,8 @@ export function createMoodModule(opts: { step?: number } = {}) {
 
 **Идея:** после успешного player-хода поставить system turn → agent task → tool → `proposeOp`.
 
+В `committed` **нельзя** `ctx.op` (observe + `scheduleSystem` only; Platform 1.0 — fail loud).
+
 ```ts
 turn: {
   committed(ctx) {
@@ -392,6 +397,8 @@ turn: {
 
 ## 10. Тестовый каркас
 
+**SoT:** harness ниже. `createTestEngine` — только advanced/maintainer.
+
 ```ts
 import { describe, expect, test } from "bun:test";
 import { testModule } from "@rpengineext/module-sdk/test";
@@ -447,4 +454,5 @@ await testModule(createMoodModule(), {
 | Все поля и границы | [sdk-reference.md](./sdk-reference.md) |
 | Как писать Zod | [schemas.md](./schemas.md) |
 | Старт с нуля | [README.md](./README.md) |
+| Platform 1.0 (harness/host/errors) | [../specs/README.md](../specs/README.md) |
 | Живой код | `packages/modules/*` |

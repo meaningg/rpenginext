@@ -10,14 +10,17 @@
 
 ## 2. Port
 
+> **Logical sketch** below. **Source of truth** for method names/signatures is
+> `@rpengineext/contracts` (`PersistencePort` and related types). Drivers may expose
+> richer helpers (e.g. atomic `commitTurn`) as long as core only depends on the port.
+
 ```text
 PersistencePort {
-  save(snapshot: SessionSnapshot): Promise<void>
-  load(sessionId: string): Promise<SessionSnapshot | null>
-  appendJournal(sessionId: string, entries: JournalEntry[]): Promise<void>
-  readJournal(sessionId: string, fromRevision?: number): Promise<JournalEntry[]>
-  delete?(sessionId: string): Promise<void>
-  list?(filter?): Promise<SessionMeta[]>
+  // logical capabilities — see contracts for exact API:
+  save / load session snapshot
+  append + read journal
+  atomic turn commit unit (state + passage + journal) where required by core
+  optional delete / list
 }
 ```
 

@@ -29,6 +29,9 @@ Names from `HOST_ENV` / related readers:
 | `RP_LOG_LEVEL` | `debug` / `info` / `warn` / `error` | default `info` |
 | `RP_LOG_JSON` | `1` = JSON logs | default pretty |
 | `RP_WORKING_MEMORY_WINDOW` | last-N chat pairs | positive int; default `12` |
+| `RP_MODULE_PROFILE` | first-party module profile | `core-book` (default) \| `minimal` \| `none` — **Platform 1.0** ([specs/04](../specs/04-host-composition.md)); *current 0.x host may still hardcode core-book set* |
+| `RP_MODULES` | comma module ids | replaces profile first-party set (list order) |
+| `RP_DISABLE_MODULES` | comma module ids | remove from resolved set after profile/list |
 | `RP_AGENTS_STREAMING` | `0` disables draft stream | default on |
 | `RP_HTTP_HOST` | API bind host | default `127.0.0.1` |
 | `RP_HTTP_PORT` | API bind port | default `8787`; `0` = ephemeral (tests) |
@@ -46,9 +49,10 @@ Agents mode: live if LLM credentials present; otherwise mock. CLI/API `--mock` f
 ```text
 EngineConfig {
   modules: {
-    enabled: string[]            // module ids
-    paths?: string[]             // discover paths
+    enabled: string[]            // module ids (engine-level; host composition may pre-resolve)
+    paths?: string[]             // reserved; not required for trusted in-process catalog
     strictManifest: boolean
+    failOnMissingCapability: boolean  // production default true
   }
   moduleConfig: {
     [moduleId]: object           // validated by registerConfigSchema
@@ -103,9 +107,25 @@ EngineConfig {
 
 ## 4. Module enablement
 
-- Host wires modules explicitly in `createHostRuntime` (defaults + `extraModules`).
-- `modules.enabled` / discover paths remain available for future dynamic load.
-- Production host should use an explicit module list (no silent auto-discovery of untrusted code).
+**Target (Module Platform 1.0)** — normative workstream: [specs/04-host-composition.md](../specs/04-host-composition.md).
+
+| Mechanism | Role |
+|-----------|------|
+| `moduleProfile` / `RP_MODULE_PROFILE` | first-party set: `core-book` (default), `minimal`, `none` |
+| `RP_MODULES` / enable lists | replace or extend first-party ids from host catalog |
+| `RP_DISABLE_MODULES` / `disabledModuleIds` | remove ids after resolution |
+| `extraModules` | append prebuilt `Module` instances (external/tests) |
+| `modules` option | **exclusive** full override (then `extraModules` only) |
+
+Rules:
+
+- Precedence: **code options > env > defaults** (see spec 04 matrix).
+- Unknown catalog id → boot fail `MODULE_UNKNOWN`.
+- `enabled ∩ disabled` non-empty → boot fail (no guess).
+- Default production: **strict missing capability = ON** (`failOnMissingCapability`).
+- No silent auto-discovery of untrusted code / remote plugins in v1.
+
+**Current 0.x (until spec 04 done):** `createHostRuntime` hardcodes working-memory + world-canon + character and accepts `extraModules` only. Env profile knobs above are **specified for 1.0**, not all implemented yet.
 
 ## 5. Feature flags
 
