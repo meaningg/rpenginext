@@ -25,6 +25,7 @@
 | [docs/architecture/08-configuration.md](./docs/architecture/08-configuration.md) | Конфиг |
 | [docs/architecture/09-testing.md](./docs/architecture/09-testing.md) | Тесты |
 | [docs/architecture/10-roadmap.md](./docs/architecture/10-roadmap.md) | Фазы внедрения |
+| [docs/specs/README.md](./docs/specs/README.md) | **Module Platform 1.0** — specs, DoD, verification |
 | [docs/architecture/11-repository-structure.md](./docs/architecture/11-repository-structure.md) | Структура репо |
 | [docs/architecture/12-extension-surface.md](./docs/architecture/12-extension-surface.md) | Internal runtime ports (maintainers; не author API) |
 | [docs/architecture/13-turn-tracing.md](./docs/architecture/13-turn-tracing.md) | Markdown-трейсы хода (core debug/AI control) |
@@ -125,6 +126,7 @@ bun run web
 # 1. каркас
 bun run create-module mood
 # recipes: state | seed-narrative | guard | full
+# Platform 1.0 also: ai-tool | access-read | migrate
 # bun run create-module lore --recipe seed-narrative
 
 bun install
@@ -147,10 +149,10 @@ export function createMoodModule() {
 }
 ```
 
-3. Подключить фабрику в host (`host-bootstrap` / CLI / API).  
-4. Тесты: success / reject / edge.  
-5. Зависимость только **`@rpengineext/module-sdk`** (не core internals, не LLM SDK).  
-6. Шаблон: [`docs/modules/_template.md`](./docs/modules/_template.md) · reference: [`sdk-reference.md`](./docs/modules/sdk-reference.md) · ADR: [0004](./docs/adr/0004-module-sdk-cbmd.md).
+3. Подключить: `extraModules` в `createHostRuntime` (0.x); profiles/env — Platform 1.0 ([specs/04](./docs/specs/04-host-composition.md)).  
+4. Тесты через **`@rpengineext/module-sdk/test`**: success / reject / edge.  
+5. Runtime dep только **`@rpengineext/module-sdk`** + zod (не core internals, не LLM SDK, не другие `module-*`).  
+6. Шаблон: [`docs/modules/_template.md`](./docs/modules/_template.md) · reference: [`sdk-reference.md`](./docs/modules/sdk-reference.md) · platform: [`docs/specs`](./docs/specs/README.md) · ADR: [0004](./docs/adr/0004-module-sdk-cbmd.md).
 
 ## Licence
 

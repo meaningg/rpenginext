@@ -1,80 +1,65 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { Link, useParams } from "react-router-dom";
 
-import { BrowseLayout } from "../layouts/BrowseLayout.tsx";
-import {
-  createSession,
-  ensurePlayer,
-  getTemplate,
-  type StoryTemplateSummary,
-} from "../shared/api/client.ts";
-import { COPY } from "../shared/config/copy.ts";
 import {
   Badge,
-  Button,
-  Card,
-  ErrorBanner,
-  Input,
+  ErrorState,
   Skeleton,
-} from "../shared/ui/index.ts";
+} from "../design-system/index.ts";
+import { usePlayerQuery } from "../entities/player/queries.ts";
+import { useStoryQuery } from "../entities/story/queries.ts";
+import { StartSessionForm } from "../features/stories/ui/StartSessionForm.tsx";
+import { COPY } from "../shared/config/copy.ts";
+import { AppShell } from "../widgets/app-shell/AppShell.tsx";
 
 /**
  * Story detail + session start.
  */
 export function StoryDetailPage() {
   const { templateId = "" } = useParams();
-  const navigate = useNavigate();
-  const [template, setTemplate] = useState<StoryTemplateSummary | null>(null);
-  const [title, setTitle] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const player = usePlayerQuery();
+  const story = useStoryQuery(templateId);
 
-  useEffect(() => {
-    void (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        await ensurePlayer();
-        const next = await getTemplate(templateId);
-        setTemplate(next);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [templateId]);
+  const error =
+    player.error instanceof Error
+      ? player.error.message
+      : story.error instanceof Error
+        ? story.error.message
+        : player.error || story.error
+          ? COPY.common.error
+          : null;
 
-  const start = async () => {
-    if (!template) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const player = await ensurePlayer();
-      const created = await createSession(
-        player,
-        template.id,
-        title.trim() || undefined,
-      );
-      navigate(`/play/${created.session.sessionId}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setBusy(false);
-    }
-  };
+  const loading = player.isLoading || story.isLoading;
+  const template = story.data;
 
   return (
-    <BrowseLayout>
-      <div className="mx-auto max-w-2xl space-y-6">
+    <AppShell>
+      <div className="mx-auto max-w-3xl space-y-6 animate-fade-in">
         <Link
           to="/"
-          className="inline-flex text-sm text-zinc-500 transition hover:text-zinc-200"
+          className="inline-flex items-center gap-1.5 text-sm text-fg-subtle transition hover:text-fg"
         >
-          ← {COPY.stories.back}
+          <ArrowLeft className="h-3.5 w-3.5" />
+          {COPY.stories.back}
         </Link>
 
-        {error ? <ErrorBanner message={error} /> : null}
+        {error ? (
+          <ErrorState
+            message={error}
+            action={
+              <button
+                type="button"
+                className="text-sm font-medium text-rose-100 underline-offset-4 hover:underline"
+                onClick={() => {
+                  void player.refetch();
+                  void story.refetch();
+                }}
+              >
+                {COPY.common.retry}
+              </button>
+            }
+          />
+        ) : null}
 
         {loading || !template ? (
           <div className="space-y-3">
@@ -85,10 +70,15 @@ export function StoryDetailPage() {
         ) : (
           <>
             <div className="space-y-3">
-              <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">
-                {template.title}
-              </h1>
-              <p className="text-[15px] leading-relaxed text-zinc-400">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-3xl font-semibold tracking-tight text-fg">
+                  {template.title}
+                </h1>
+                <span className="font-mono text-xs text-fg-faint">
+                  v{template.version}
+                </span>
+              </div>
+              <p className="text-[15px] leading-relaxed text-fg-muted">
                 {template.synopsis}
               </p>
               {template.tags.length > 0 ? (
@@ -100,37 +90,10 @@ export function StoryDetailPage() {
               ) : null}
             </div>
 
-            <Card className="space-y-4">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="session-title"
-                  className="text-sm font-medium text-zinc-200"
-                >
-                  {COPY.stories.sessionTitle}
-                </label>
-                <Input
-                  id="session-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder={COPY.stories.sessionTitlePlaceholder}
-                  maxLength={120}
-                />
-                <p className="text-xs text-zinc-600">
-                  {COPY.stories.sessionTitleHint}
-                </p>
-              </div>
-              <Button
-                size="lg"
-                loading={busy}
-                onClick={() => void start()}
-                className="w-full sm:w-auto"
-              >
-                {busy ? COPY.stories.starting : COPY.stories.start}
-              </Button>
-            </Card>
+            <StartSessionForm templateId={template.id} />
           </>
         )}
       </div>
-    </BrowseLayout>
+    </AppShell>
   );
 }

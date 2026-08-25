@@ -73,25 +73,28 @@ flowchart TD
 
 ### Что можно в каждом moment
 
-| Moment | Когда | `ctx.op` | `deny` | `scheduleSystem` | `passage` |
-|--------|--------|----------|--------|------------------|-----------|
-| `seed.apply` | new game, есть meta | да | да* | нет | нет |
-| `rules.guard` | до изменений | нет смысла** | **да** | нет | нет |
-| `rules.soft` | предупреждения | нет | нет | нет | нет |
-| `turn.change` | до narrative/LLM | **да** | да | нет | нет |
-| `narrative.*` | сбор prompt | нет | нет | нет | нет |
-| `turn.afterProse` | prose известен, ещё draft | **да** | да | нет | **да** |
-| commit | core | — | — | — | — |
-| `turn.committed` | после успешного commit | **нет** (observe) | нет | **да** | **да** |
-| `turn.rejected` | после отказа | нет | нет | нет | нет |
-| `turn.load` | загрузка сейва | обычно нет | — | нет | нет |
-| `ai.tools.handler` | tool round агента | **`proposeOp`** | да | нет | — |
-| `rules.invariant` | проверка slice | нет | да* | нет | — |
+| Moment | Когда | `ctx.op` | `deny` | `scheduleSystem` | `passage` | `readModel` |
+|--------|--------|----------|--------|------------------|-----------|-------------|
+| `seed.apply` | new game, есть meta | да | да* | нет | нет | да |
+| `rules.guard` | до изменений | **нет** (fail-loud) | **да** | нет | нет | да |
+| `rules.soft` | предупреждения | **нет** (fail-loud) | нет | нет | нет | да |
+| `turn.change` | до narrative/LLM | **да** | да | нет | нет | да |
+| `narrative.*` | сбор prompt | **нет** (fail-loud) | нет | нет | нет | да |
+| `turn.afterProse` | prose известен, ещё draft | **да** | да | нет | **да** | да |
+| commit | core | — | — | — | — | — |
+| `turn.committed` | после успешного commit | **нет** (**fail-loud**, не silent-drop) | нет | **да** | **да** (read) | да |
+| `turn.rejected` | после отказа | **нет** (fail-loud) | нет | нет | нет | да |
+| `turn.load` | загрузка сейва | **нет** (fail-loud) | — | нет | нет | да |
+| `ai.tools.handler` | tool round агента | **`proposeOp`** | да | нет | — | да |
+| `rules.invariant` | проверка slice | **нет** (fail-loud) | да* | нет | — | n/a |
 
 \* `deny` в op `apply` / invariant — отказ операции или хода (см. core failure codes).  
-\*\* Guard должен **резать** ход через `deny`, а не «тихо править» мир.
+Guard должен **резать** ход через `deny`, а не «тихо править» мир.
 
-`priority` модуля: **меньше = раньше** (default `100`). Типичный диапазон product-модулей: `10–100`.
+**Write-forbidden moments:** вызов `ctx.op` / mutate → стабильный код `MODULE_MOMENT_OP_FORBIDDEN` (Platform 1.0 / spec 03 E15). Тихий collect-and-drop **запрещён**.  
+**`ctx.readModel(name)`:** либо данные, либо fail loud `MODULE_READ_MODEL_UNKNOWN` — **без** silent `undefined` (spec 06). *API `readModel` на ctx — deliverable Platform 1.0; до ship используй `access.read` / host readModels по docs.*
+
+`priority` модуля: **меньше = раньше** (default `100`). Bands: infra 0–9, world 10–29, entities 30–59, systems 60–79, presentation 80–99 (см. conventions / spec 04).
 
 ---
 
@@ -306,7 +309,9 @@ turn: {
 }
 ```
 
-**Важно:** в `committed` **не** пиши state через `op` — мир уже зафиксирован. Нужны изменения → `scheduleSystem` → system turn / tool → `proposeOp`.
+**Важно:** в `committed` **не** пиши state через `op` — мир уже зафиксирован.  
+Platform 1.0: `ctx.op` / mutate здесь → **fail loud** `MODULE_MOMENT_OP_FORBIDDEN` (не silent-drop).  
+Нужны изменения → `scheduleSystem` → system turn / tool → `proposeOp`.
 
 Эталоны: working-memory (`afterProse`), character (`committed` + background).
 
@@ -551,11 +556,15 @@ turn: {
 
 | Метод | Смысл | Где уместно |
 |-------|--------|-------------|
-| `op(name, payload?, reason?)` | предложить state op → StateCommand | seed, change, afterProse, tools |
+| `op(name, payload?, reason?)` | предложить state op → StateCommand | seed, change, afterProse, tools only |
 | `proposeOp(...)` | алиас `op` (семантика та же) | ai tool handlers |
-| `readSlice<T>(name)` | прочитать slice | при `access.read` |
-| `scheduleSystem({ reason, payload?, mode? })` | очередь system turn | **committed** |
+| `readSlice<T>(name)` | прочитать slice | свой slice или `access.read` |
+| `readModel(name, args?)` | **Platform 1.0:** стабильный cross-module query | любой moment; unknown → `MODULE_READ_MODEL_UNKNOWN` |
+| `scheduleSystem({ reason, payload?, mode? })` | очередь system turn | **committed** only |
 | `note(title, body?, data?)` | запись в turn trace | отладка |
+
+Write-forbidden moments (`committed`, `narrative.*`, `guard`, …): `op`/`proposeOp` → `MODULE_MOMENT_OP_FORBIDDEN`.  
+`readModel`: либо JSON object, либо fail loud — **без** silent `undefined` (spec 06). До ship 1.0 API может отсутствовать — используй `readSlice` / host readModels.
 
 `ScheduleSystemRequest.mode`: `"background"` | `"inline"` (как использует character).
 
@@ -583,16 +592,18 @@ deny("CODE", "Человекочитаемое сообщение"); // throws M
 | `normalizeModuleDefinition` | advanced / tooling |
 | types: `ModuleDefinition`, `ModuleCtx`, capability interfaces, `DefinedModule` | TypeScript |
 
-Тестовый harness (отдельный subpath):
+Тестовый harness (отдельный subpath) — **author SoT**:
 
 ```ts
 import { testModule } from "@rpengineext/module-sdk/test";
-// или низкоуровнево:
-import { createTestEngine } from "@rpengineext/core/testing";
+// advanced/maintainer only:
+// import { createTestEngine } from "@rpengineext/core/testing";
 ```
 
-`testModule(mod, { meta, moduleConfig, llm, agentsMode, seed })` →  
+Сейчас: `testModule(mod, { meta, moduleConfig, llm, agentsMode, seed })` →  
 `{ engine, runtime, sessionId, turn(text), slice }`.
+
+Platform 1.0 (spec 02): `testModules`, `action`, `systemTurn`, `waitIdle`, `save`/`load`, asserts, `fixedProseLlm` / `scriptedToolLlm`.
 
 ---
 
@@ -600,13 +611,16 @@ import { createTestEngine } from "@rpengineext/core/testing";
 
 | Нельзя | Вместо этого |
 |--------|----------------|
-| Мутировать `ctx.slice` / `worldState` руками | `ctx.op` |
-| Писать в чужой slice | свой op + (будущие) inter-module protocols; сейчас — нет |
+| Мутировать `ctx.slice` / `worldState` руками | `ctx.op` в write-allowed moments |
+| `ctx.op` в `committed` / narrative / guard | `scheduleSystem` + system turn / tool; иначе fail loud |
+| Писать в чужой slice | свой op; cross-read via `access.read` / `readModel` (1.0) |
+| Silent `readModel` miss | fail `MODULE_READ_MODEL_UNKNOWN` (1.0) |
 | Звать OpenAI/Anthropic SDK | `ai.tasks` / tools |
 | Подписываться на произвольные pipeline stages | moments `turn.*` / `rules.*` / `seed` |
 | Ждать «полу-commit» | атомарный draft |
 | Считать ports (`ModuleRegisterContext`, …) author API | только maintainers |
 | Несколько slice на модуль | v1: **один** primary slice |
+| Runtime dep на другой `module-*` | provides/requires + readModel/access |
 
 ---
 

@@ -45,7 +45,11 @@ apps/web → HTTP API only (no core/packages runtime imports)
 host-bootstrap → core, contracts, logger, persistence, agents, modules, content-stories
 content-stories → contracts
 core → contracts, logger
-modules/* → contracts          (+ core only as devDependency for tests)
+module-sdk → contracts, zod
+create-module → (scaffold only; no runtime engine dep required)
+modules/* → module-sdk, zod
+             (+ core only as devDependency for tests / harness peer)
+             (+ contracts only if justified; prefer types via module-sdk)
 agents/* → contracts, logger
 persistence/* → contracts
 contracts → zod (+ minimal)
@@ -54,9 +58,11 @@ logger → (minimal)
 
 Forbidden:
 
-- `modules/*` → `core/src/**` internals (use `@rpengineext/core/testing` in tests only)
+- `modules/*` → `core/src/**` internals (tests: `@rpengineext/core/testing` or **prefer** `@rpengineext/module-sdk/test`)
+- `modules/*` → other `module-*` packages at **runtime** (inter-module only via provides/requires, access.read, readModel)
 - `core` → `modules/*` concrete packages (host registry wires modules)
 - `apps/web` → any engine package
+- author modules → LLM vendor SDKs / raw ports / pipeline interceptors
 
 ## 3. Shared utilities
 
