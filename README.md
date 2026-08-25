@@ -113,6 +113,7 @@ bun run web
 | [`@rpengineext/host-bootstrap`](./packages/host-bootstrap) | ready | общая wiring движка для CLI/API |
 | [`@rpengineext/content-stories`](./packages/content-stories) | ready | каталог шаблонов историй (`data/stories`) |
 | [`@rpengineext/module-working-memory`](./packages/modules/working-memory) | ready | последние N пар чата для narrative + полный архив пар в session state |
+| [`@rpengineext/module-summary`](./packages/modules/summary) | ready | дельта-чанки working memory через фоновые system turns → все саммари в narrative system prompt |
 | [`@rpengineext/module-character`](./packages/modules/character) | ready | PC seed, narrative injection, background outfit tool-agent |
 | [`@rpengineext/module-world-canon`](./packages/modules/world-canon) | ready | immutable world canon → narrative system prompt |
 | further product modules (npc/plot/…) | planned | Phase 5+ отдельными задачами |

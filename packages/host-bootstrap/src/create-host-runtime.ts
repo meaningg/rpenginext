@@ -25,6 +25,7 @@ import {
 } from "@rpengineext/core";
 import { createLogger, type Logger } from "@rpengineext/logger";
 import { createCharacterModule } from "@rpengineext/module-character";
+import { createSummaryModule } from "@rpengineext/module-summary";
 import { createWorldCanonModule } from "@rpengineext/module-world-canon";
 import { createWorkingMemoryModule } from "@rpengineext/module-working-memory";
 import { SqlitePersistence } from "@rpengineext/persistence-sqlite";
@@ -127,6 +128,8 @@ export async function createHostRuntime(
     createWorkingMemoryModule({ windowPairs: hostEnv.workingMemoryWindow }),
     createWorldCanonModule(),
     createCharacterModule(),
+    // Summary interval follows the working-memory window by default.
+    createSummaryModule({ intervalTurns: hostEnv.workingMemoryWindow }),
     ...(options.extraModules ?? []),
   ];
 
