@@ -1,4 +1,4 @@
-import type { WorkingMemoryPair } from "../schema/pair.ts";
+import type { WorkingMemoryPair } from "../schema.ts";
 
 /**
  * Chat message shape for narrative.write history.
