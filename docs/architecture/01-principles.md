@@ -20,13 +20,13 @@ Core делает только то, без чего нельзя собрать
 
 ### P2. Contracts over conventions
 
-Межпакетное взаимодействие — **только** через `contracts`.
+Межпакетное runtime-взаимодействие — **только** через `contracts`.
 
 - Никаких «просто импортни private из core».
 - Никаких magically named files без манифеста.
 - Breaking change контракта = major semver + ADR.
-- Расширение gameplay — через **extension surface** (registrations + interceptors + ports), не через правку core.
-  См. [12-extension-surface.md](./12-extension-surface.md).
+- **Авторы модулей** расширяют gameplay через **`@rpengineext/module-sdk` / `defineModule`** (moments/capabilities), не через ports/pipeline. См. [ADR 0004](../adr/0004-module-sdk-cbmd.md), [../modules/README.md](../modules/README.md).
+- **Maintainers core** — extension surface (registrations + interceptors + ports). См. [12-extension-surface.md](./12-extension-surface.md) (не author API).
 
 ### P3. Single source of truth
 
@@ -114,6 +114,9 @@ LLM не может:
 8. ❌ Narrative text как источник фактов для следующего хода без materialize в state/memory policy.
 9. ❌ Логирование секретов и полного system prompt с ключами.
 10. ❌ Breaking change `contracts` без major version и миграционного примечания.
+11. ❌ Мутация world state из `turn.committed` / observe-only moments (только `scheduleSystem` + отдельный system turn).
+12. ❌ Silent discard author mistakes (`ctx.op` в forbidden moment, unknown `readModel`) — fail loud + stable code.
+13. ❌ Runtime dependency `module-*` → `module-*` (только provides/requires / access / readModel).
 
 ---
 

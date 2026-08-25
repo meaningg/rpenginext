@@ -67,7 +67,8 @@ AI предлагает. Модули помогают и ограничиваю
 | [08-configuration.md](./08-configuration.md) | Конфиг и секреты |
 | [09-testing.md](./09-testing.md) | Тестовая стратегия |
 | [10-roadmap.md](./10-roadmap.md) | Фазы внедрения |
-| [11-repository-structure.md](./11-repository-structure.md) | Дерево репозитория |
+| [../specs/README.md](../specs/README.md) | Module Platform 1.0 specs (DoD / verification) |
+| [11-repository-structure.md](./11-repository-structure.md) | Структура репо |
 | [12-extension-surface.md](./12-extension-surface.md) | Ports bus (maintainers; **не** author API) |
 | [13-turn-tracing.md](./13-turn-tracing.md) | Core: markdown-трейсы хода для дебага/AI control |
 | [../modules/README.md](../modules/README.md) | **Как сделать модуль** — пошагово + рецепты |
@@ -108,15 +109,16 @@ AI предлагает. Модули помогают и ограничиваю
 |-------|----------|------------|
 | `contracts` | редко, semver | публичные типы, порты, schemas, extension points, Result/ids |
 | `core` | редко | runtime, pipeline, registry, state kernel, orchestrator, tracing |
+| `module-sdk` | умеренно (semver author surface) | **единственный** author API (`defineModule`) |
 | `logger` | умеренно | structured logging |
 | `host-bootstrap` | умеренно | composition root CLI/API |
 | `content-stories` | умеренно | loader каталога story JSON |
-| `modules/*` | часто | независимые авторы (+ first-party) |
+| `modules/*` | часто | независимые авторы (+ first-party); зависят от **module-sdk** |
 | `agents/*` | умеренно | провайдеры LLM и специализированные agent adapters |
 | `persistence/sqlite` | умеренно | bun:sqlite за PersistencePort |
 | `apps/*` | часто | CLI / API / Web |
 
-Отдельного пакета `shared` **нет** — boundary primitives живут в `contracts`.
+Отдельного пакета `shared` **нет** — boundary primitives живут в `contracts`. Author boundary = `module-sdk`.
 
 **Правило стабильности core:** если фичу можно сделать модулем — она не идёт в core.
 

@@ -1,68 +1,80 @@
-import { useEffect, useState } from "react";
+import { Library } from "lucide-react";
 
-import { StoryCard } from "../features/stories/components/StoryCard.tsx";
-import { BrowseLayout } from "../layouts/BrowseLayout.tsx";
-import {
-  ensurePlayer,
-  listTemplates,
-  type StoryTemplateSummary,
-} from "../shared/api/client.ts";
-import { COPY } from "../shared/config/copy.ts";
 import {
   EmptyState,
-  ErrorBanner,
+  ErrorState,
   PageHeader,
   Skeleton,
-} from "../shared/ui/index.ts";
+} from "../design-system/index.ts";
+import { usePlayerQuery } from "../entities/player/queries.ts";
+import { useStoriesQuery } from "../entities/story/queries.ts";
+import { StoryGrid } from "../features/stories/ui/StoryGrid.tsx";
+import { COPY } from "../shared/config/copy.ts";
+import { AppShell } from "../widgets/app-shell/AppShell.tsx";
 
 /**
  * Story catalog page.
  */
 export function StoriesPage() {
-  const [templates, setTemplates] = useState<StoryTemplateSummary[] | null>(
-    null,
-  );
-  const [error, setError] = useState<string | null>(null);
+  const player = usePlayerQuery();
+  const stories = useStoriesQuery();
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        await ensurePlayer();
-        setTemplates(await listTemplates());
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-        setTemplates([]);
-      }
-    })();
-  }, []);
+  const error =
+    player.error instanceof Error
+      ? player.error.message
+      : stories.error instanceof Error
+        ? stories.error.message
+        : player.error || stories.error
+          ? COPY.common.error
+          : null;
+
+  const loading = player.isLoading || stories.isLoading;
+  const templates = stories.data ?? [];
 
   return (
-    <BrowseLayout>
-      <div className="space-y-7">
+    <AppShell>
+      <div className="space-y-7 animate-fade-in">
         <PageHeader
           kicker={COPY.stories.kicker}
           title={COPY.stories.title}
           subtitle={COPY.stories.subtitle}
         />
 
-        {error ? <ErrorBanner message={error} /> : null}
+        {error ? (
+          <ErrorState
+            message={error}
+            action={
+              <button
+                type="button"
+                className="text-sm font-medium text-rose-100 underline-offset-4 hover:underline"
+                onClick={() => {
+                  void player.refetch();
+                  void stories.refetch();
+                }}
+              >
+                {COPY.common.retry}
+              </button>
+            }
+          />
+        ) : null}
 
-        {templates === null ? (
-          <div className="grid gap-3.5 sm:grid-cols-2">
-            <Skeleton className="h-48" />
-            <Skeleton className="h-48" />
-            <Skeleton className="h-48" />
+        {loading ? (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            <Skeleton className="h-52" />
+            <Skeleton className="h-52" />
+            <Skeleton className="h-52" />
+            <Skeleton className="h-52" />
           </div>
         ) : templates.length === 0 && !error ? (
-          <EmptyState title={COPY.stories.empty} />
+          <EmptyState
+            title={COPY.stories.empty}
+            body={COPY.stories.emptyBody}
+            icon={<Library className="h-5 w-5" />}
+          />
         ) : (
-          <div className="grid gap-3.5 sm:grid-cols-2">
-            {templates.map((template) => (
-              <StoryCard key={template.id} template={template} />
-            ))}
-          </div>
+          <StoryGrid templates={templates} />
         )}
       </div>
-    </BrowseLayout>
+    </AppShell>
   );
 }

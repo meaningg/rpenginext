@@ -17,6 +17,8 @@
 | [**schemas.md**](./schemas.md) | Как описывать state/config/AI через Zod (один раз) |
 | [`_template.md`](./_template.md) | Скелет для копипасты |
 | [`packages/module-sdk/README.md`](../../packages/module-sdk/README.md) | Витрина пакета (коротко) |
+| [**../specs/README.md**](../specs/README.md) | **Module Platform 1.0** — freeze, harness, CI, host, release DoD (maintainers / platform work) |
+| `compatibility.md` / `errors.md` / `conventions.md` | Platform 1.0 artifacts (appear as specs 01/03/04/06 land) |
 
 Если нужно **понять, что вообще умеет SDK** — сразу в [reference](./sdk-reference.md).  
 Если нужно **быстро набросать модуль** — разделы ниже + [recipes](./recipes.md).
@@ -78,7 +80,8 @@ bun run create-module mood
 bun run create-module lore --recipe seed-narrative
 ```
 
-Рецепты scaffold: `state` | `seed-narrative` | `guard` | `full`
+Рецепты scaffold (сейчас): `state` | `seed-narrative` | `guard` | `full`  
+Platform 1.0 добавит: `ai-tool` | `access-read` | `migrate` — [spec 05](../specs/05-scaffold-and-migrations.md)
 
 ```text
 packages/modules/mood/
@@ -146,47 +149,31 @@ export function createMoodModule() {
 }
 ```
 
-### 3. Тесты (минимум 3)
+### 3. Тесты (минимум 3) — harness first
+
+**SoT для авторов:** `@rpengineext/module-sdk/test`.  
+`createTestEngine` (`@rpengineext/core/testing`) — advanced/maintainer escape, не основной путь.
 
 ```ts
 import { describe, expect, test } from "bun:test";
-import { createTestEngine } from "@rpengineext/core/testing";
-// или: import { testModule } from "@rpengineext/module-sdk/test";
+import { testModule } from "@rpengineext/module-sdk/test";
 import { createMoodModule } from "../src/index.ts";
 
 describe("mood", () => {
   test("success: ход поднимает level", async () => {
-    const created = await createTestEngine({
-      modules: [createMoodModule()],
-    });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
+    const t = await testModule(createMoodModule());
+    expect(t.ok).toBe(true);
+    if (!t.ok) return;
 
-    const session = await created.value.engine.startSession();
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
-
-    const turn = await session.value.submitAction({
-      kind: "free_text",
-      text: "смотрю вокруг",
-    });
+    const turn = await t.value.turn("смотрю вокруг");
     expect(turn.status).toBe("committed");
-
-    const state = created.value.runtime.getSessionState(session.value.sessionId);
-    const slice = state?.slices.mood as { level: number };
-    expect(slice.level).toBe(1);
+    expect((t.value.slice as { level: number }).level).toBe(1);
   });
 
   test("error: guard режет ход", async () => {
-    const created = await createTestEngine({ modules: [createMoodModule()] });
-    if (!created.ok) return;
-    const session = await created.value.engine.startSession();
-    if (!session.ok) return;
-
-    const turn = await session.value.submitAction({
-      kind: "free_text",
-      text: "nope",
-    });
+    const t = await testModule(createMoodModule());
+    if (!t.ok) return;
+    const turn = await t.value.turn("nope");
     expect(turn.status).toBe("rejected");
   });
 
@@ -198,29 +185,21 @@ describe("mood", () => {
 });
 ```
 
-Короткий harness:
-
-```ts
-import { testModule } from "@rpengineext/module-sdk/test";
-
-const t = await testModule(createMoodModule());
-// t.ok → t.value.turn("привет") → t.value.slice
-```
+Platform 1.0 расширит harness (`testModules`, `save`/`load`, `waitIdle`, asserts, scripted tools) — [spec 02](../specs/02-testing-harness-stress-ci.md).
 
 ### 4. Подключить к host
 
-Там, где собирается engine (обычно `host-bootstrap`):
+**Сейчас (0.x):** `extraModules` в `createHostRuntime` (или правка списка в host-bootstrap).
 
 ```ts
 import { createMoodModule } from "@rpengineext/module-mood";
 
-modules: [
-  createWorkingMemoryModule({ windowPairs }),
-  createCharacterModule(),
-  createWorldCanonModule(),
-  createMoodModule(),
-]
+await createHostRuntime({
+  extraModules: [createMoodModule()],
+});
 ```
+
+**Platform 1.0:** profiles / `RP_MODULES` / catalog — [spec 04](../specs/04-host-composition.md). Не хардкодить product-модули в core.
 
 ### 5. Проверка
 
@@ -246,6 +225,7 @@ bun run cli:hello   # или api / web
 | Статус / help / read model | `host` | [recipe](./recipes.md#4-status--help) |
 | Настройка из конфига | `config` | [recipe](./recipes.md#5-config) |
 | Читать чужой slice | `access.read` | [reference → access](./sdk-reference.md#access) |
+| Стабильный cross-module query | `ctx.readModel` (Platform 1.0) | [spec 06](../specs/06-inter-module-and-sdk-gaps.md) |
 | Описать схему slice | Zod | [schemas.md](./schemas.md) |
 
 ---
@@ -265,10 +245,12 @@ bun run cli:hello   # или api / web
 ## Чеклист перед PR
 
 - [ ] Уникальный `id`, semver `version`, понятный `title`
-- [ ] State только через `ops`
-- [ ] ≥3 теста: success / reject или error / edge
-- [ ] README модуля: что чувствует игрок
-- [ ] Нет импортов core internals / ports
+- [ ] State только через `ops` (и только в moments, где write разрешён)
+- [ ] `committed` — observe + `scheduleSystem` only (не `ctx.op`)
+- [ ] ≥3 теста через **`@rpengineext/module-sdk/test`**: success / reject / edge
+- [ ] README модуля: что чувствует игрок (+ public contract when Platform 1.0)
+- [ ] Runtime deps: `module-sdk` + `zod` only; нет `module-*` → `module-*`
+- [ ] Нет импортов core internals / ports / LLM SDK
 - [ ] `bun test packages/modules/<id>` зелёный
 
 ---
