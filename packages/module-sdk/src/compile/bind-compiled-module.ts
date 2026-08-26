@@ -1,6 +1,8 @@
 import {
   err,
   failure,
+  isModuleCtxViolation,
+  ModuleCtxViolation,
   ok,
   setModuleSystemSchedules,
   takeModuleOpProposals,
@@ -16,6 +18,8 @@ import {
   type Result,
   type SliceDefinition,
   type StateCommand,
+  type TurnContext,
+  type TurnLogger,
   type WorldState,
 } from "@rpengineext/contracts";
 import { z } from "zod";
@@ -84,7 +88,7 @@ function normalizeSections(
     .filter((x): x is NarrativePromptSection => x !== null);
 }
 
-const noopLog = {
+const noopLog: TurnLogger = {
   debug() {},
   info() {},
   warn() {},
@@ -93,6 +97,17 @@ const noopLog = {
     return noopLog;
   },
 };
+
+/**
+ * Converts author ctx violations (forbidden moment misuse) into structured
+ * failures preserving the stable module code. Returns undefined for other errors.
+ */
+function violationToFailure(e: unknown): Failure | undefined {
+  if (!isModuleCtxViolation(e)) return undefined;
+  return failure(e.code, e.message, {
+    ...(e.details ? { details: e.details } : {}),
+  });
+}
 
 /**
  * Structural bind: only catalogs/moments declared in IR are installed.
@@ -252,6 +267,10 @@ export function bindCompiledModule(
     meta?: JsonObject;
     opMode: "collect" | "propose";
     log?: typeof ctx.log;
+    momentName?: string;
+    writeAllowed?: boolean;
+    emitAllowed?: boolean;
+    scheduleAllowed?: boolean;
   }) =>
     createModuleCtx({
       moduleId,
@@ -271,6 +290,16 @@ export function bindCompiledModule(
       allowedReadSlices: bindings.allowedReadSlices,
       knownOps,
       opMode: opts.opMode,
+      momentName: opts.momentName,
+      writeAllowed: opts.writeAllowed,
+      emitAllowed: opts.emitAllowed,
+      scheduleAllowed: opts.scheduleAllowed,
+      knownEmitNames: bindings.events.emit.length > 0 ? new Set(bindings.events.emit.map((e) => e.name)) : undefined,
+      emitSchemas: new Map(
+        bindings.events.emit
+          .filter((e) => e.schema)
+          .map((e) => [e.name, e.schema!]),
+      ),
     });
 
   // --- Layer A catalogs (from IR) ---
@@ -393,8 +422,15 @@ export function bindCompiledModule(
             turnCtx,
             meta,
             opMode: "collect",
+            momentName: "seed.apply",
           });
-          await seed.apply(value, mctx);
+          try {
+            await seed.apply(value, mctx);
+          } catch (e) {
+            const violation = violationToFailure(e);
+            if (violation) return err(violation);
+            throw e;
+          }
           commands.push(...session.commands);
         }
         return ok({ commands });
@@ -415,6 +451,8 @@ export function bindCompiledModule(
               intent,
               world: turnCtx.stateView,
               opMode: "collect",
+              momentName: "rules.guard",
+              writeAllowed: false,
             });
             await rules.guard!(mctx);
             return ok({ allow: true });
@@ -422,6 +460,8 @@ export function bindCompiledModule(
             if (isModuleDenial(e)) {
               return ok({ allow: false, code: e.code, message: e.message });
             }
+            const violation = violationToFailure(e);
+            if (violation) return err(violation);
             throw e;
           }
         },
@@ -440,6 +480,8 @@ export function bindCompiledModule(
             intent,
             world: turnCtx.stateView,
             opMode: "collect",
+            momentName: "rules.soft",
+            writeAllowed: false,
           });
           const warnings = (await rules.soft!(mctx)) ?? [];
           return ok({ warnings: [...warnings] });
@@ -460,6 +502,8 @@ export function bindCompiledModule(
             if (isModuleDenial(e)) {
               return ok({ ok: false as const, reason: e.message });
             }
+            const violation = violationToFailure(e);
+            if (violation) return err(violation);
             throw e;
           }
         },
@@ -489,11 +533,14 @@ export function bindCompiledModule(
                 turnKind,
                 world: turnCtx.stateView,
                 opMode: "collect",
+                momentName: "turn.change",
               });
               await turn.change(mctx);
               commands.push(...session.commands);
             } catch (e) {
               if (isModuleDenial(e)) return err(failure(e.code, e.message));
+              const violation = violationToFailure(e);
+              if (violation) return err(violation);
               throw e;
             }
           }
@@ -521,11 +568,14 @@ export function bindCompiledModule(
               turnKind,
               world: draft,
               opMode: "collect",
+              momentName: "turn.afterProse",
             });
             await turn.afterProse(mctx);
             commands.push(...session.commands);
           } catch (e) {
             if (isModuleDenial(e)) return err(failure(e.code, e.message));
+            const violation = violationToFailure(e);
+            if (violation) return err(violation);
             throw e;
           }
         }
@@ -535,6 +585,7 @@ export function bindCompiledModule(
   }
 
   // committed: AfterCommit runs once; schedules drained by SystemTurnScheduler
+  // Moment: post-outcome observe + scheduleSystem + emit (write-forbidden).
   if (m.committed) {
     ctx.addAfterCommitHook({
       async afterCommit({ passage, rawAction, turnKind }, turnCtx) {
@@ -545,21 +596,31 @@ export function bindCompiledModule(
         }[] = [];
         for (const turn of bindings.turns) {
           if (!turn.committed) continue;
-          const { ctx: mctx, session } = baseCtx({
-            turnCtx,
-            action: rawAction,
-            passage,
-            turnKind,
-            world: turnCtx.stateView,
-            opMode: "collect",
-          });
-          await turn.committed(mctx);
-          for (const req of session.systemRequests) {
-            schedules.push({
-              reason: req.reason,
-              ...(req.payload ? { payload: req.payload } : {}),
-              ...(req.mode ? { mode: req.mode } : {}),
+          try {
+            const { ctx: mctx, session } = baseCtx({
+              turnCtx,
+              action: rawAction,
+              passage,
+              turnKind,
+              world: turnCtx.stateView,
+              opMode: "collect",
+              momentName: "turn.committed",
+              writeAllowed: false,
+              emitAllowed: true,
+              scheduleAllowed: true,
             });
+            await turn.committed(mctx);
+            for (const req of session.systemRequests) {
+              schedules.push({
+                reason: req.reason,
+                ...(req.payload ? { payload: req.payload } : {}),
+                ...(req.mode ? { mode: req.mode } : {}),
+              });
+            }
+          } catch (e) {
+            const violation = violationToFailure(e);
+            if (violation) return err(violation);
+            throw e;
           }
         }
         setModuleSystemSchedules(
@@ -587,12 +648,21 @@ export function bindCompiledModule(
       async onRejected({ failure: fail }, turnCtx) {
         for (const turn of bindings.turns) {
           if (!turn.rejected) continue;
-          const { ctx: mctx } = baseCtx({
-            turnCtx,
-            world: turnCtx.stateView,
-            opMode: "collect",
-          });
-          await turn.rejected({ ...mctx, failureCode: fail.code });
+          try {
+            const { ctx: mctx } = baseCtx({
+              turnCtx,
+              world: turnCtx.stateView,
+              opMode: "collect",
+              momentName: "turn.rejected",
+              writeAllowed: false,
+              emitAllowed: true,
+            });
+            await turn.rejected({ ...mctx, failureCode: fail.code });
+          } catch (e) {
+            const violation = violationToFailure(e);
+            if (violation) return err(violation);
+            throw e;
+          }
         }
         return ok(undefined);
       },
@@ -604,13 +674,21 @@ export function bindCompiledModule(
       async hydrate({ state }, turnCtx) {
         for (const turn of bindings.turns) {
           if (!turn.load) continue;
-          const { ctx: mctx } = baseCtx({
-            turnCtx,
-            world: state,
-            opMode: "collect",
-            log: turnCtx?.log ?? ctx.log,
-          });
-          await turn.load(mctx);
+          try {
+            const { ctx: mctx } = baseCtx({
+              turnCtx,
+              world: state,
+              opMode: "collect",
+              momentName: "turn.load",
+              writeAllowed: false,
+              log: turnCtx?.log ?? ctx.log,
+            });
+            await turn.load(mctx);
+          } catch (e) {
+            const violation = violationToFailure(e);
+            if (violation) return err(violation);
+            throw e;
+          }
         }
         return ok(undefined);
       },
@@ -628,24 +706,29 @@ export function bindCompiledModule(
             locale,
             world: draft,
             opMode: "collect",
+            momentName: "narrative.*",
+            writeAllowed: false,
           });
-          if (m.narrativeSystem && nar.system) {
-            sections.push(
-              ...normalizeSections(
-                await nar.system(mctx),
-                `${moduleId}.system`,
-                "system",
-              ),
-            );
-          }
-          if (m.narrativeUser && nar.user) {
-            sections.push(
-              ...normalizeSections(
-                await nar.user(mctx),
-                `${moduleId}.user`,
-                "user",
-              ),
-            );
+          try {
+            if (m.narrativeSystem && nar.system) {
+              const section = await nar.system(mctx);
+              sections.push(
+                ...normalizeSections(section, `${moduleId}.system`, "system"),
+              );
+            }
+            if (m.narrativeUser && nar.user) {
+              sections.push(
+                ...normalizeSections(
+                  await nar.user(mctx),
+                  `${moduleId}.user`,
+                  "user",
+                ),
+              );
+            }
+          } catch (e) {
+            const violation = violationToFailure(e);
+            if (violation) return err(violation);
+            throw e;
           }
         }
         return ok({ sections });
@@ -663,14 +746,22 @@ export function bindCompiledModule(
             intent,
             world: draft,
             opMode: "collect",
+            momentName: "narrative.*",
+            writeAllowed: false,
           });
-          if (m.narrativeBrief && nar.brief) {
-            const brief = await nar.brief(mctx);
-            if (brief) data = { ...data, ...brief };
-          }
-          if (m.narrativeHistory && nar.history) {
-            const history = await nar.history(mctx);
-            data = { ...data, history: history as unknown as JsonValue };
+          try {
+            if (m.narrativeBrief && nar.brief) {
+              const brief = await nar.brief(mctx);
+              if (brief) data = { ...data, ...brief };
+            }
+            if (m.narrativeHistory && nar.history) {
+              const history = await nar.history(mctx);
+              data = { ...data, history: history as unknown as JsonValue };
+            }
+          } catch (e) {
+            const violation = violationToFailure(e);
+            if (violation) return err(violation);
+            throw e;
           }
         }
         return ok({ namespace: sliceName, data });
@@ -752,11 +843,14 @@ export function bindCompiledModule(
             turnCtx,
             world: turnCtx.stateView,
             opMode: "propose",
+            momentName: "ai.tools.handler",
           });
           const result = await toolDef.handler(parsed.data as JsonObject, mctx);
           return ok(result);
         } catch (e) {
           if (isModuleDenial(e)) return err(failure(e.code, e.message));
+          const violation = violationToFailure(e);
+          if (violation) return err(violation);
           throw e;
         }
       },
@@ -812,6 +906,8 @@ export function bindCompiledModule(
             turnCtx,
             world: draft,
             opMode: "collect",
+            momentName: "host.status",
+            writeAllowed: false,
           });
           const lines = await host.status!(mctx);
           return ok({ lines });
@@ -837,23 +933,80 @@ export function bindCompiledModule(
   }
 
   for (const rmId of m.hostReadModels) {
-    let getter:
-      | ((state: WorldState, args: JsonObject, config: unknown) => JsonObject)
+    let def:
+      | import("../types/capabilities.ts").HostReadModelDef
       | undefined;
     for (const host of bindings.host) {
       if (host.readModels?.[rmId]) {
-        getter = host.readModels[rmId];
+        def = host.readModels[rmId];
         break;
       }
     }
-    if (!getter) {
+    if (!def) {
       throw new Error(`${moduleId}: IR readModel ${rmId} missing binding`);
     }
-    const get = getter;
+    const get =
+      typeof def === "function" ? def : def.get;
+    const argsSchema =
+      typeof def === "object" && def.args ? def.args : undefined;
     ctx.registerReadModel({
       id: rmId,
+      ...(argsSchema ? { argsSchema: argsSchema as never } : {}),
       get(state, args) {
         return get(state, args as JsonObject, getConfig());
+      },
+    });
+  }
+
+  // --- events (specs/06 §7): declare publishers + static subscriptions ---
+  for (const emit of bindings.events.emit) {
+    ctx.registerEventPublisher({
+      name: emit.name,
+      moduleId,
+      ...(emit.schema ? { schema: emit.schema } : {}),
+    });
+  }
+  for (const sub of bindings.events.subscribe) {
+    const priority = sub.priority;
+    ctx.registerEventSubscription({
+      name: sub.name,
+      priority,
+      moduleId,
+      /** Handler wrapper: observe-only ctx (op/deny fail-loud → E15/E20). */
+      handler: async (turnCtx, event) => {
+        const { ctx: mctx, session } = baseCtx({
+          turnCtx: turnCtx as TurnContext,
+          world: (turnCtx as TurnContext).stateView,
+          opMode: "collect",
+          momentName: "event.dispatch",
+          writeAllowed: false,
+          emitAllowed: true,
+          scheduleAllowed: true,
+        });
+        try {
+          await sub.handler(mctx, event);
+          if (session.systemRequests.length > 0) {
+            setModuleSystemSchedules(
+              (turnCtx as TurnContext).extras as Record<string, unknown>,
+              moduleId,
+              session.systemRequests.map((req) => ({
+                reason: req.reason,
+                ...(req.payload ? { payload: req.payload } : {}),
+                ...(req.mode ? { mode: req.mode } : {}),
+              })),
+            );
+          }
+        } catch (e) {
+          if (isModuleDenial(e)) {
+            // deny() inside event dispatch → MODULE_EVENT_DENY_FORBIDDEN (E20)
+            throw new ModuleCtxViolation(
+              "MODULE_EVENT_DENY_FORBIDDEN",
+              `[MODULE_EVENT_DENY_FORBIDDEN] deny() is forbidden in event handler (module: ${moduleId}, event: ${sub.name}). Hint: handlers are observe-only; follow-up work via scheduleSystem.`,
+              { moduleId, event: sub.name },
+            );
+          }
+          throw e;
+        }
       },
     });
   }

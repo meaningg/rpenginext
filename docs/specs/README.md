@@ -1,8 +1,8 @@
 # Specs — Module Platform 1.0 (Production)
 
-> **Статус:** planning / normative  
-> **Режим релиза:** **один** — полноценный production Platform 1.0.  
-> **Запрещено:** ship «MVP-урезанный 1.0», half-DoD, «потом допилим».  
+> **Статус:** **done** — Module Platform 1.0 shipped (production tag per spec 07).
+> **Режим релиза:** **один** — полноценный production Platform 1.0.
+> **Запрещено:** ship «MVP-урезанный 1.0», half-DoD, «потом допилим».
 > **Не цель workstream:** domain-модули (npc/plot/combat) как content — они **после** platform tag.
 
 ## 1. Цель
@@ -16,16 +16,16 @@ Production-ready платформа, на которой:
 
 ## 2. Карта спек (все обязательны для tag)
 
-| Spec | Тема | Gate |
-|------|------|------|
-| [00-overview-and-release-gate.md](./00-overview-and-release-gate.md) | Обзор, production DoD, anti-scope, спринты | foundation |
-| [01-sdk-contract-freeze.md](./01-sdk-contract-freeze.md) | Freeze SDK / moments / compatibility policy | required |
-| [02-testing-harness-stress-ci.md](./02-testing-harness-stress-ci.md) | Harness, stress, atomicity, `test:platform` | required |
-| [03-author-errors.md](./03-author-errors.md) | Стабильные author-facing errors | required |
-| [04-host-composition.md](./04-host-composition.md) | Profiles, env, CLI+API module list | required |
-| [05-scaffold-and-migrations.md](./05-scaffold-and-migrations.md) | Все recipes + migrations + CI scaffold | required |
-| [06-inter-module-and-sdk-gaps.md](./06-inter-module-and-sdk-gaps.md) | Boundaries, strict requires, `ctx.readModel` | required |
-| [07-release-and-versioning.md](./07-release-and-versioning.md) | 1.0 stamp, docs freeze, release gate | required |
+| Spec | Тема | Gate | Status |
+|------|------|------|--------|
+| [00-overview-and-release-gate.md](./00-overview-and-release-gate.md) | Обзор, production DoD, anti-scope, спринты | foundation | `done` |
+| [01-sdk-contract-freeze.md](./01-sdk-contract-freeze.md) | Freeze SDK / moments / compatibility policy | required | `done` |
+| [02-testing-harness-stress-ci.md](./02-testing-harness-stress-ci.md) | Harness, stress, atomicity, `test:platform` | required | `done` |
+| [03-author-errors.md](./03-author-errors.md) | Стабильные author-facing errors | required | `done` |
+| [04-host-composition.md](./04-host-composition.md) | Profiles, env, CLI+API module list | required | `done` |
+| [05-scaffold-and-migrations.md](./05-scaffold-and-migrations.md) | Все recipes + migrations + CI scaffold | required | `done` |
+| [06-inter-module-and-sdk-gaps.md](./06-inter-module-and-sdk-gaps.md) | Boundaries, strict requires, `ctx.readModel`, events, lifecycle | required | `done` |
+| [07-release-and-versioning.md](./07-release-and-versioning.md) | 1.0 stamp, docs freeze, release gate | required | `done` |
 
 Связанное:
 
@@ -48,11 +48,11 @@ Production-ready платформа, на которой:
 |---------|-----|
 | Author API | SDK 1.0 frozen; один path; harness = author test SoT |
 | Moments | write-forbidden moments fail-loud on `ctx.op` (E15); no silent-drop |
-| Tests | harness + stress N≥30 **noop** modules + S01–S14 + atomicity + first-party + e2e mock + smoke |
+| Tests | harness + stress N≥30 **noop** modules + S01–S22 + atomicity + first-party + e2e mock + smoke |
 | Host | profiles + env + extraModules; strict capabilities default ON; precedence matrix locked |
 | Data | multi-slice save/load + schema migrations tested |
-| Ops | list modules CLI **и** API; structured boot log; stable error codes E01–E15 |
-| Inter-module | no module→module deps; `provides`/`requires`; `ctx.readModel` fail-loud unknown |
+| Ops | list modules CLI **и** API; structured boot log; stable error codes E01–E26 |
+| Inter-module | no module→module deps; `provides`/`requires`; `ctx.readModel` fail-loud unknown; `events` emit/subscribe post-outcome; lifecycle `init`/`shutdown` |
 | Release | versions 1.0.0 aligned; compatibility.md; release notes; dual-path risk explicit until ADR 0005 |
 
 ## 5. Статусы спек

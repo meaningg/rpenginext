@@ -1,6 +1,6 @@
 {
   "name": "@rpengineext/content-stories",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Story template catalog loader for rpengineext hosts",

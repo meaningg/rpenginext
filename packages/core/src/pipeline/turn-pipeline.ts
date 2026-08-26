@@ -1,13 +1,18 @@
 import {
   CORE_COMMAND_TYPES,
+  MODULE_EVENT_MAX_BURST_PER_TURN,
+  MODULE_EVENT_MAX_CASCADE_DEPTH,
   STAGE_IDS,
   agentCallPermission,
   emptyJsonObject,
   err,
   failure,
   hasPermission,
+  isModuleCtxViolation,
   ok,
   proposePermissionForSlice,
+  takeModuleEvents,
+  takeModuleSystemSchedules,
   type ActionIntent,
   type AgentResult,
   type AgentTask,
@@ -17,6 +22,7 @@ import {
   type InterceptorEffect,
   type JournalEntry,
   type JsonObject,
+  type ModuleEvent,
   type NarrativePromptSection,
   type NormalizedAction,
   type Passage,
@@ -105,6 +111,13 @@ export interface TurnPipelineDeps {
   readonly coreVersion: string;
   readonly contractsVersion: string;
   readonly getModulePermissions: (moduleId: string) => readonly PermissionToken[];
+  onEventDispatched?: (sessionId: string, event: import("@rpengineext/contracts").ModuleEvent) => void;
+  /** Resolves a registered readModel against a state view (fail-loud contract). */
+  readonly readModel: (
+    name: string,
+    state: WorldState,
+    args?: JsonObject,
+  ) => Result<unknown, Failure>;
 }
 
 interface TurnScratch {
@@ -151,6 +164,15 @@ export class TurnPipeline {
   private readonly getModulePermissions: (
     moduleId: string,
   ) => readonly PermissionToken[];
+  private readonly readModel: (
+    name: string,
+    state: WorldState,
+    args?: JsonObject,
+  ) => Result<unknown, Failure>;
+  private readonly onEventDispatched?: (
+    sessionId: string,
+    event: ModuleEvent,
+  ) => void;
 
   /**
    * @param deps - pipeline dependencies
@@ -167,6 +189,8 @@ export class TurnPipeline {
     this.coreVersion = deps.coreVersion;
     this.contractsVersion = deps.contractsVersion;
     this.getModulePermissions = deps.getModulePermissions;
+    this.readModel = deps.readModel;
+    this.onEventDispatched = deps.onEventDispatched;
   }
 
   /**
@@ -287,6 +311,14 @@ export class TurnPipeline {
       log: this.log.child({ turnId, sessionId: session.sessionId }),
       rng,
       permissions: createCorePermissionChecker(),
+      readModel: (name, args) =>
+        this.readModel(
+          name,
+          session.kernel.hasOpenDraft()
+            ? (session.kernel.getDraftView() as WorldState)
+            : s0,
+          args,
+        ),
     });
 
     this.orchestrator.beginTurn(ctx);
@@ -1747,6 +1779,12 @@ export class TurnPipeline {
         ...(session.meta ?? {}),
         ...(session.seed ? { seed: session.seed } : {}),
       },
+      pendingSystemTurns: session.pendingSystemTurns.map((t) => ({
+        reason: t.reason,
+        ...(t.payload ? { payload: t.payload } : {}),
+        requestedByModuleId: t.requestedByModuleId ?? "unknown",
+        mode: t.mode,
+      })),
     };
 
     if (this.config.persistence.policy === "per_turn") {
@@ -2067,6 +2105,20 @@ export class TurnPipeline {
     }
 
     const auth = session.kernel.getAuthoritative() as WorldState;
+
+    // Module events emitted in turn.committed (+ cascades) — post-outcome,
+    // observe-only dispatch; schedules persist only for player turns.
+    const emitted = takeModuleEvents(scratch.extras);
+    if (emitted.length > 0) {
+      await this.dispatchModuleEvents(
+        emitted,
+        session,
+        scratch,
+        auth,
+        "committed",
+      );
+    }
+
     await this.tracer.finalize({
       outcome: "committed",
       stateRevisionAfter: auth.meta.revision,
@@ -2107,6 +2159,19 @@ export class TurnPipeline {
     });
 
     const auth = session.kernel.getAuthoritative() as WorldState;
+
+    // Events emitted in turn.rejected observe the rolled-back state (A09).
+    const emitted = takeModuleEvents(scratch.extras);
+    if (emitted.length > 0) {
+      await this.dispatchModuleEvents(
+        emitted,
+        session,
+        scratch,
+        auth,
+        "rejected",
+      );
+    }
+
     this.tracer.recordStateDiff([]);
     await this.tracer.finalize({
       outcome: "rejected",
@@ -2122,6 +2187,172 @@ export class TurnPipeline {
       failure: failurePayload,
       warnings: scratch.warnings,
     };
+  }
+
+  /**
+   * Dispatches turn-scoped module events post-outcome (specs/06 §7.3).
+   *
+   * FIFO per emission moment; subscribers per event in (priority asc, registration
+   * order asc). Handler permissions: observe-only (op/deny fail-loud), emit allowed
+   * with cascade/burst caps. Handler throw post-outcome → warning, turn stays
+   * committed, world unchanged. Schedules persist only for player turns.
+   */
+  private async dispatchModuleEvents(
+    emitted: readonly ModuleEvent[],
+    session: SessionTurnState,
+    scratch: TurnScratch,
+    state: WorldState,
+    phase: "committed" | "rejected",
+  ): Promise<void> {
+    const dispatchExtras: MutableExtras = {};
+    // Queue items: [event, cascadeDepth]; moment emits start at depth 0.
+    const queue: { event: ModuleEvent; depth: number }[] = emitted.map((event) => ({
+      event,
+      depth: 0,
+    }));
+    let burst = 0;
+    let cascadeBreached = false;
+    let burstBreached = false;
+
+    const onScheduled = (request: PendingSystemTurn) => {
+      if (scratch.kind !== "player") {
+        this.log.debug(
+          { sessionId: scratch.sessionId, reason: request.reason },
+          "event handler scheduleSystem ignored on system turn (drain-loop guard)",
+        );
+        return;
+      }
+      session.pendingSystemTurns.push(request);
+    };
+
+    const dispatchCtx = createTurnContext({
+      turnId: scratch.turnId,
+      sessionId: scratch.sessionId,
+      getStateView: () => state,
+      propose: () =>
+        err(failure("INTERNAL", "propose closed during event dispatch")),
+      requestAgent: async (task) => ({
+        ok: false,
+        taskId: task.taskId,
+        error: { code: "CLOSED", message: "agents unavailable during event dispatch" },
+      }),
+      readModel: (name, args) => this.readModel(name, state, args),
+      note: (n) => this.tracer.note(n),
+      extras: dispatchExtras,
+      log: this.log,
+      permissions: createCorePermissionChecker(),
+    });
+
+    while (queue.length > 0) {
+      if (burst >= MODULE_EVENT_MAX_BURST_PER_TURN) {
+        burstBreached = true;
+        break;
+      }
+      const { event, depth } = queue.shift()!;
+      burst += 1;
+      if (depth > MODULE_EVENT_MAX_CASCADE_DEPTH) {
+        cascadeBreached = true;
+        break;
+      }
+
+      const publisher = this.index.eventPublishers.get(event.name);
+      if (!publisher) {
+        this.log.warn(
+          { moduleId: event.moduleId, event: event.name },
+          `[MODULE_EVENT_UNKNOWN] dispatched event without publisher: ${event.name}`,
+        );
+        continue;
+      }
+
+      this.onEventDispatched?.(scratch.sessionId, event);
+
+      const subscribers = this.index.eventSubscriptions.filter(
+        (sub) => sub.value.name === event.name,
+      );
+      if (subscribers.length === 0) continue;
+
+      for (const sub of subscribers) {
+        try {
+          await sub.value.handler(dispatchCtx, { payload: event.payload });
+        } catch (e) {
+          if (isModuleCtxViolation(e)) {
+            this.log.warn(
+              {
+                moduleId: sub.moduleId,
+                event: event.name,
+                code: e.code,
+                phase,
+              },
+              `[${e.code}] event handler violation (${event.name}): ${e.message}`,
+            );
+            this.tracer.warn(
+              `${event.name} handler ${sub.moduleId}: [${e.code}] ${e.message}`,
+            );
+          } else {
+            this.log.warn(
+              {
+                moduleId: sub.moduleId,
+                event: event.name,
+                err: e instanceof Error ? e.message : String(e),
+              },
+              `[MODULE_EVENT_HANDLER_ERROR] event handler threw for ${event.name} (turn stays ${phase})`,
+            );
+            this.tracer.warn(
+              `${event.name} handler ${sub.moduleId} threw: ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
+        }
+
+        // Handler schedules + emitted cascades collected through dispatch extras.
+        const schedules = takeModuleSystemSchedules(
+          dispatchExtras,
+          sub.moduleId,
+        );
+        for (const req of schedules) {
+          onScheduled({
+            reason: req.reason,
+            ...(req.payload ? { payload: req.payload } : {}),
+            requestedByModuleId: sub.moduleId,
+            mode: req.mode === "background" ? "background" : "inline",
+          });
+        }
+      }
+
+      // Events emitted by handlers (cascade) — depth+1.
+      const cascades = takeModuleEvents(dispatchExtras);
+      for (const cascade of cascades) {
+        queue.push({ event: cascade, depth: depth + 1 });
+      }
+
+      if (cascadeBreached || burstBreached) break;
+    }
+
+    if (cascadeBreached) {
+      this.log.warn(
+        {
+          sessionId: scratch.sessionId,
+          code: "MODULE_EVENT_CASCADE_LIMIT",
+          depth: MODULE_EVENT_MAX_CASCADE_DEPTH,
+        },
+        `[MODULE_EVENT_CASCADE_LIMIT] event cascade depth cap breached; remaining events dropped`,
+      );
+      this.tracer.warn(
+        `[MODULE_EVENT_CASCADE_LIMIT] depth > ${MODULE_EVENT_MAX_CASCADE_DEPTH}; remaining events dropped`,
+      );
+    }
+    if (burstBreached) {
+      this.log.warn(
+        {
+          sessionId: scratch.sessionId,
+          code: "MODULE_EVENT_BURST_LIMIT",
+          limit: MODULE_EVENT_MAX_BURST_PER_TURN,
+        },
+        `[MODULE_EVENT_BURST_LIMIT] per-turn event burst cap breached; remaining events dropped`,
+      );
+      this.tracer.warn(
+        `[MODULE_EVENT_BURST_LIMIT] > ${MODULE_EVENT_MAX_BURST_PER_TURN} events; remaining events dropped`,
+      );
+    }
   }
 
   /**
@@ -2226,7 +2457,9 @@ function mapFailureCode(code: string): TurnFailure["code"] {
   ) {
     return "AGENT_FAILED";
   }
-  return "INTERNAL";
+  // Stable-token passthrough: module-platform codes (MODULE_*) and author
+  // deny() codes surface unchanged (specs/03; never opaque INTERNAL).
+  return code;
 }
 
 function normalizeEffects(

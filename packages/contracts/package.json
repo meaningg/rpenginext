@@ -1,6 +1,6 @@
 {
   "name": "@rpengineext/contracts",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Public schemas, ports, and extension surface for rpengineext (semver heart)",

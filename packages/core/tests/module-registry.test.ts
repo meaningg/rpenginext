@@ -38,7 +38,7 @@ describe("ModuleRegistry", () => {
     ]);
     expect(boot.ok).toBe(false);
     if (boot.ok) return;
-    expect(boot.error.code).toBe("DUPLICATE_MODULE");
+    expect(boot.error.code).toBe("MODULE_ID_DUPLICATE");
   });
 
   test("missing capability fails", async () => {
@@ -47,10 +47,10 @@ describe("ModuleRegistry", () => {
       {
         manifest: {
           id: "needs-npc",
-          version: "0.1.0",
+          version: "1.0.0",
           displayName: "Needs NPC",
           description: "",
-          engines: { core: "^0.1.0", contracts: "^0.1.0" },
+          engines: { core: "^1.0.0", contracts: "^1.0.0" },
           priority: 10,
           provides: [],
           requires: ["capability:npc"],
@@ -65,6 +65,60 @@ describe("ModuleRegistry", () => {
     ]);
     expect(boot.ok).toBe(false);
     if (boot.ok) return;
-    expect(boot.error.code).toBe("CAPABILITY_MISSING");
+    expect(boot.error.code).toBe("MODULE_REQUIRES_MISSING");
+  });
+
+  test("engines incompatible fails with stable code (E11)", async () => {
+    const registry = new ModuleRegistry({ log });
+    const boot = await registry.boot([
+      {
+        manifest: {
+          id: "old-module",
+          version: "0.1.0",
+          displayName: "Old",
+          description: "",
+          engines: { core: "^0.1.0", contracts: "^0.1.0" },
+          priority: 10,
+          provides: [],
+          requires: [],
+          permissions: [],
+          stateSlices: [],
+          registers: [],
+          contributes: [],
+          interceptors: [],
+        },
+        register() {},
+      },
+    ]);
+    expect(boot.ok).toBe(false);
+    if (boot.ok) return;
+    expect(boot.error.code).toBe("MODULE_ENGINES_INCOMPATIBLE");
+  });
+
+  test("duplicate slice name fails with stable code (E05)", async () => {
+    const mk = (id: string): import("@rpengineext/contracts").Module => ({
+      manifest: {
+        id,
+        version: "1.0.0",
+        displayName: id,
+        description: "",
+        engines: { core: "^1.0.0", contracts: "^1.0.0" },
+        priority: 10,
+        provides: [],
+        requires: [],
+        permissions: [],
+        stateSlices: [{ name: "shared_slice", schemaVersion: 1 }],
+        registers: [],
+        contributes: [],
+        interceptors: [],
+      },
+      register() {},
+    });
+    const registry = new ModuleRegistry({ log });
+    const boot = await registry.boot([mk("mod-a"), mk("mod-b")]);
+    expect(boot.ok).toBe(false);
+    if (boot.ok) return;
+    expect(boot.error.code).toBe("MODULE_SLICE_DUPLICATE");
+    expect(JSON.stringify(boot.error.details)).toContain("shared_slice");
   });
 });

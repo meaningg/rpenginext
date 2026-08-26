@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import type { JsonObject } from "@rpengineext/contracts";
-import { readWorkingMemoryWindowFromEnv } from "@rpengineext/module-working-memory";
 
 /**
  * Validated host config section for the summary module.
@@ -44,6 +43,24 @@ export function resolveSummaryConfig(options?: {
   if (typeof raw === "number" && Number.isInteger(raw) && raw > 0) {
     return { intervalTurns: raw };
   }
-  const windowPairs = readWorkingMemoryWindowFromEnv(options?.env);
+  const windowPairs = readSummaryIntervalFromEnv(options?.env);
   return { intervalTurns: windowPairs };
+}
+
+/**
+ * Reads the working-memory window variable locally (boundary rule: no
+ * module→module imports). Semantics mirror `module-working-memory` config;
+ * kept in sync via docs/modules/conventions.md + public contracts.
+ *
+ * @param env - process env
+ */
+export function readSummaryIntervalFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): number {
+  // Mirrors DEFAULT_WINDOW_PAIRS from the working-memory public contract.
+  const raw = env.RP_WORKING_MEMORY_WINDOW?.trim();
+  if (!raw) return 12;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) return 12;
+  return n;
 }

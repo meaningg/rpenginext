@@ -20,6 +20,18 @@ describe("API integration", () => {
     const health = await fetch(`${baseUrl}/health`);
     expect(health.ok).toBe(true);
 
+    // Ops contract (specs/04 §6.3): dedicated module inventory route.
+    const modulesRes = await fetch(`${baseUrl}/modules`);
+    expect(modulesRes.ok).toBe(true);
+    const modulesBody = (await modulesRes.json()) as {
+      modules: { id: string; version: string; priority: number }[];
+    };
+    expect(modulesBody.modules.length).toBeGreaterThanOrEqual(3);
+    const ids = modulesBody.modules.map((m) => m.id);
+    expect(ids).toContain("working-memory");
+    expect(ids).toContain("world-canon");
+    expect(ids).toContain("character");
+
     const player = await createPlayer(baseUrl, "Tester");
 
     const templatesRes = await fetch(`${baseUrl}/v1/templates`);

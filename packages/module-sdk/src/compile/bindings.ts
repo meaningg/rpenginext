@@ -10,6 +10,7 @@ import type {
 import type {
   AiTaskDef,
   AiToolDef,
+  EventsCapability,
   HostCapability,
   NarrativeCapability,
   RulesCapability,
@@ -17,6 +18,7 @@ import type {
   StateCapability,
   TurnCapability,
 } from "../types/capabilities.ts";
+import type { ModuleCtx } from "../types/context.ts";
 import type { NormalizedModuleDefinition } from "../types/definition.ts";
 import { defaultSliceName, namespacedId } from "../util/ids.ts";
 import { resolveOp, type ResolvedOp } from "./resolve-op.ts";
@@ -53,6 +55,23 @@ export interface ModuleBindings {
     AiToolDef & { readonly id: string }
   >;
   readonly knownOps: ReadonlySet<string>;
+  /** Events capability (canonical names + subscribe handlers). */
+  readonly events: {
+    readonly emit: readonly ({
+      readonly name: string;
+      readonly schema?: z.ZodType<JsonObject>;
+      readonly description?: string;
+    })[];
+    readonly subscribe: readonly {
+      readonly name: string;
+      readonly priority: number;
+      readonly moduleId: string;
+      handler(
+        ctx: ModuleCtx,
+        event: { readonly payload: JsonObject },
+      ): void | Promise<void>;
+    }[];
+  };
 }
 
 /**
@@ -114,6 +133,41 @@ export function buildBindings(
     }
   }
 
+  // Events: canonical names = `<moduleId>.<local>`; subscriptions keep priority + handler.
+  const eventPrefix = normalized.id.replace(/-/g, "_");
+  const eventsEmit: {
+    readonly name: string;
+    readonly schema?: z.ZodType<JsonObject>;
+    readonly description?: string;
+  }[] = [];
+  const eventsSubscribe: {
+    readonly name: string;
+    readonly priority: number;
+    readonly moduleId: string;
+    handler(
+      ctx: ModuleCtx,
+      event: { readonly payload: JsonObject },
+    ): void | Promise<void>;
+  }[] = [];
+  for (const cap of normalized.capabilities) {
+    if (cap.kind !== "events") continue;
+    for (const decl of cap.emit ?? []) {
+      eventsEmit.push({
+        name: `${eventPrefix}.${decl.name}`,
+        ...(decl.schema ? { schema: decl.schema as z.ZodType<JsonObject> } : {}),
+        ...(decl.description ? { description: decl.description } : {}),
+      });
+    }
+    for (const decl of cap.subscribe ?? []) {
+      eventsSubscribe.push({
+        name: decl.name,
+        priority: decl.priority ?? 100,
+        moduleId: normalized.id,
+        handler: decl.handler as never,
+      });
+    }
+  }
+
   return {
     ...(stateCap
       ? {
@@ -156,6 +210,7 @@ export function buildBindings(
     aiTasks,
     aiTools,
     knownOps: new Set(ops.keys()),
+    events: { emit: eventsEmit, subscribe: eventsSubscribe },
   };
 }
 

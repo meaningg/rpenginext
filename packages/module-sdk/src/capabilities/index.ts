@@ -2,6 +2,7 @@ import type {
   AccessCapability,
   AiCapability,
   ConfigCapability,
+  EventsCapability,
   HostCapability,
   NarrativeCapability,
   RulesCapability,
@@ -79,4 +80,13 @@ export function accessCap(
   def: Omit<AccessCapability, "kind">,
 ): AccessCapability {
   return { kind: "access", ...def };
+}
+
+/**
+ * @param def - events capability fields (specs/06 §7)
+ */
+export function eventsCap(
+  def: Omit<EventsCapability, "kind">,
+): EventsCapability {
+  return { kind: "events", ...def };
 }

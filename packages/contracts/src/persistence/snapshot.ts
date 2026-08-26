@@ -12,6 +12,18 @@ export const EnabledModuleRefSchema = z.object({
 });
 
 /**
+ * Durable pending system turn (specs/02 S19): survives save/load, drains after load.
+ */
+export const PendingSystemTurnSchema = z.object({
+  reason: z.string().min(1),
+  payload: JsonObjectSchema.optional(),
+  requestedByModuleId: z.string().min(1),
+  mode: z.enum(["inline", "background"]).default("inline"),
+});
+
+export type PendingSystemTurnSnapshot = z.infer<typeof PendingSystemTurnSchema>;
+
+/**
  * Durable session snapshot (logical).
  * @see docs/architecture/07-persistence.md
  */
@@ -30,6 +42,7 @@ export const SessionSnapshotSchema = z.object({
   passages: z.array(PassageSchema).optional(),
   idempotency: z.record(z.string(), IdStringSchema).optional(),
   meta: JsonObjectSchema.optional(),
+  pendingSystemTurns: z.array(PendingSystemTurnSchema).optional(),
 });
 
 export type SessionSnapshot = z.infer<typeof SessionSnapshotSchema>;

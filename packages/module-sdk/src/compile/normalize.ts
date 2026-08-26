@@ -1,6 +1,6 @@
 import {
   err,
-  failure,
+  moduleFailure,
   ok,
   type Failure,
   type JsonObject,
@@ -27,13 +27,34 @@ export function normalizeModuleDefinition<
   def: ModuleDefinition<TSlice, TConfig>,
 ): Result<NormalizedModuleDefinition, Failure> {
   if (!def.id?.trim()) {
-    return err(failure("SCHEMA_INVALID", "module id is required"));
+    return err(
+      moduleFailure("MODULE_DEFINE_INVALID", "module id is required", {
+        field: "id",
+      }),
+    );
+  }
+  if (!/^[a-z][a-z0-9-]*$/.test(def.id)) {
+    return err(
+      moduleFailure(
+        "MODULE_DEFINE_INVALID",
+        `module id "${def.id}" must be kebab-case ([a-z][a-z0-9-]*)`,
+        { field: "id" },
+      ),
+    );
   }
   if (!def.version?.trim()) {
-    return err(failure("SCHEMA_INVALID", "module version is required"));
+    return err(
+      moduleFailure("MODULE_DEFINE_INVALID", "module version is required", {
+        field: "version",
+      }),
+    );
   }
   if (!def.title?.trim()) {
-    return err(failure("SCHEMA_INVALID", "module title is required"));
+    return err(
+      moduleFailure("MODULE_DEFINE_INVALID", "module title is required", {
+        field: "title",
+      }),
+    );
   }
 
   const capabilities: Capability[] = [...(def.capabilities ?? [])];
@@ -50,31 +71,63 @@ export function normalizeModuleDefinition<
   if (def.host) capabilities.push({ kind: "host", ...def.host } as Capability);
   if (def.config) capabilities.push({ kind: "config", ...def.config } as Capability);
   if (def.access) capabilities.push({ kind: "access", ...def.access } as Capability);
+  if (def.events) capabilities.push({ kind: "events", ...def.events } as Capability);
+
+  // Event name validation (canonical = moduleId._ + local kebab name; specs/06 §7.3).
+  const eventCaps = capabilities.filter((c) => c.kind === "events");
+  for (const cap of eventCaps) {
+    if (cap.kind !== "events") continue;
+    for (const decl of cap.emit ?? []) {
+      if (!/^[a-z][a-z0-9-]*$/.test(decl.name)) {
+        return err(
+          moduleFailure(
+            "MODULE_DEFINE_INVALID",
+            `module ${def.id}: event emit name "${decl.name}" must be kebab-case`,
+            { field: "events.emit", name: decl.name },
+          ),
+        );
+      }
+    }
+    for (const decl of cap.subscribe ?? []) {
+      if (!/^[a-z][a-z0-9_.-]*$/.test(decl.name)) {
+        return err(
+          moduleFailure(
+            "MODULE_DEFINE_INVALID",
+            `module ${def.id}: event subscribe name "${decl.name}" must be dot-complete canonical (<module>.<name>)`,
+            { field: "events.subscribe", name: decl.name },
+          ),
+        );
+      }
+    }
+  }
 
   const stateCaps = capabilities.filter((c) => c.kind === "state");
   if (stateCaps.length > 1) {
     return err(
-      failure(
-        "SCHEMA_INVALID",
+      moduleFailure(
+        "MODULE_DEFINE_INVALID",
         `module ${def.id}: at most one state capability (v1)`,
+        { field: "state" },
       ),
     );
   }
   const configCaps = capabilities.filter((c) => c.kind === "config");
   if (configCaps.length > 1) {
     return err(
-      failure(
-        "SCHEMA_INVALID",
+      moduleFailure(
+        "MODULE_DEFINE_INVALID",
         `module ${def.id}: at most one config capability`,
+        { field: "config" },
       ),
     );
   }
   const accessCaps = capabilities.filter((c) => c.kind === "access");
   if (accessCaps.length > 1) {
     return err(
-      failure(
-        "SCHEMA_INVALID",
+      moduleFailure(
+        "MODULE_DEFINE_INVALID",
         `module ${def.id}: at most one access capability`,
+        { field: "access" },
       ),
     );
   }
@@ -88,5 +141,7 @@ export function normalizeModuleDefinition<
     provides: def.provides ?? [],
     requires: def.requires ?? ["capability:state-core"],
     capabilities,
+    init: def.init,
+    shutdown: def.shutdown,
   });
 }

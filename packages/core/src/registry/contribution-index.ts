@@ -30,6 +30,8 @@ import type {
   LocalizationContributor,
   MemoryKindDefinition,
   MigrationDefinition,
+  ModuleEventPublisher,
+  ModuleEventSubscription,
   NarrativeContextProvider,
   NarrativeCritic,
   NarrativePromptContributor,
@@ -88,6 +90,10 @@ export class ContributionIndex {
   readonly templates = new Map<string, Owned<TemplateDefinition>>();
   readonly configSchemas = new Map<string, Owned<ConfigSchemaDefinition>>();
   readonly migrations: Owned<MigrationDefinition>[] = [];
+  /** Canonical event name → publisher (one per name; specs/06 §7.3). */
+  readonly eventPublishers = new Map<string, Owned<ModuleEventPublisher>>();
+  /** Static subscriptions (sorted by priority asc + registration order). */
+  eventSubscriptions: Owned<ModuleEventSubscription>[] = [];
 
   readonly interceptors: Owned<StageInterceptor>[] = [];
 
@@ -144,6 +150,7 @@ export class ContributionIndex {
       this.conflictKeys,
       this.publicProjectors,
       this.migrations,
+      this.eventSubscriptions,
       this.interceptors,
       this.inputNormalizers,
       this.actionClassifiers,
@@ -191,8 +198,9 @@ export class ContributionIndex {
     ];
     for (const list of lists) {
       list.sort((a, b) => {
-        if (a.priority !== b.priority) return a.priority - b.priority;
-        return a.moduleId.localeCompare(b.moduleId);
+        // Tie-break for equal priority = registration order (Array.sort is
+        // stable; specs/04 §4.1.1 — never Map/random order).
+        return a.priority - b.priority;
       });
     }
   }

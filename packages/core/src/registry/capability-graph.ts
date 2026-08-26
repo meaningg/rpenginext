@@ -35,8 +35,8 @@ export function validateCapabilityGraph(
       if (!provided.has(req)) {
         return err(
           failure(
-            "CAPABILITY_MISSING",
-            `module "${manifest.id}" requires missing capability "${req}"`,
+            "MODULE_REQUIRES_MISSING",
+            `module "${manifest.id}" requires missing capability "${req}". Hint: load a module that provides it or drop the requires entry.`,
             { causedBy: [manifest.id] },
           ),
         );
@@ -91,8 +91,8 @@ export function validateCapabilityGraph(
 
   const order = [...manifests]
     .sort((a, b) => {
-      if (a.priority !== b.priority) return a.priority - b.priority;
-      return a.id.localeCompare(b.id);
+      // Tie-break = registration order (Array.sort is stable; specs/04 §4.1.1).
+      return a.priority - b.priority;
     })
     .map((m) => m.id);
 

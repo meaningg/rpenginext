@@ -65,6 +65,15 @@ export interface TurnContext {
   readonly rng?: TurnRng;
   readonly permissions: PermissionChecker;
   /**
+   * Resolves a registered module readModel.
+   * Unknown name → fail-loud failure with code `MODULE_READ_MODEL_UNKNOWN`
+   * (never undefined); args fail provider schema → `MODULE_READ_MODEL_ARGS_INVALID`.
+   *
+   * @param name - registered readModel id
+   * @param args - optional provider args
+   */
+  readModel?(name: string, args?: JsonObject): Result<unknown, Failure>;
+  /**
    * Buffers commands into the turn draft (not committed).
    *
    * @param commands - candidate state commands

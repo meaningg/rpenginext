@@ -60,7 +60,7 @@ export { buildOutfitSyncMessages } from "./outfit-sync-messages.ts";
 export function createCharacterModule() {
   return defineModule({
     id: MODULE_ID,
-    version: "0.1.0",
+    version: "1.0.0",
     title: "Player Character",
     description:
       "Seeds PC from story JSON, injects into narrative prompt, background outfit sync via tool-calling agent",

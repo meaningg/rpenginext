@@ -34,6 +34,8 @@ import {
   type LocalizationContributor,
   type MemoryKindDefinition,
   type MigrationDefinition,
+  type ModuleEventPublisher,
+  type ModuleEventSubscription,
   type ModuleManifest,
   type ModuleRegisterContext,
   type NarrativeContextProvider,
@@ -307,6 +309,22 @@ export function createRegisterContext(
       const check = requireRegister(`migration:${def.slice}`);
       if (!check.ok) return track(check);
       return track(push(index.migrations, def));
+    },
+    registerEventPublisher(def: ModuleEventPublisher) {
+      return track(
+        putUnique(
+          index.eventPublishers,
+          def.name,
+          def,
+          "event publisher",
+          `event-emit:${def.name}`,
+        ),
+      );
+    },
+    registerEventSubscription(def: ModuleEventSubscription) {
+      const check = requireRegister(`event-sub:${def.name}`);
+      if (!check.ok) return track(check);
+      return track(push(index.eventSubscriptions, def));
     },
 
     addInterceptor(interceptor: StageInterceptor) {

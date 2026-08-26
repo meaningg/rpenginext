@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-import { TurnFailureCodeSchema } from "../errors.ts";
 import { IdStringSchema } from "../ids.ts";
 import { JsonObjectSchema } from "../json.ts";
 import { StateCommandSchema } from "../state/commands.ts";
@@ -8,10 +7,13 @@ import { PassageSchema } from "./passage.ts";
 
 /**
  * Player-safe turn failure payload.
+ * `code` carries stable tokens: core codes from {@link TURN_FAILURE_CODES},
+ * module-platform codes (MODULE_*) and author `deny(code)` codes pass through
+ * unchanged (specs/03: deny preserves author code).
  */
 export const TurnFailureSchema = z.object({
   turnId: IdStringSchema,
-  code: TurnFailureCodeSchema,
+  code: z.string().min(1),
   message: z.string().min(1),
   details: z.unknown().optional(),
   causedBy: z.array(z.string().min(1)).optional(),

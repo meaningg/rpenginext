@@ -20,6 +20,7 @@ export const CAPABILITY_KINDS = [
   "host",
   "config",
   "access",
+  "events",
 ] as const;
 
 export type CapabilityKind = (typeof CAPABILITY_KINDS)[number];
@@ -265,18 +266,29 @@ export interface HostStatusLine {
   readonly text: string;
 }
 
+/**
+ * One readModel provider: bare handler function or `{ args, get }` with an
+ * optional args schema (validated per call → MODULE_READ_MODEL_ARGS_INVALID).
+ */
+export type HostReadModelDef<TConfig = unknown> =
+  | ((state: WorldState, args: JsonObject, config: TConfig) => JsonObject)
+  | {
+      /** Optional args schema; validated on every call. */
+      readonly args?: import("zod").z.ZodType<JsonObject>;
+      readonly get: (
+        state: WorldState,
+        args: JsonObject,
+        config: TConfig,
+      ) => JsonObject;
+    };
+
 export interface HostCapability<TSlice = unknown, TConfig = unknown> {
   readonly kind: "host";
   readonly status?: (
     ctx: ModuleCtx<TSlice, TConfig>,
   ) => HostStatusLine[] | Promise<HostStatusLine[]>;
   readonly help?: readonly { readonly id: string; readonly body: string }[];
-  readonly readModels?: Readonly<
-    Record<
-      string,
-      (state: WorldState, args: JsonObject, config: TConfig) => JsonObject
-    >
-  >;
+  readonly readModels?: Readonly<Record<string, HostReadModelDef<TConfig>>>;
 }
 
 export interface ConfigCapability<TConfig extends JsonObject = JsonObject> {
@@ -293,6 +305,29 @@ export interface AccessCapability {
   readonly read?: readonly string[];
 }
 
+/**
+ * Module events (specs/06 §7): static emit declarations + static subscriptions.
+ * Emit is only allowed in `turn.committed` / `turn.rejected` / `event.dispatch`;
+ * handlers are observe-only (op/deny fail-loud).
+ */
+export interface EventsCapability<TSlice = unknown, TConfig = unknown> {
+  readonly kind: "events";
+  readonly emit?: readonly {
+    readonly name: string;
+    readonly schema?: z.ZodType<JsonObject>;
+    readonly description?: string;
+  }[];
+  readonly subscribe?: readonly {
+    /** Canonical event name (dot-complete). */
+    readonly name: string;
+    readonly priority?: number;
+    readonly handler: (
+      ctx: ModuleCtx<TSlice, TConfig>,
+      event: { readonly payload: JsonObject },
+    ) => void | Promise<void>;
+  }[];
+}
+
 export type Capability =
   | StateCapability
   | SeedCapability
@@ -302,4 +337,5 @@ export type Capability =
   | AiCapability
   | HostCapability
   | ConfigCapability
-  | AccessCapability;
+  | AccessCapability
+  | EventsCapability;

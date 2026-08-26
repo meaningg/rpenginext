@@ -53,8 +53,8 @@ export function applySliceMigrations(
       if (!step) {
         return err(
           failure(
-            "INTERNAL",
-            `missing migration for slice "${name}" from v${version} to v${def.schemaVersion}`,
+            "MODULE_SLICE_UNMIGRATABLE",
+            `slice "${name}" at schemaVersion ${version} cannot be migrated to v${def.schemaVersion} (missing migration step). Hint: register state.migrations for each version gap or keep schemaVersion stable.`,
             { details: { slice: name, fromVersion: version } },
           ),
         );
@@ -62,8 +62,9 @@ export function applySliceMigrations(
       if (step.toVersion <= version) {
         return err(
           failure(
-            "INTERNAL",
-            `non-forward migration for slice "${name}" v${version} → v${step.toVersion}`,
+            "MODULE_SLICE_UNMIGRATABLE",
+            `non-forward migration for slice "${name}" v${version} → v${step.toVersion}. Hint: migrations must move forward only.`,
+            { details: { slice: name, fromVersion: version } },
           ),
         );
       }

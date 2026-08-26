@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|--------|
-| **Status** | `ready` |
+| **Status** | `done` |
 | **Priority** | P0 |
 | **Depends on** | Spec 00 |
 | **Blocks** | Spec 05 scaffold tests; Spec 07 tag |
@@ -33,7 +33,7 @@ Production quality bar for module/platform tests:
 - Full `@rpengineext/module-sdk/test` harness (multi-module, save/load, background, system turns)
 - LLM mocks: fixed prose **and** scripted tool-calling
 - Stress suite N≥30 + cases S01–S12
-- Atomicity pack A01–A08 (no optional gaps)
+- Atomicity pack A01–A09 (no optional gaps)
 - First-party integration tests on harness
 - Root scripts + docs
 
@@ -80,6 +80,7 @@ testModules(modules, options?) → Result<ModuleTestHarness, Failure>
 | `state()` | readonly world snapshot |
 | `modules` | manifest summaries |
 | `readModel(name, args?)` | host/engine readModel if exposed to tests |
+| `events` | dispatched events log for current session (read-only; cleared on `load`) |
 | `stop()` | dispose |
 
 ### 4.3 Asserts (required)
@@ -88,6 +89,7 @@ testModules(modules, options?) → Result<ModuleTestHarness, Failure>
 expectCommitted(turn: TurnResult): void
 expectRejected(turn: TurnResult, code?: string): void
 expectSlice(harness, name, partial): void
+expectEvent(harness, name: string, partialPayload?: JsonObject): void
 ```
 
 ### 4.4 LLM mocks (required)
@@ -124,7 +126,7 @@ packages/module-sdk/src/test/
 ### 5.3 Compat
 
 - Keep `tests/compat` goldens
-- Extend when 1.0 surface grows (readModel)
+- Extend when 1.0 surface grows (readModel, events)
 - Gate on every sdk/core PR
 
 ### 5.4 Stress suite (required)
@@ -150,6 +152,14 @@ Generator: `createNoopStressModule(i)` via `defineModule`.
 | S12 | moduleConfig invalid | boot/turn fail clear code (align 03) |
 | S13 | `ctx.op` inside `committed` | fail with `MODULE_MOMENT_OP_FORBIDDEN`; world unchanged beyond already-committed player turn |
 | S14 | unknown `ctx.readModel` name | fail with `MODULE_READ_MODEL_UNKNOWN` |
+| S15 | events fan-out: one emit → N=30 subscribers, priority order, payload intact | all fire, deterministic |
+| S16 | `ctx.emit` in narrative / turn.change | turn rejected with `MODULE_EVENT_EMIT_FORBIDDEN` |
+| S17 | subscriber `ctx.op` / `deny` in event dispatch | fail-loud `MODULE_MOMENT_OP_FORBIDDEN` / `MODULE_EVENT_DENY_FORBIDDEN`; world unchanged |
+| S18 | subscription to unknown event name (publisher loaded) | boot fail `MODULE_EVENT_UNKNOWN`; without `requires` on publisher → boot warning + inert |
+| S19 | pending scheduled system turns across save/load | restored and drained after load (`waitIdle`); no corruption |
+| S20 | subscriber handler throws post-commit | turn stays committed; warning `MODULE_EVENT_HANDLER_ERROR`; world unchanged |
+| S21 | `init` failure / `shutdown` error / ordering | boot fail `MODULE_INIT_FAILED`; shutdown → warning `MODULE_SHUTDOWN_ERROR`; init priority asc, shutdown reverse |
+| S22 | event cascade depth / per-turn burst caps | `MODULE_EVENT_CASCADE_LIMIT` / `MODULE_EVENT_BURST_LIMIT`; remaining events dropped with warning; world unchanged |
 
 Perf tripwire (same suite or adjacent):
 
@@ -157,6 +167,8 @@ Perf tripwire (same suite or adjacent):
 |----|------|
 | P01 | Boot N=30 under recorded generous bound |
 | P02 | One mock turn with N=30 empty handlers under bound |
+| P03 | Boot N=100 no-op modules (events declared) under recorded bound |
+| P04 | One mock turn with N=100 handlers + event fan-out under bound |
 
 **Bounds process (required):**
 1. On first green stress PR, record wall-time baseline on CI-class machine (or documented local reference).
@@ -164,7 +176,7 @@ Perf tripwire (same suite or adjacent):
 3. Fail only on pathological regression (e.g. >3× baseline or absolute ceiling), not micro-bench flake.
 4. Re-baseline only with explicit PR note when intentional cost is added.
 
-### 5.5 Atomicity pack A01–A08 (all required)
+### 5.5 Atomicity pack A01–A09 (all required)
 
 | ID | Case |
 |----|------|
@@ -176,6 +188,7 @@ Perf tripwire (same suite or adjacent):
 | A06 | system turn skips `narrative.write` |
 | A07 | background system: next player waits / serial session |
 | A08 | journal replay matches state |
+| A09 | events on rejected turn observe rolled-back state (no draft leak); dispatch cannot mutate (observe-only enforced) |
 
 If a case lacks coverage today — **add tests**. “If helper exists” is not allowed.
 
@@ -196,6 +209,7 @@ Also ensure `test:compat`, `test:module-sdk` remain.
 - [ ] `testModules` multi-module
 - [ ] `turn` / `action` / `systemTurn` / `waitIdle`
 - [ ] `save` + `load` roundtrip works in harness tests
+- [ ] `events` log + `expectEvent`
 - [ ] `fixedProseLlm` + `scriptedToolLlm`
 - [ ] asserts exported
 - [ ] JSDoc on public API
@@ -203,8 +217,9 @@ Also ensure `test:compat`, `test:module-sdk` remain.
 
 ### Suites
 - [ ] S01–S14 green (incl. committed-op + unknown readModel)
-- [ ] P01–P02 present with **documented** bounds
-- [ ] A01–A08 green inside `test:platform`
+- [ ] S15–S22 green (events: fan-out, forbidden emit, observe-only, binding, caps, lifecycle, pending system turns)
+- [ ] P01–P04 present with **documented** bounds
+- [ ] A01–A09 green inside `test:platform`
 - [ ] compat green
 - [ ] first-party integration on harness (incl. character tool path)
 - [ ] Author docs teach harness first; `createTestEngine` advanced-only
@@ -237,7 +252,9 @@ bun run typecheck
 - [ ] Implement full harness API §4
 - [ ] LLM mocks including scripted tools
 - [ ] Stress S01–S14 + P01–P02 (+ baseline bounds doc)
-- [ ] Fill atomicity A01–A08 gaps
+- [ ] Events S15–S22 + P03–P04 (bounds) incl. harness events log
+- [ ] Lifecycle S21 (init/shutdown ordering + failure codes)
+- [ ] Fill atomicity A01–A09 gaps
 - [ ] Root scripts
 - [ ] Migrate first-party integration tests
 - [ ] Update testing docs (harness = author SoT)

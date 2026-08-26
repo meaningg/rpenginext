@@ -50,6 +50,39 @@ export interface CompiledMomentsIr {
   readonly hostReadModels: readonly string[];
 }
 
+/**
+ * Declarative event emitter descriptor in IR (specs/06 §7).
+ */
+export interface CompiledEventEmitIr {
+  readonly name: string;
+  readonly hasSchema: boolean;
+  readonly description?: string;
+}
+
+/**
+ * Declarative event subscription descriptor in IR.
+ */
+export interface CompiledEventSubscribeIr {
+  readonly name: string;
+  readonly priority: number;
+}
+
+/**
+ * Declarative events surface (handlers live beside IR at runtime).
+ */
+export interface CompiledEventsIr {
+  readonly emit: readonly CompiledEventEmitIr[];
+  readonly subscribe: readonly CompiledEventSubscribeIr[];
+}
+
+/**
+ * Declarative module lifecycle flags (handlers live beside IR at runtime).
+ */
+export interface CompiledLifecycleIr {
+  readonly init: boolean;
+  readonly shutdown: boolean;
+}
+
 export interface CompiledAiTaskIr {
   readonly localKey: string;
   readonly type: string;
@@ -83,6 +116,8 @@ export interface CompiledModuleIR {
   readonly aiTasks: readonly CompiledAiTaskIr[];
   readonly aiTools: readonly CompiledAiToolIr[];
   readonly capabilityKinds: readonly string[];
+  readonly lifecycle: CompiledLifecycleIr;
+  readonly events: CompiledEventsIr;
 }
 
 /**

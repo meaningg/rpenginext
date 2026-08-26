@@ -15,12 +15,12 @@ import { createCommandId } from "../util/ids.ts";
 export function createFixtureHelloModule(): Module {
   const manifest: ModuleManifest = {
     id: "fixture-hello",
-    version: "0.1.0",
+    version: "1.0.0",
     displayName: "Fixture Hello",
     description: "Phase 2 test fixture module",
     engines: {
-      core: "^0.1.0",
-      contracts: "^0.1.0",
+      core: "^1.0.0",
+      contracts: "^1.0.0",
     },
     priority: 50,
     provides: ["capability:fixture-hello"],

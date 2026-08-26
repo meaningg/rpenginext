@@ -5,10 +5,12 @@ import {
   err,
   failure,
   MODULE_IR_VERSION,
+  moduleFailure,
   ok,
   parseModuleManifest,
   type Failure,
   type Module,
+  type ModuleEventPublisher,
   type ModuleFactory,
   type ModuleManifest,
   type PermissionToken,
@@ -21,6 +23,15 @@ import { satisfiesRange } from "../util/semver.ts";
 import { ContributionIndex } from "./contribution-index.ts";
 import { validateCapabilityGraph } from "./capability-graph.ts";
 import { createRegisterContext } from "./register-context.ts";
+
+/**
+ * Extracts the owner module id (with `-` → `_`) from a canonical event name.
+ */
+function canonicalOwner(name: string): string | undefined {
+  const dot = name.indexOf(".");
+  if (dot <= 0) return undefined;
+  return name.slice(0, dot);
+}
 
 export interface LoadedModule {
   readonly module: Module;
@@ -122,6 +133,7 @@ export class ModuleRegistry {
     }
 
     const seen = new Set<string>();
+    const seenSlices = new Map<string, string>();
     const parsedModules: { module: Module; manifest: ModuleManifest }[] = [];
     for (const mod of resolved) {
       const parsed = parseModuleManifest(mod.manifest);
@@ -135,18 +147,36 @@ export class ModuleRegistry {
       const manifest = parsed.data;
       if (seen.has(manifest.id)) {
         return err(
-          failure("DUPLICATE_MODULE", `duplicate module id: ${manifest.id}`),
+          moduleFailure(
+            "MODULE_ID_DUPLICATE",
+            `duplicate module id "${manifest.id}" (module: ${manifest.id}). Hint: give each module a unique id.`,
+            { moduleId: manifest.id, moduleIds: [manifest.id] },
+          ),
         );
       }
       seen.add(manifest.id);
 
+      for (const slice of manifest.stateSlices) {
+        const owner = seenSlices.get(slice.name);
+        if (owner) {
+          return err(
+            moduleFailure(
+              "MODULE_SLICE_DUPLICATE",
+              `duplicate slice name "${slice.name}" owned by modules "${owner}" and "${manifest.id}". Hint: each slice must be owned by exactly one module.`,
+              { slice: slice.name, moduleIds: [owner, manifest.id] },
+            ),
+          );
+        }
+        seenSlices.set(slice.name, manifest.id);
+      }
+
       const coreOk = satisfiesRange(this.coreVersion, manifest.engines.core);
       if (!coreOk.ok) {
         return err(
-          failure(
-            "ENGINE_MISMATCH",
-            `module ${manifest.id} engines.core ${manifest.engines.core} incompatible with core ${this.coreVersion}`,
-            { causedBy: [manifest.id] },
+          moduleFailure(
+            "MODULE_ENGINES_INCOMPATIBLE",
+            `module "${manifest.id}" engines.core "${manifest.engines.core}" incompatible with core ${this.coreVersion} (module: ${manifest.id}). Hint: upgrade the module to sdk ^1.0.0 or align engine versions.`,
+            { moduleId: manifest.id },
           ),
         );
       }
@@ -156,10 +186,10 @@ export class ModuleRegistry {
       );
       if (!contractsOk.ok) {
         return err(
-          failure(
-            "ENGINE_MISMATCH",
-            `module ${manifest.id} engines.contracts ${manifest.engines.contracts} incompatible with contracts ${this.contractsVersion}`,
-            { causedBy: [manifest.id] },
+          moduleFailure(
+            "MODULE_ENGINES_INCOMPATIBLE",
+            `module "${manifest.id}" engines.contracts "${manifest.engines.contracts}" incompatible with contracts ${this.contractsVersion} (module: ${manifest.id}). Hint: upgrade the module to sdk ^1.0.0 or align engine versions.`,
+            { moduleId: manifest.id },
           ),
         );
       }
@@ -189,10 +219,9 @@ export class ModuleRegistry {
     }
 
     const ordered = [...active].sort((a, b) => {
-      if (a.manifest.priority !== b.manifest.priority) {
-        return a.manifest.priority - b.manifest.priority;
-      }
-      return a.manifest.id.localeCompare(b.manifest.id);
+      // Tie-break for equal priority = registration order (stable sort preserves
+      // the resolved `base ++ extraModules` list order; specs/04 §4.1.1).
+      return a.manifest.priority - b.manifest.priority;
     });
 
     const graphResult = validateCapabilityGraph(ordered.map((item) => item.manifest));
@@ -227,10 +256,10 @@ export class ModuleRegistry {
           const ir = mod.compiled.ir;
           if (ir.irVersion !== MODULE_IR_VERSION) {
             return err(
-              failure(
-                "ENGINE_MISMATCH",
-                `module ${manifest.id} IR v${ir.irVersion} unsupported (engine supports v${MODULE_IR_VERSION})`,
-                { causedBy: [manifest.id] },
+              moduleFailure(
+                "MODULE_ENGINES_INCOMPATIBLE",
+                `module "${manifest.id}" IR v${ir.irVersion} unsupported (engine supports v${MODULE_IR_VERSION}) (module: ${manifest.id}). Hint: recompile with the current module-sdk.`,
+                { moduleId: manifest.id },
               ),
             );
           }
@@ -306,6 +335,10 @@ export class ModuleRegistry {
 
     this.index.sortAll();
 
+    // --- events binding (specs/06 §7.3) ---
+    const binding = this.validateEventBindings();
+    if (!binding.ok) return binding;
+
     return ok({
       modules: this.loaded,
       index: this.index,
@@ -317,7 +350,66 @@ export class ModuleRegistry {
   }
 
   /**
-   * Invokes module start hooks.
+   * Validates static event subscriptions against loaded publishers.
+   *
+   * - publisher loaded + name unknown (typo) → boot fail `MODULE_EVENT_UNKNOWN`;
+   * - publisher not loaded, no capability requires → boot warning + inert subscription;
+   * - publisher not loaded with capability requires → fails via capability graph (`MODULE_REQUIRES_MISSING`).
+   */
+  private validateEventBindings(): Result<void, Failure> {
+    const publisherNames = new Set(this.index.eventPublishers.keys());
+    const loadedIds = new Set(this.loaded.map((m) => m.module.manifest.id));
+    const inert: string[] = [];
+
+    for (const sub of this.index.eventSubscriptions) {
+      const subOwner = sub.moduleId;
+      if (publisherNames.has(sub.value.name)) continue;
+
+      const publisherModuleId = canonicalOwner(sub.value.name);
+      // Manifest ids use dashes; canonical prefixes use underscores.
+      const publisherDashId = publisherModuleId?.replace(/_/g, "-");
+      if (publisherModuleId && publisherDashId && loadedIds.has(publisherDashId)) {
+        // Publisher is loaded but did not declare this name → typo.
+        return err(
+          moduleFailure(
+            "MODULE_EVENT_UNKNOWN",
+            `module "${subOwner}" subscribes to unknown event "${sub.value.name}" (publisher module "${publisherModuleId}" is loaded but does not declare it) (module: ${subOwner}). Hint: check the event catalog in the publisher README / events.emit.`,
+            { moduleId: subOwner, event: sub.value.name },
+          ),
+        );
+      }
+      if (publisherModuleId && !loadedIds.has(publisherModuleId)) {
+        // Publisher not loaded: requires on its capability fails elsewhere;
+        // otherwise the subscription is inert (documented composition variance).
+        this.log.warn(
+          { moduleId: subOwner, event: sub.value.name, publisher: publisherModuleId },
+          `event subscription inert: publisher module "${publisherModuleId}" not loaded`,
+        );
+        inert.push(sub.value.name);
+        continue;
+      }
+
+      // Canonical prefix unknown entirely → typo against the whole catalog.
+      return err(
+        moduleFailure(
+          "MODULE_EVENT_UNKNOWN",
+          `module "${subOwner}" subscribes to unknown event "${sub.value.name}" (module: ${subOwner}). Hint: check the event catalog in publisher READMEs / events.emit.`,
+          { moduleId: subOwner, event: sub.value.name },
+        ),
+      );
+    }
+
+    if (inert.length > 0) {
+      this.index.eventSubscriptions = this.index.eventSubscriptions.filter(
+        (sub) => !inert.includes(sub.value.name),
+      );
+    }
+    return ok(undefined);
+  }
+
+  /**
+   * Invokes module init hooks (specs/06 §8).
+   * Init failure → boot fail `MODULE_INIT_FAILED`; engine must not start.
    */
   async startAll(): Promise<Result<void, Failure>> {
     for (const loaded of this.loaded) {
@@ -329,13 +421,10 @@ export class ModuleRegistry {
         });
       } catch (error) {
         return err(
-          failure(
-            "MODULE_ERROR",
-            `module ${loaded.module.manifest.id} start() failed`,
-            {
-              details: String(error),
-              causedBy: [loaded.module.manifest.id],
-            },
+          moduleFailure(
+            "MODULE_INIT_FAILED",
+            `module "${loaded.module.manifest.id}" init() failed (module: ${loaded.module.manifest.id}). Hint: fix the init hook or its external resource; cause: ${error instanceof Error ? error.message : String(error)}.`,
+            { moduleId: loaded.module.manifest.id },
           ),
         );
       }
@@ -345,7 +434,8 @@ export class ModuleRegistry {
   }
 
   /**
-   * Invokes module stop hooks (reverse order).
+   * Invokes module shutdown hooks in reverse priority order (specs/06 §8).
+   * Errors → warning `MODULE_SHUTDOWN_ERROR`; stop never fails.
    */
   async stopAll(): Promise<Result<void, Failure>> {
     const reverse = [...this.loaded].reverse();
@@ -357,12 +447,14 @@ export class ModuleRegistry {
           log: this.log.child({ moduleId: loaded.module.manifest.id }),
         });
       } catch (error) {
-        this.log.error(
+        this.log.warn(
           {
             moduleId: loaded.module.manifest.id,
-            err: String(error),
+            code: "MODULE_SHUTDOWN_ERROR",
+            err:
+              error instanceof Error ? error.message : String(error),
           },
-          "module stop() failed",
+          `[MODULE_SHUTDOWN_ERROR] module "${loaded.module.manifest.id}" shutdown() failed (module: ${loaded.module.manifest.id}). Hint: shutdown is cleanup only; fix the resource teardown.`,
         );
       }
     }

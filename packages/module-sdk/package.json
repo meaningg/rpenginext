@@ -1,6 +1,6 @@
 {
   "name": "@rpengineext/module-sdk",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Author-facing Module SDK (CBMD): defineModule, capabilities, test harness",
@@ -10,6 +10,7 @@
   },
   "scripts": {
     "test": "bun test",
+    "test:harness": "bun test tests/harness",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
@@ -23,7 +24,7 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "@rpengineext/core": "^0.1.0"
+    "@rpengineext/core": "^1.0.0"
   },
   "peerDependenciesMeta": {
     "@rpengineext/core": {

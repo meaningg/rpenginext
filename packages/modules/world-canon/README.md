@@ -21,6 +21,19 @@ Built with **`@rpengineext/module-sdk`** (`defineModule`).
 
 Host puts this string on `session.meta.worldCanon`.
 
+## Public contract
+
+| Field | Value |
+|-------|-------|
+| id / version / priority | `world-canon` · `1.0.0` · 15 |
+| provides / requires | `capability:world-canon` / — |
+| slice | `world_canon` (schemaVersion 1) |
+| meta keys (seed) | `meta.worldCanon: string` |
+| config key | `world_canon` (schema) |
+| readModels | — |
+| events | emitted: —; subscribed: — |
+| system reasons / tasks / tools | — (no background system turns) |
+
 ## Non-goals (v1)
 
 - Mid-session canon mutation

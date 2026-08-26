@@ -107,25 +107,34 @@ EngineConfig {
 
 ## 4. Module enablement
 
-**Target (Module Platform 1.0)** — normative workstream: [specs/04-host-composition.md](../specs/04-host-composition.md).
+**Normative (Module Platform 1.0 done)** — [specs/04-host-composition.md](../specs/04-host-composition.md).
 
 | Mechanism | Role |
 |-----------|------|
 | `moduleProfile` / `RP_MODULE_PROFILE` | first-party set: `core-book` (default), `minimal`, `none` |
 | `RP_MODULES` / enable lists | replace or extend first-party ids from host catalog |
 | `RP_DISABLE_MODULES` / `disabledModuleIds` | remove ids after resolution |
-| `extraModules` | append prebuilt `Module` instances (external/tests) |
+| `extraModules` | append prebuilt `Module` instances (external/tests), **always last** |
 | `modules` option | **exclusive** full override (then `extraModules` only) |
 
 Rules:
 
-- Precedence: **code options > env > defaults** (see spec 04 matrix).
-- Unknown catalog id → boot fail `MODULE_UNKNOWN`.
-- `enabled ∩ disabled` non-empty → boot fail (no guess).
+- Precedence (locked): `options.modules` (exclusive) > `RP_MODULES` > profile (`options.moduleProfile` ?? `RP_MODULE_PROFILE` ?? `core-book`); затем `enabledModuleIds` add, `disabledModuleIds` + `RP_DISABLE_MODULES` remove.
+- Unknown catalog id → boot fail `MODULE_UNKNOWN` (E12).
+- `enabled ∩ disabled` non-empty → boot fail `CONFIG_INVALID` (no guess).
 - Default production: **strict missing capability = ON** (`failOnMissingCapability`).
+- Equal `priority` tie-break = **registration order** (resolved `base ++ extraModules`), детерминировано.
+- Inventory: `listModules()` на runtime, CLI `--modules`, API `GET /modules`, structured boot log.
 - No silent auto-discovery of untrusted code / remote plugins in v1.
 
-**Current 0.x (until spec 04 done):** `createHostRuntime` hardcodes working-memory + world-canon + character and accepts `extraModules` only. Env profile knobs above are **specified for 1.0**, not all implemented yet.
+### 4.1 Module config & secrets (normative, spec 04 §4.6)
+
+| Rule | Value |
+|------|-------|
+| `moduleConfig` — не secrets channel | значения могут попасть в конфиг-дампы/логи/error-контекст — api keys и токены запрещены |
+| Secrets | process env, читается кодом модуля напрямую; host не проксирует env в модули в 1.0 |
+| Failures | значения конфига/секретов не появляются в failure details (spec 03 §4.1) |
+| Validation | moduleConfig zod schema на boot; fail → `CONFIG_INVALID` (E07) |
 
 ## 5. Feature flags
 

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|--------|
-| **Status** | `ready` |
+| **Status** | `done` |
 | **Priority** | P3 final gate |
 | **Depends on** | **All** specs 01–06 `done` (no partial set) |
 | **Blocks** | public claim “Module Platform 1.0” |
@@ -103,11 +103,11 @@ Document this block in root README and this spec.
 
 | Doc | Action |
 |-----|--------|
-| `docs/modules/sdk-reference.md` | **Normative SDK 1.0**; ctx includes readModel |
+| `docs/modules/sdk-reference.md` | **Normative SDK 1.0**; ctx includes readModel + events; lifecycle hooks |
 | `docs/modules/compatibility.md` | final |
 | `docs/modules/CHANGELOG.md` | `## 1.0.0` |
-| `docs/modules/errors.md` | final catalog |
-| `docs/modules/conventions.md` | inter-module + priority |
+| `docs/modules/errors.md` | final catalog (E01–E26) |
+| `docs/modules/conventions.md` | inter-module + events + priority |
 | `docs/modules/README.md` | platform locked + links |
 | `docs/modules/recipes.md` | all recipes + migrations |
 | `docs/releases/module-platform-1.0.md` | release notes |
@@ -126,20 +126,24 @@ Author path must not teach ports.
 
 `docs/releases/module-platform-1.0.md`:
 
-1. **What shipped** — SDK 1.0, harness, stress, host composition, migrations, readModel, errors, CI gates  
+1. **What shipped** — SDK 1.0, harness, stress, host composition, migrations, readModel, errors, CI gates, **events (push-уведомления), module lifecycle (init/shutdown)**  
 2. **Author workflow** — link modules README  
 3. **Compatibility promise** — link compatibility.md  
 4. **Breaking vs 0.x** — explicit list  
 5. **Deferred by design**
    - ADR 0005 moments-native core  
    - Until ADR 0005: **sdk IR bind ↔ ports bus dual-path** remains; every sdk/core PR **must** keep `test:compat` + `test:modules-stress` green (dual-path regression risk)  
+   - ADR 0005 target: MomentRegistry ключуется нормативной моментной таблицей spec 01 §4.2; поверхности 1.0 (events dispatch, lifecycle) реализуются момент-нативно (spec 06 §7.4) — миграция = перенос старых портов под полными гейтами (compat + stress + platform), без переделки новых поверхностей  
    - `turn.plan` (spec 06 A)  
-   - costs / structured actions author API  
+   - costs / structured actions author API
+   - dynamic event subscriptions / event filters
+   - versioned capability tokens
    - domain modules npc/plot/…  
    - marketplace, multiplayer, content-safety product  
    - live LLM CI blocker  
 6. **Ops** — env vars, GET /modules, strict capabilities  
 7. **Post-release rule** — core PR only bugfix / ADR / “cannot express in SDK” proof  
+8. **Events/lifecycle additivity** — new event / new optional hook = **minor**; change to dispatch semantics, moment permissions, or hook ctx rules = **major** (spec 01 §5.2)  
 
 ## 8. Implementation checklist
 
@@ -195,8 +199,9 @@ Manual:
 4. Each product module: own task; harness tests; no core drive-by.  
 5. ADR 0005 / turn.plan only on documented triggers — not drive-by refactors.  
 6. Never re-introduce MVP tags for broken half-platforms.  
-7. Until moments-native core: treat sdk↔ports adapter as **load-bearing**; no “quick” bind bypass without compat fixtures.  
-8. Author-facing docs must keep teaching **harness + defineModule only** (no ports, no pipeline stages as author API).
+7. Until moments-native core: treat sdk↔ports adapter as **load-bearing**; no “quick” bind bypass without compat fixtures.
+8. Events/lifecycle: additive surface (new event, new optional hook) = **minor** + compat/stress/boundaries gates; changing dispatch semantics / moment permissions / hook ctx rules = **major** (spec 01 §5.2).
+9. Author-facing docs must keep teaching **harness + defineModule only** (no ports, no pipeline stages as author API).
 
 ## 12. Exit
 
@@ -213,5 +218,5 @@ Spec **done** when §9 satisfied and Module Platform 1.0 is tagged/merged with r
 | Errors | 03 | errors.md, E01–E14 tests |
 | Host ops | 04 | host-bootstrap tests, GET /modules, env |
 | Scaffold/migrations | 05 | test:scaffold-smoke, migrate tests |
-| Inter-module + readModel | 06 | test:module-boundaries, readModel tests |
+| Inter-module + readModel + events | 06 | test:module-boundaries, readModel + events tests |
 | Tag | 07 | this checklist + release notes |

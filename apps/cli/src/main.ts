@@ -15,6 +15,7 @@ import { createHostRuntime } from "@rpengineext/host-bootstrap";
  *   bun run apps/cli/src/main.ts --repl
  *   bun run apps/cli/src/main.ts --session <id> --repl
  *   bun run apps/cli/src/main.ts --mock --once hello
+ *   bun run apps/cli/src/main.ts --modules
  */
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -29,6 +30,7 @@ async function main(): Promise<void> {
   const repl = args.includes("--repl");
   const printTrace = args.includes("--print-trace");
   const forceMock = args.includes("--mock");
+  const listModules = args.includes("--modules");
   const sessionIdx = args.indexOf("--session");
   const sessionIdArg =
     sessionIdx >= 0 ? (args[sessionIdx + 1] ?? undefined) : undefined;
@@ -47,6 +49,21 @@ async function main(): Promise<void> {
 
   const { engine, runtime, env, persistence, created, stop } = boot.value;
   const traceSink = created.traceSink;
+
+  if (listModules) {
+    console.log(`rpengineext modules (core ${CORE_VERSION})`);
+    const modules = boot.value.listModules();
+    if (modules.length === 0) {
+      console.log("(no modules loaded)");
+    }
+    for (const mod of modules) {
+      console.log(
+        `- ${mod.id} v${mod.version} priority=${mod.priority} slices=[${mod.slices.join(", ") || "-"}]`,
+      );
+    }
+    await stop();
+    return;
+  }
 
   console.log(`rpengineext CLI (core ${CORE_VERSION})`);
   console.log(`agents mode: ${env.agentsMode}`);

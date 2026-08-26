@@ -46,7 +46,7 @@ export {
 export function createWorldCanonModule() {
   return defineModule({
     id: MODULE_ID,
-    version: "0.1.0",
+    version: "1.0.0",
     title: "World Canon",
     description:
       "Seeds immutable world canon from story JSON and injects it into the narrative system prompt",

@@ -1,7 +1,9 @@
 # SDK reference — полный каталог `@rpengineext/module-sdk`
 
-> Для авторов модулей. Это **карта возможностей**, не tutorial.  
+> **Normative SDK 1.0** (Module Platform 1.0 · frozen).
+> Для авторов модулей. Это **карта возможностей**, не tutorial.
 > Старт за 5 минут: [README.md](./README.md) · Паттерны: [recipes.md](./recipes.md) · Zod: [schemas.md](./schemas.md)
+> Политика совместимости: [compatibility.md](./compatibility.md) · Коды ошибок: [errors.md](./errors.md) · Конвенции: [conventions.md](./conventions.md)
 
 Единственная публичная точка входа: **`defineModule`**.  
 Пакет: `@rpengineext/module-sdk`.
@@ -73,26 +75,28 @@ flowchart TD
 
 ### Что можно в каждом moment
 
-| Moment | Когда | `ctx.op` | `deny` | `scheduleSystem` | `passage` | `readModel` |
-|--------|--------|----------|--------|------------------|-----------|-------------|
-| `seed.apply` | new game, есть meta | да | да* | нет | нет | да |
-| `rules.guard` | до изменений | **нет** (fail-loud) | **да** | нет | нет | да |
-| `rules.soft` | предупреждения | **нет** (fail-loud) | нет | нет | нет | да |
-| `turn.change` | до narrative/LLM | **да** | да | нет | нет | да |
-| `narrative.*` | сбор prompt | **нет** (fail-loud) | нет | нет | нет | да |
-| `turn.afterProse` | prose известен, ещё draft | **да** | да | нет | **да** | да |
-| commit | core | — | — | — | — | — |
-| `turn.committed` | после успешного commit | **нет** (**fail-loud**, не silent-drop) | нет | **да** | **да** (read) | да |
-| `turn.rejected` | после отказа | **нет** (fail-loud) | нет | нет | нет | да |
-| `turn.load` | загрузка сейва | **нет** (fail-loud) | — | нет | нет | да |
-| `ai.tools.handler` | tool round агента | **`proposeOp`** | да | нет | — | да |
-| `rules.invariant` | проверка slice | **нет** (fail-loud) | да* | нет | — | n/a |
+| Moment | Когда | `ctx.op` | `deny` | `scheduleSystem` | `passage` | `readModel` | `emit` |
+|--------|--------|----------|--------|------------------|-----------|-------------|--------|
+| `seed.apply` | new game, есть meta | да | да* | нет | нет | да | нет (fail-loud) |
+| `rules.guard` | до изменений | **нет** (fail-loud) | **да** | нет | нет | да | нет (fail-loud) |
+| `rules.soft` | предупреждения | **нет** (fail-loud) | нет | нет | нет | да | нет (fail-loud) |
+| `turn.change` | до narrative/LLM | **да** | да | нет | нет | да | нет (fail-loud) |
+| `narrative.*` | сбор prompt | **нет** (fail-loud) | нет | нет | нет | да | нет (fail-loud) |
+| `turn.afterProse` | prose известен, ещё draft | **да** | да | нет | **да** | да | нет (fail-loud) |
+| commit | core | — | — | — | — | — | — |
+| `turn.committed` | после успешного commit | **нет** (**fail-loud**, не silent-drop) | нет | **да** | **да** (read) | да | **да** |
+| `turn.rejected` | после отказа | **нет** (fail-loud) | нет | нет | нет | да | **да** |
+| `turn.load` | загрузка сейва | **нет** (fail-loud) | — | нет | нет | да | нет (fail-loud) |
+| `ai.tools.handler` | tool round агента | **`proposeOp`** | да | нет | — | да | нет (fail-loud) |
+| `rules.invariant` | проверка slice | **нет** (fail-loud) | да* | нет | — | n/a | нет (fail-loud) |
+| `event.dispatch` | подписчик события (post-outcome) | **нет** (**fail-loud**) | **нет** (**fail-loud**) | **да** | нет | да | **да** (capped) |
 
 \* `deny` в op `apply` / invariant — отказ операции или хода (см. core failure codes).  
 Guard должен **резать** ход через `deny`, а не «тихо править» мир.
 
-**Write-forbidden moments:** вызов `ctx.op` / mutate → стабильный код `MODULE_MOMENT_OP_FORBIDDEN` (Platform 1.0 / spec 03 E15). Тихий collect-and-drop **запрещён**.  
-**`ctx.readModel(name)`:** либо данные, либо fail loud `MODULE_READ_MODEL_UNKNOWN` — **без** silent `undefined` (spec 06). *API `readModel` на ctx — deliverable Platform 1.0; до ship используй `access.read` / host readModels по docs.*
+**Write-forbidden moments:** вызов `ctx.op` / mutate → стабильный код `MODULE_MOMENT_OP_FORBIDDEN` (spec 03 E15). Тихий collect-and-drop **запрещён**.  
+**`ctx.readModel(name)`:** либо данные, либо fail loud `MODULE_READ_MODEL_UNKNOWN` — **без** silent `undefined`, во всех моментах (spec 06 E10).  
+**`ctx.emit`:** только в post-outcome моментах (`committed` / `rejected` / `event.dispatch`); в остальных → fail-loud `MODULE_EVENT_EMIT_FORBIDDEN` (E19; mid-turn — reject хода).
 
 `priority` модуля: **меньше = раньше** (default `100`). Bands: infra 0–9, world 10–29, entities 30–59, systems 60–79, presentation 80–99 (см. conventions / spec 04).
 
@@ -121,7 +125,8 @@ function tryDefineModule(...): Result<DefinedModule, Failure>
 | `provides` | `string[]` | нет | Capability tokens для других `requires` |
 | `requires` | `string[]` | нет | Зависимости по tokens |
 | `capabilities` | `Capability[]` | нет | Composition-форма |
-| `state` … `access` | object sugar | нет | См. каталог ниже |
+| `state` … `events` | object sugar | нет | См. каталог ниже |
+| `init` / `shutdown` | lifecycle hooks | нет | Опциональны; нормы в §4.5 ниже |
 
 `options.factoryConfig` — снимок конфига на фабрике (как `windowPairs` у working-memory).  
 Host всё равно может переопределить через `config.moduleConfig`.
@@ -526,7 +531,79 @@ turn: {
 ```
 
 Без `access.read` `readSlice` чужого имени не должен использоваться как контракт.  
-**Write** в чужой slice не существует в sdk v1.
+**Write** в чужой slice не существует в sdk v1.  
+Для стабильных cross-module запросов используй **`ctx.readModel`** (см. ниже §5 и conventions.md §6).
+
+---
+
+### `events`
+
+**Зачем:** push-уведомления между модулями без module→module deps (spec 06 §7).
+
+| Поле | Тип | Смысл |
+|------|-----|--------|
+| `emit` | `EmitDecl[]` | события, которые модуль может публиковать |
+| `subscribe` | `SubscribeDecl[]` | статические подписки |
+
+```ts
+interface EmitDecl {
+  name: string;                    // local kebab-case; canonical = <moduleId>.<name>
+  schema?: z.ZodType<JsonObject>;  // payload validation
+  description?: string;
+}
+
+interface SubscribeDecl {
+  name: string;                    // canonical event name (dot-полное)
+  priority?: number;               // default 100; меньше = раньше
+  handler(ctx: ModuleCtx, event: { payload: JsonObject }): void | Promise<void>;
+}
+```
+
+```ts
+events: {
+  emit: [{ name: "changed", schema: ChangedPayloadSchema }],
+  subscribe: [
+    {
+      name: "other_mod.changed",
+      handler(ctx, { payload }) {
+        // observe-only: readModel / свой slice ок; op/deny → fail-loud
+        ctx.scheduleSystem({ reason: "my_mod.follow_up", mode: "background" });
+      },
+    },
+  ],
+},
+```
+
+**Нормы (locked):**
+
+- canonical name = `<moduleId>` (`-` → `_`) + `.` + local kebab; один publisher на имя → duplicate = boot fail `MODULE_EVENT_DUPLICATE` (E16).
+- Подписка на неизвестное имя: publisher загружен → boot fail `MODULE_EVENT_UNKNOWN` (E17); publisher не загружен без `requires` → boot warning + инертна.
+- Dispatch только в `committed` / `rejected` / `event.dispatch`; payload валидируется schema publisher'а (E18); emit в других моментах → `MODULE_EVENT_EMIT_FORBIDDEN` (E19).
+- Хендлеры observe-only: `ctx.op`/`proposeOp` → `MODULE_MOMENT_OP_FORBIDDEN` (E15); `deny()` → `MODULE_EVENT_DENY_FORBIDDEN` (E20); `scheduleSystem` — ok; `emit` — ok (каскад, caps E22/E23: depth 8, burst 256/turn).
+- Handler throw post-commit → turn committed + warning `MODULE_EVENT_HANDLER_ERROR` (E21), мир не меняется.
+- События эфемерны (turn-scoped), в save не пишутся; подписки статичны.
+
+### Lifecycle hooks: `init` / `shutdown` (spec 06 §8)
+
+Опциональны, модуль-level (не capability kind):
+
+```ts
+defineModule({
+  id, version, title,
+  async init(ctx) { /* once, после boot-валидации, до первого turn */ },
+  async shutdown() { /* cleanup only, при stop engine */ },
+});
+```
+
+| Правило | Значение |
+|---------|----------|
+| `init` timing | после полной boot-валидации (registry, requires, events graph), до seed/turn; runs once |
+| `init` ctx | **без world-доступа**: config + log; op / emit / deny / readModel / access → fail-loud `MODULE_MOMENT_OP_FORBIDDEN` (message указывает `init`) |
+| `init` ordering | priority asc, sequential (детерминизм) |
+| `init` failure | **boot fail** `MODULE_INIT_FAILED` (E24); engine не стартует; shutdown для не-инициализированных модулей не вызывается |
+| `shutdown` timing | при engine stop / dispose; **reverse priority** (последний init — первый shutdown) |
+| `shutdown` ctx | нет ctx; cleanup only; error → warning `MODULE_SHUTDOWN_ERROR` (E25), stop не валится |
+| Persistence | init/shutdown не пишут в save; при init-фейле мир/сейв не создаются |
 
 ---
 
@@ -559,12 +636,13 @@ turn: {
 | `op(name, payload?, reason?)` | предложить state op → StateCommand | seed, change, afterProse, tools only |
 | `proposeOp(...)` | алиас `op` (семантика та же) | ai tool handlers |
 | `readSlice<T>(name)` | прочитать slice | свой slice или `access.read` |
-| `readModel(name, args?)` | **Platform 1.0:** стабильный cross-module query | любой moment; unknown → `MODULE_READ_MODEL_UNKNOWN` |
-| `scheduleSystem({ reason, payload?, mode? })` | очередь system turn | **committed** only |
+| `readModel(name, args?)` | стабильный cross-module query | любой момент; unknown → `MODULE_READ_MODEL_UNKNOWN` (E10) |
+| `emit(name, payload?)` | публикация события | **`committed` / `rejected` / `event.dispatch` only**; иначе `MODULE_EVENT_EMIT_FORBIDDEN` (E19) |
+| `scheduleSystem({ reason, payload?, mode? })` | очередь system turn | **committed** only / event handler |
 | `note(title, body?, data?)` | запись в turn trace | отладка |
 
-Write-forbidden moments (`committed`, `narrative.*`, `guard`, …): `op`/`proposeOp` → `MODULE_MOMENT_OP_FORBIDDEN`.  
-`readModel`: либо JSON object, либо fail loud — **без** silent `undefined` (spec 06). До ship 1.0 API может отсутствовать — используй `readSlice` / host readModels.
+Write-forbidden moments (`committed`, `narrative.*`, `guard`, `event.dispatch`, `init`, …): `op`/`proposeOp` → `MODULE_MOMENT_OP_FORBIDDEN`.  
+`readModel`: либо JSON object, либо fail loud `MODULE_READ_MODEL_UNKNOWN` — **без** silent `undefined` (все моменты, включая narrative).
 
 `ScheduleSystemRequest.mode`: `"background"` | `"inline"` (как использует character).
 
@@ -592,18 +670,22 @@ deny("CODE", "Человекочитаемое сообщение"); // throws M
 | `normalizeModuleDefinition` | advanced / tooling |
 | types: `ModuleDefinition`, `ModuleCtx`, capability interfaces, `DefinedModule` | TypeScript |
 
-Тестовый harness (отдельный subpath) — **author SoT**:
+Тестовый harness (отдельный subpath) — **author SoT** (spec 02):
 
 ```ts
-import { testModule } from "@rpengineext/module-sdk/test";
+import {
+  testModule, testModules,           // boot
+  expectCommitted, expectRejected,   // asserts
+  expectSlice, expectEvent,
+  fixedProseLlm, scriptedToolLlm,    // LLM mocks
+} from "@rpengineext/module-sdk/test";
 // advanced/maintainer only:
 // import { createTestEngine } from "@rpengineext/core/testing";
 ```
 
-Сейчас: `testModule(mod, { meta, moduleConfig, llm, agentsMode, seed })` →  
-`{ engine, runtime, sessionId, turn(text), slice }`.
+Harness surface: `turn(text)` · `action(action)` · `systemTurn(reason, payload?)` · `waitIdle(timeoutMs?)` · `save()` / `load(pointer)` · `slice` / `sliceOf(name)` · `state()` · `readModel(name, args?)` · `events` log (read-only, cleared on load) · `stop()`.
 
-Platform 1.0 (spec 02): `testModules`, `action`, `systemTurn`, `waitIdle`, `save`/`load`, asserts, `fixedProseLlm` / `scriptedToolLlm`.
+Options: `{ meta, moduleConfig, llm, agentsMode, seed, strictCapabilities, persistence }` — `strictCapabilities` default **true**.
 
 ---
 
@@ -612,15 +694,17 @@ Platform 1.0 (spec 02): `testModules`, `action`, `systemTurn`, `waitIdle`, `save
 | Нельзя | Вместо этого |
 |--------|----------------|
 | Мутировать `ctx.slice` / `worldState` руками | `ctx.op` в write-allowed moments |
-| `ctx.op` в `committed` / narrative / guard | `scheduleSystem` + system turn / tool; иначе fail loud |
-| Писать в чужой slice | свой op; cross-read via `access.read` / `readModel` (1.0) |
-| Silent `readModel` miss | fail `MODULE_READ_MODEL_UNKNOWN` (1.0) |
+| `ctx.op` в `committed` / narrative / guard / init | `scheduleSystem` + system turn / tool; иначе fail loud |
+| Писать в чужой slice | свой op; cross-read via `access.read` / `readModel` |
+| Silent `readModel` miss | fail `MODULE_READ_MODEL_UNKNOWN` (все моменты) |
+| `ctx.emit` вне post-outcome | fail `MODULE_EVENT_EMIT_FORBIDDEN` |
+| `deny()` в event handler | fail `MODULE_EVENT_DENY_FORBIDDEN`; follow-up через `scheduleSystem` |
 | Звать OpenAI/Anthropic SDK | `ai.tasks` / tools |
 | Подписываться на произвольные pipeline stages | moments `turn.*` / `rules.*` / `seed` |
 | Ждать «полу-commit» | атомарный draft |
 | Считать ports (`ModuleRegisterContext`, …) author API | только maintainers |
 | Несколько slice на модуль | v1: **один** primary slice |
-| Runtime dep на другой `module-*` | provides/requires + readModel/access |
+| Runtime dep на другой `module-*` | provides/requires + readModel/access/events |
 
 ---
 
@@ -635,7 +719,9 @@ Platform 1.0 (spec 02): `testModules`, `action`, `systemTurn`, `waitIdle`, `save
 7. Нужен UI? → `host`  
 8. Тюнинг? → `config`  
 9. Фон / агент? → `turn.committed` + `ai`  
-10. Чужие данные read-only? → `access`
+10. Чужие данные read-only? → `access` / `ctx.readModel`  
+11. Уведомления другим модулям? → `events` (emit в committed/rejected)  
+12. Внешние ресурсы при boot? → `init` / `shutdown`
 
 ---
 

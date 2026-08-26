@@ -2,13 +2,13 @@
 
 | Field | Value |
 |-------|--------|
-| **Status** | `ready` |
+| **Status** | `done` |
 | **Priority** | P0 |
 | **Depends on** | Spec 00; pairs with Spec 02 stress failures |
 | **Blocks** | operable multi-module production; Spec 07 |
 | **Owner area** | module-sdk compile/bind, core registry/pipeline, contracts failure codes |
 | **Release mode** | production — SHOULD → **MUST** for author-facing paths |
-| **Catalog** | E01–**E15** (E15 = forbidden-moment mutate) |
+| **Catalog** | E01–**E26** (E15 = forbidden-moment mutate; E16–E26 = events / lifecycle / readModel-args) |
 
 ## 1. Goal
 
@@ -29,7 +29,7 @@
 ### In scope (required)
 - Normative shape for author-facing failures
 - Code catalog + mapping from legacy codes
-- E01–E15 paths with automated tests
+- E01–E26 paths with automated tests
 - `docs/modules/errors.md`
 - Helper `moduleFailure(...)` (sdk and/or core)
 - Guarantee: host/API still returns structured `Failure`
@@ -77,7 +77,18 @@ Reuse existing contract codes when present; add missing to **single source** in 
 | `MODULE_OP_UNKNOWN` | unknown op name |
 | `MODULE_OP_PAYLOAD_INVALID` | payload schema fail |
 | `MODULE_READ_MODEL_UNKNOWN` | readModel name missing |
-| `MODULE_MOMENT_OP_FORBIDDEN` | `ctx.op` / mutate attempt in moment that forbids writes (e.g. `committed`) |
+| `MODULE_MOMENT_OP_FORBIDDEN` | `ctx.op` / mutate attempt in moment that forbids writes (e.g. `committed`, `event.dispatch`) |
+| `MODULE_EVENT_DUPLICATE` | duplicate publisher of same canonical event name |
+| `MODULE_EVENT_UNKNOWN` | emit / subscription to unknown event name |
+| `MODULE_EVENT_PAYLOAD_INVALID` | emit payload fails declared schema |
+| `MODULE_EVENT_EMIT_FORBIDDEN` | `ctx.emit` in a moment that forbids emission (non post-outcome) |
+| `MODULE_EVENT_DENY_FORBIDDEN` | `deny()` inside event dispatch |
+| `MODULE_EVENT_HANDLER_ERROR` | subscriber handler threw (post-commit → warning, turn stays committed) |
+| `MODULE_EVENT_CASCADE_LIMIT` | event cascade depth cap breached |
+| `MODULE_EVENT_BURST_LIMIT` | per-turn event burst cap breached |
+| `MODULE_INIT_FAILED` | module `init` hook failed (boot failure) |
+| `MODULE_SHUTDOWN_ERROR` | module `shutdown` hook error (warning) |
+| `MODULE_READ_MODEL_ARGS_INVALID` | readModel args fail provider schema |
 | `COMMAND_INVALID` | apply/domain deny |
 | `SCHEMA_INVALID` | slice/AI schema |
 | `CONFIG_INVALID` | moduleConfig / host config |
@@ -86,7 +97,7 @@ Reuse existing contract codes when present; add missing to **single source** in 
 
 Legacy mapping: document in `errors.md` + `compatibility.md` if old codes kept as aliases.
 
-### 4.3 Paths that MUST be clear (E01–E15)
+### 4.3 Paths that MUST be clear (E01–E26)
 
 | # | Path | Must include |
 |---|------|--------------|
@@ -104,7 +115,18 @@ Legacy mapping: document in `errors.md` + `compatibility.md` if old codes kept a
 | E12 | unknown host module id | id + known ids hint (truncated) |
 | E13 | op payload invalid | moduleId, op, zod path |
 | E14 | unmigratable slice version | moduleId, slice, fromVersion |
-| E15 | `ctx.op` / world mutate in forbidden moment (`committed`, narrative, rejected, …) | moduleId, moment name; **must not** silent-discard ops |
+| E15 | `ctx.op` / world mutate in forbidden moment (`committed`, narrative, rejected, event.dispatch, …) | moduleId, moment name; **must not** silent-discard ops |
+| E16 | duplicate event publisher | moduleId, event name, both module ids |
+| E17 | unknown event name (subscribe / emit) | moduleId, event name, hint of known events (truncated) |
+| E18 | event payload invalid | moduleId, event, zod path |
+| E19 | `ctx.emit` in forbidden moment | moduleId, moment name |
+| E20 | `deny()` in event handler | moduleId, event name |
+| E21 | event handler throw (post-commit) | moduleId, event name; **turn stays committed**, warning |
+| E22 | cascade depth limit | moduleId, event, depth |
+| E23 | burst limit | counts + first moduleId |
+| E24 | `init` failure | moduleId, cause hint (без секретов); boot fail |
+| E25 | `shutdown` error | moduleId (warning) |
+| E26 | readModel args invalid | moduleId (caller), model name, zod path |
 
 **E15 normative rule:** moments that forbid writes (**especially `turn.committed`**) MUST fail loud on `ctx.op` / `proposeOp` / equivalent mutate. Silent collect-and-drop is **banned** (current 0.x gap — fix before 1.0).
 
@@ -112,17 +134,17 @@ Legacy mapping: document in `errors.md` + `compatibility.md` if old codes kept a
 
 ### 5.1 Touchpoints (indicative)
 
-- sdk: `define-module.ts`, `normalize.ts`, `build-ir.ts`, `bind-compiled-module.ts`, `create-ctx.ts`, `resolve-op.ts`
-- core: `module-registry.ts`, `capability-graph.ts`, `register-context.ts`, `turn-context.ts`, `turn-pipeline.ts`, session load migrations
+- sdk: `define-module.ts`, `normalize.ts`, `build-ir.ts`, `bind-compiled-module.ts`, `create-ctx.ts` (emit guard), `resolve-op.ts`
+- core: `module-registry.ts`, `capability-graph.ts`, `register-context.ts`, `turn-context.ts`, `turn-pipeline.ts` (event dispatch + limits), session load migrations
 - contracts: failure code union/constants
 - host-bootstrap: unknown module id
 
 ### 5.2 Steps
 
 1. Inventory current codes on module paths.  
-2. Add missing codes to contracts.  
+2. Add missing codes to contracts (incl. E16–E26).  
 3. `moduleFailure(code, message, details)` helper.  
-4. Patch E01–E15 call sites (incl. committed op fail-loud).  
+4. Patch E01–E26 call sites (incl. committed op fail-loud, event dispatch, init/shutdown).  
 5. Automated tests per E0x (unit/integration/stress overlap OK).  
 6. Publish `docs/modules/errors.md` + links.
 
@@ -137,12 +159,12 @@ Legacy mapping: document in `errors.md` + `compatibility.md` if old codes kept a
 
 - [ ] `docs/modules/errors.md` published and linked
 - [ ] Codes centralized; catalog matches implementation
-- [ ] E01–E15 each have automated test locking `code` + key details
+- [ ] E01–E26 each have automated test locking `code` + key details
 - [ ] Unknown op / duplicate id / missing requires / committed-op never surface as opaque `INTERNAL` only
 - [ ] `committed` + `ctx.op` → `MODULE_MOMENT_OP_FORBIDDEN` (not silent drop)
 - [ ] No secrets in failure details (test or review checklist)
 - [ ] Host/API still returns structured `Failure`
-- [ ] Author can fix E01–E15 without opening core source
+- [ ] Author can fix E01–E26 without opening core source
 
 ## 7. Verification
 
@@ -165,10 +187,10 @@ Manual:
 ## 8. Implementation checklist
 
 - [ ] Inventory + legacy map
-- [ ] contracts codes
+- [ ] contracts codes (incl. E16–E26)
 - [ ] helper
-- [ ] E01–E15 call sites
-- [ ] tests (incl. E15 committed mutate)
+- [ ] E01–E26 call sites
+- [ ] tests (incl. E15 committed mutate, E19 emit moment, E20 deny in dispatch, E21 handler throw, E24 init fail)
 - [ ] errors.md + links
 
 ## 9. Risks

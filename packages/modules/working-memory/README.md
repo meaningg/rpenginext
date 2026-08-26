@@ -44,6 +44,19 @@ await createEngine({
 - `turn.afterProse` → `append_pair` op before COMMIT
 - `host.readModels` → debug selectors
 
+## Public contract
+
+| Field | Value |
+|-------|-------|
+| id / version / priority | `working-memory` · `1.0.0` · 10 |
+| provides / requires | `capability:working-memory` / — |
+| slice | `working_memory` (schemaVersion 1) |
+| meta keys (seed) | — (no seed) |
+| config key | `working_memory: { windowPairs: number }` (env `RP_WORKING_MEMORY_WINDOW`) |
+| readModels | `working_memory.window` (args: —), `working_memory.all` (args: —) |
+| events | emitted: —; subscribed: — |
+| system reasons / tasks / tools | — (no background system turns) |
+
 ## Non-goals (v1)
 
 - No truncation of message text

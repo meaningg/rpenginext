@@ -55,6 +55,26 @@ export interface ModuleCtx<TSlice = unknown, TConfig = unknown> {
   proposeOp(op: string, payload?: JsonObject, reason?: string): void;
 
   /**
+   * Resolves a registered module readModel (specs/06 §6).
+   * Never returns undefined: unknown name → fail-loud `MODULE_READ_MODEL_UNKNOWN`;
+   * args fail provider schema → `MODULE_READ_MODEL_ARGS_INVALID` (in all moments).
+   *
+   * @param name - readModel id (`<moduleId>.<local>`)
+   * @param args - optional provider args
+   */
+  readModel<T extends JsonObject = JsonObject>(name: string, args?: JsonObject): T;
+
+  /**
+   * Emits a module event (specs/06 §7). Only allowed in `turn.committed` /
+   * `turn.rejected` / `event.dispatch` — other moments fail-loud
+   * with `MODULE_EVENT_EMIT_FORBIDDEN`.
+   *
+   * @param name - canonical event name (`<moduleId>.<local>`)
+   * @param payload - event payload validated against events.emit schema
+   */
+  emit(name: string, payload?: JsonObject): void;
+
+  /**
    * Read another module slice (requires access.read).
    *
    * @param sliceName - target slice

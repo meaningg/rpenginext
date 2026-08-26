@@ -44,6 +44,19 @@ covered by a chunk. If you override `intervalTurns`, keep
 | Factory | `createSummaryModule({ intervalTurns })` — explicit override |
 | `moduleConfig` | `summary: { intervalTurns: number }` |
 
+## Public contract
+
+| Field | Value |
+|-------|-------|
+| id / version / priority | `summary` · `1.0.0` · 30 |
+| provides / requires | `capability:summary` / — (читает `working_memory` slice via `access.read`, без package dep) |
+| slice | `summary` (schemaVersion 1) |
+| meta keys (seed) | — |
+| config key | `summary: { intervalTurns: number }` (default: `RP_WORKING_MEMORY_WINDOW`) |
+| readModels | `summary.list` (args: —) |
+| events | emitted: —; subscribed: — |
+| system reasons / tasks / tools | reason `summary.make` · task `summary.make` · tool `summary.store` |
+
 ```ts
 import { createSummaryModule } from "@rpengineext/module-summary";
 import { createWorkingMemoryModule } from "@rpengineext/module-working-memory";

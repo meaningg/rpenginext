@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|--------|
-| **Status** | `ready` |
+| **Status** | `done` |
 | **Priority** | P1 |
 | **Depends on** | Spec 00; Spec 03 for error codes |
 | **Blocks** | production multi-module ops; Spec 07 |
@@ -106,8 +106,11 @@ result = base ++ (options.extraModules ?? [])   # extraModules ALWAYS last
 | unknown catalog id in enable / `RP_MODULES` | fail `MODULE_UNKNOWN` |
 | duplicate id after merge (incl. `extraModules`) | fail `MODULE_ID_DUPLICATE` |
 | empty set (`none` + no extra) | allowed; core loop still boots |
+| equal `priority` in any ordered surface | tie-break = **registration order** (position in resolved `base ++ extraModules`), deterministic; never Map/random order |
 
 Precedence summary: **explicit code options > env > defaults**. Exclusive `modules` short-circuits profile/id resolution; `extraModules` still appends.
+
+**Registration order is normative** (position in the resolved `base ++ extraModules` list): it is the deterministic tie-break for equal `priority` across all ordering-sensitive surfaces — narrative sections, turn moments, event dispatch (spec 06 §7), init/shutdown (spec 06 §8).
 
 ### 4.2 Profiles (required)
 
@@ -156,6 +159,15 @@ Document in `docs/architecture/08-configuration.md`, API/CLI READMEs.
 | strict manifest (if applicable) | true for production host profile |
 | module list logging | info on boot |
 
+### 4.6 Module config & secrets (normative)
+
+| Rule | Value |
+|------|-------|
+| `moduleConfig` is not a secrets channel | значения могут попасть в конфиг-дампы / логи / error-контекст — api keys и токены запрещены |
+| Secrets | process env, читается кодом модуля напрямую (ответственность автора); host не проксирует env в модули в 1.0 |
+| Failures | значения конфига/секретов не появляются в failure details (spec 03 §4.1) |
+| Validation | `moduleConfig` zod schema на boot; fail → `CONFIG_INVALID` (E07) |
+
 ## 5. Priority bands (required doc)
 
 `docs/modules/conventions.md` (or equivalent):
@@ -168,6 +180,8 @@ Document in `docs/architecture/08-configuration.md`, API/CLI READMEs.
 | 60–79 | systems | combat, plot |
 | 80–99 | presentation | status |
 | 100+ | default | low |
+
+Tie-break for equal priority inside one band: **registration order** (§4.1.1); никогда не случайный порядок.
 
 First-party must fit bands (wm 10, canon 15, character 20).  
 Optional runtime warn if priority outside 0–1000 in dev.
@@ -231,6 +245,8 @@ Structured field: array of `{ id, version, priority }`.
 - [ ] Boot log includes module inventory
 - [ ] Profiles `core-book`, `minimal`, `none`
 - [ ] Priority bands documented; first-party compliant
+- [ ] Equal-priority tie-break = registration order (tested)
+- [ ] `moduleConfig` secrets policy documented in 08-configuration (§4.6)
 - [ ] Tests cover: default, env override, disable, extraModules, unknown id, modules override, strict requires
 - [ ] Docs: 08-configuration + host READMEs + modules “how to wire”
 

@@ -143,7 +143,11 @@ export async function createEngine(
       coreVersion: CORE_VERSION,
       contractsVersion: CONTRACTS_VERSION,
       agentsMode,
-      modules: registry.getModules().map((m) => m.module.manifest.id),
+      modules: registry.getModules().map((m) => ({
+        id: m.module.manifest.id,
+        version: m.module.manifest.version,
+        priority: m.module.manifest.priority,
+      })),
     },
     "engine created",
   );
@@ -175,8 +179,8 @@ export function validateModuleConfigs(
     if (!parsed.success) {
       return err(
         failure(
-          "REGISTRATION_INVALID",
-          `moduleConfig["${key}"] failed registered config schema`,
+          "CONFIG_INVALID",
+          `moduleConfig["${key}"] failed registered config schema (module: unknown). Hint: fix the config section per the module public contract / config schema.`,
           { details: parsed.error.flatten() },
         ),
       );

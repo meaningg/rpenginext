@@ -1,6 +1,6 @@
 {
   "name": "@rpengineext/logger",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Structured logger factory (pino) for rpengineext core, modules, and hosts",

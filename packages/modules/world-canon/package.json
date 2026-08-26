@@ -1,6 +1,6 @@
 {
   "name": "@rpengineext/module-world-canon",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "World canon module: story seed + system prompt injection for narrative.write",

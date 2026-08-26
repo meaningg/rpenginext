@@ -1,6 +1,7 @@
 import {
   err,
   failure,
+  moduleFailure,
   ok,
   type Failure,
   type JsonObject,
@@ -127,29 +128,62 @@ export class HostSurface {
   }
 
   /**
-   * Resolves a read-model by id.
+   * Resolves a read-model by id (fail-loud contract, specs/06 §6).
    *
    * @param id - read model id
    * @param state - world state
-   * @param args - selector args
+   * @param args - selector args (validated against provider argsSchema when present)
+   * @param callerModuleId - calling module id (for failure details)
    */
   getReadModel(
     id: string,
     state: WorldState,
     args: JsonObject = {},
+    callerModuleId?: string,
   ): Result<unknown, Failure> {
     const owned = this.index.readModels.get(id);
     if (!owned) {
-      return err(failure("INTERNAL", `unknown read model: ${id}`));
+      return err(
+        moduleFailure(
+          "MODULE_READ_MODEL_UNKNOWN",
+          `unknown readModel "${id}"${callerModuleId ? ` (module: ${callerModuleId})` : ""}. Hint: check the provider public contract / readModels catalog.`,
+          {
+            ...(callerModuleId ? { moduleId: callerModuleId } : {}),
+            name: id,
+          },
+        ),
+      );
+    }
+    if (owned.value.argsSchema) {
+      const parsed = owned.value.argsSchema.safeParse(args);
+      if (!parsed.success) {
+        return err(
+          moduleFailure(
+            "MODULE_READ_MODEL_ARGS_INVALID",
+            `readModel "${id}" args failed provider schema${callerModuleId ? ` (module: ${callerModuleId})` : ""}. Hint: pass args per the provider public contract.`,
+            {
+              ...(callerModuleId ? { moduleId: callerModuleId } : {}),
+              name: id,
+              path: parsed.error.issues?.[0]?.path ?? [],
+            },
+          ),
+        );
+      }
+      args = parsed.data;
     }
     try {
       return ok(owned.value.get(state, args));
     } catch (error) {
       return err(
-        failure("MODULE_ERROR", `read model ${id} threw`, {
-          details: String(error),
-          causedBy: [owned.moduleId],
-        }),
+        moduleFailure(
+          "MODULE_ERROR",
+          `readModel "${id}" threw (module: ${owned.moduleId}). Hint: fix the provider get() implementation.`,
+          {
+            moduleId: callerModuleId,
+            name: id,
+            providerModuleId: owned.moduleId,
+          },
+        ),
       );
     }
   }

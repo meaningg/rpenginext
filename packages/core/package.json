@@ -1,6 +1,6 @@
 {
   "name": "@rpengineext/core",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Stable RP engine runtime: registry, state kernel, turn pipeline, agents, tracing",
