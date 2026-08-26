@@ -27,6 +27,7 @@ import {
   StoreSummaryArgsSchema,
   StoreSummaryPayloadSchema,
   StoreSummaryResultSchema,
+  STORE_SUMMARY_TOOL_PARAMETERS,
   SummaryMakeInputSchema,
   SummaryMakeOutputSchema,
   SummarySliceSchema,
@@ -128,7 +129,7 @@ export function createSummaryModule(options: CreateSummaryModuleOptions = {}) {
   return defineModule(
     {
       id: MODULE_ID,
-      version: "1.0.0",
+      version: "1.0.1",
       title: "Story Summary",
       description:
         "Delta summary chunks of working memory via background system turns; all chunks injected into the narrative system prompt",
@@ -283,7 +284,7 @@ export function createSummaryModule(options: CreateSummaryModuleOptions = {}) {
             optional: true,
             timeoutMs: 30_000,
             maxRepairAttempts: 1,
-            maxToolRounds: 3,
+            maxToolRounds: 2,
             temperature: 0.2,
             tools: ["store"],
             runOn: { systemReason: SYSTEM_REASON_MAKE_SUMMARY },
@@ -295,6 +296,7 @@ export function createSummaryModule(options: CreateSummaryModuleOptions = {}) {
             description: "Store one delta summary chunk for the new turns",
             args: StoreSummaryArgsSchema as unknown as z.ZodType<JsonObject>,
             result: StoreSummaryResultSchema as unknown as z.ZodType<JsonObject>,
+            parametersJsonSchema: STORE_SUMMARY_TOOL_PARAMETERS,
             handler: (args, ctx) => {
               const summary = String(args.summary ?? "").trim();
               if (!summary) {
