@@ -18,6 +18,11 @@ export {
   MODULE_PROFILE_IDS,
   type ModuleProfileId,
   expandProfile,
-  instantiateFromCatalog,
   resolveMergedIds,
 } from "./module-catalog.ts";
+export {
+  discoverModulePool,
+  instantiateFromPool,
+  resolvePool,
+  type ModulePoolEntry,
+} from "./module-discovery.ts";

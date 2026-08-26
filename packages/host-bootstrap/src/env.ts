@@ -25,6 +25,7 @@ export const HOST_ENV = {
   moduleProfile: "RP_MODULE_PROFILE",
   modules: "RP_MODULES",
   disableModules: "RP_DISABLE_MODULES",
+  moduleDirs: "RP_MODULE_DIRS",
 } as const;
 
 const DEFAULT_DATA_DIR = "data";
@@ -59,6 +60,8 @@ export interface HostEnv {
   readonly moduleProfile: "core-book" | "minimal" | "none" | undefined;
   readonly modules: readonly string[] | undefined;
   readonly disableModules: readonly string[];
+  /** Module discovery scan roots (ADR 0006); undefined = default root. */
+  readonly moduleDirs: readonly string[] | undefined;
 }
 
 /**
@@ -111,6 +114,7 @@ export function readHostEnv(
     moduleProfile: parseModuleProfile(env[HOST_ENV.moduleProfile]),
     modules: parseCommaList(env[HOST_ENV.modules]),
     disableModules: parseCommaList(env[HOST_ENV.disableModules]) ?? [],
+    moduleDirs: parseCommaList(env[HOST_ENV.moduleDirs]),
   };
 }
 

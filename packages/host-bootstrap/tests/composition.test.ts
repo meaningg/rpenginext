@@ -220,33 +220,33 @@ describe("host module composition (specs/04)", () => {
 describe("resolveHostModules (precedence unit)", () => {
   const env = readHostEnv({ ...BASE_ENV, RP_AGENTS_MODE: undefined as never });
 
-  test("default profile → core-book ids", () => {
-    const res = resolveHostModules({}, env);
+  test("default profile → core-book ids", async () => {
+    const res = await resolveHostModules({}, env);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.value.ids).toEqual(["working-memory", "world-canon", "character"]);
   });
 
-  test("profile option beats env", () => {
+  test("profile option beats env", async () => {
     const withEnv = readHostEnv({
       ...BASE_ENV,
       RP_MODULE_PROFILE: "minimal",
       RP_AGENTS_MODE: undefined as never,
     });
-    const res = resolveHostModules({ moduleProfile: "none" }, withEnv);
+    const res = await resolveHostModules({ moduleProfile: "none" }, withEnv);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.value.ids).toEqual([]);
   });
 
-  test("RP_MODULES beats profile", () => {
+  test("RP_MODULES beats profile", async () => {
     const withEnv = readHostEnv({
       ...BASE_ENV,
       RP_MODULE_PROFILE: "minimal",
       RP_MODULES: "character",
       RP_AGENTS_MODE: undefined as never,
     });
-    const res = resolveHostModules({}, withEnv);
+    const res = await resolveHostModules({}, withEnv);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.value.ids).toEqual(["character"]);

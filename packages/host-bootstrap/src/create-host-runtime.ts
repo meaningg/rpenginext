@@ -31,10 +31,16 @@ import { SqlitePersistence } from "@rpengineext/persistence-sqlite";
 import { readHostEnv, type HostEnv } from "./env.ts";
 import {
   expandProfile,
-  instantiateFromCatalog,
+  MODULE_CATALOG,
   resolveMergedIds,
   type ModuleProfileId,
 } from "./module-catalog.ts";
+import {
+  discoverModulePool,
+  instantiateFromPool,
+  resolvePool,
+  type ModulePoolEntry,
+} from "./module-discovery.ts";
 
 /**
  * Options for {@link createHostRuntime}.
@@ -44,6 +50,10 @@ import {
  * (`options.moduleProfile` ?? `RP_MODULE_PROFILE` ?? `core-book`),
  * then `enabledModuleIds` add, `disabledModuleIds` + `RP_DISABLE_MODULES`
  * remove; `extraModules` always appended last.
+ *
+ * Module discovery (ADR 0006): `moduleDirs` / `RP_MODULE_DIRS` extend the
+ * id pool; default scan root is `packages/modules` (workspace). `options.modules`
+ * skips discovery entirely (exclusive).
  */
 export interface CreateHostRuntimeOptions {
   readonly env?: Record<string, string | undefined>;
@@ -57,6 +67,8 @@ export interface CreateHostRuntimeOptions {
   readonly moduleProfile?: ModuleProfileId;
   readonly enabledModuleIds?: readonly string[];
   readonly disabledModuleIds?: readonly string[];
+  /** Module discovery roots (ADR 0006); explicit roots must exist. */
+  readonly moduleDirs?: readonly string[];
 }
 
 /**
@@ -90,15 +102,19 @@ export interface HostRuntime {
 }
 
 /**
- * Resolves the module list per the locked precedence matrix (specs/04 §4.1.1).
+ * Resolves the module list per the locked precedence matrix (specs/04 §4.1.1)
+ * over the merged id pool (catalog ⊕ discovery, ADR 0006). `options.modules`
+ * short-circuits (exclusive); `extraModules` appends in {@link createHostRuntime}.
  *
  * @param options - host options
  * @param env - normalized host env
+ * @param pool - merged module pool (defaults to the first-party catalog)
  */
-export function resolveHostModules(
+export async function resolveHostModules(
   options: CreateHostRuntimeOptions,
   env: HostEnv,
-): Result<{ modules: Module[]; ids: readonly string[] }, Failure> {
+  pool: readonly ModulePoolEntry[] = MODULE_CATALOG,
+): Promise<Result<{ modules: Module[]; ids: readonly string[] }, Failure>> {
   if (options.modules) {
     // Exclusive Module[] — skip profile/id resolution entirely.
     return ok({ modules: [...options.modules], ids: [] });
@@ -136,7 +152,7 @@ export function resolveHostModules(
   const disabled = new Set([...disabledSet, ...env.disableModules]);
   const finalIds = merged.value.filter((id) => !disabled.has(id));
 
-  const instantiated = instantiateFromCatalog(finalIds);
+  const instantiated = await instantiateFromPool(finalIds, pool);
   if (!instantiated.ok) return instantiated;
 
   return ok({ modules: instantiated.value, ids: finalIds });
@@ -207,8 +223,28 @@ export async function createHostRuntime(
         })
       : undefined;
 
+  // Module discovery (ADR 0006): explicit roots must exist; the default
+  // `packages/modules` root warns-and-skips when absent (e.g. assembled deploys).
+  // `options.modules` is exclusive — discovery is skipped entirely (D7).
+  let pool: readonly ModulePoolEntry[] = MODULE_CATALOG;
+  if (!options.modules) {
+    const DEFAULT_MODULE_DIRS = ["packages/modules"] as const;
+    const explicitDirs =
+      options.moduleDirs !== undefined || hostEnv.moduleDirs !== undefined;
+    const moduleDirs = options.moduleDirs ?? hostEnv.moduleDirs ?? DEFAULT_MODULE_DIRS;
+    const discovered = await discoverModulePool(moduleDirs, {
+      strict: explicitDirs,
+      log: log.child({ component: "module-discovery" }),
+    });
+    if (!discovered.ok) {
+      persistence.close();
+      return discovered;
+    }
+    pool = resolvePool(MODULE_CATALOG, discovered.value, log);
+  }
+
   // Module composition (specs/04): profiles / env / options / extraModules.
-  const resolved = resolveHostModules(options, hostEnv);
+  const resolved = await resolveHostModules(options, hostEnv, pool);
   if (!resolved.ok) {
     persistence.close();
     return resolved;

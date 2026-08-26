@@ -209,13 +209,22 @@ describe("mood", () => {
 
 ### 4. Подключить к host
 
-**1.0:** profiles / env / catalog — без хардкода (spec 04):
+**Без кода (рекомендуется, ADR 0006):** пакет, положенный в `packages/modules/`
+(create-module уже пишет поле `rpengineext.module` в `package.json`), сам попадает
+в id-пул хоста — подключение = одна env-строка:
+
+```bash
+RP_MODULES=mood bun run cli --modules    # модуль обнаружен и загружен
+```
+
+**1.0 классика:** profiles / env / catalog (spec 04):
 
 ```bash
 # default = core-book (wm + canon + character)
 RP_MODULE_PROFILE=minimal          # working-memory only
 RP_MODULES=working-memory,character
 RP_DISABLE_MODULES=character       # drop character from resolved set
+RP_MODULE_DIRS=packages/modules    # discovery roots (default); comma-list
 ```
 
 Либо кодом (приоритет: `options.modules` > env > profile):
@@ -223,9 +232,13 @@ RP_DISABLE_MODULES=character       # drop character from resolved set
 ```ts
 await createHostRuntime({
   extraModules: [createMoodModule()],            // всегда после resolution
-  // moduleProfile, enabledModuleIds, disabledModuleIds, modules (exclusive)
+  // moduleProfile, enabledModuleIds, disabledModuleIds, modules (exclusive), moduleDirs
 });
 ```
+
+Discovery — это **пул, а не автозагрузка**: модуль адресуется по id/
+(`RP_MODULES`, `enabledModuleIds`, unknown-подсказки), но загружается только
+при явном выборе. Детали: [ADR 0006](../adr/0006-local-module-discovery.md).
 
 ### 5. Проверка
 

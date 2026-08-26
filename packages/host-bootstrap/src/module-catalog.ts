@@ -1,33 +1,38 @@
-import {
-  err,
-  moduleFailure,
-  ok,
-  type Failure,
-  type Module,
-  type Result,
-} from "@rpengineext/contracts";
+import { err, moduleFailure, ok, type Failure, type Result } from "@rpengineext/contracts";
 import { createCharacterModule } from "@rpengineext/module-character";
 import { createSummaryModule } from "@rpengineext/module-summary";
 import { createWorldCanonModule } from "@rpengineext/module-world-canon";
 import { createWorkingMemoryModule } from "@rpengineext/module-working-memory";
 
+import type { ModulePoolEntry } from "./module-discovery.ts";
+
 /**
- * First-party in-process factory catalog (specs/04 §4.3).
- * Unknown id → boot fail `MODULE_UNKNOWN` with hint.
+ * First-party in-process factory catalog (specs/04 §4.3) — the blessed part of
+ * the module pool. Discovery (ADR 0006) extends the pool; catalog wins on id
+ * collision. Unknown id → boot fail `MODULE_UNKNOWN` with hint.
  */
-export interface ModuleFactoryEntry {
-  readonly id: string;
-  readonly factory: () => Module;
-}
-
-export const MODULE_CATALOG: readonly ModuleFactoryEntry[] = [
-  { id: "working-memory", factory: () => createWorkingMemoryModule() },
-  { id: "world-canon", factory: () => createWorldCanonModule() },
-  { id: "character", factory: () => createCharacterModule() },
-  { id: "summary", factory: () => createSummaryModule() },
+export const MODULE_CATALOG: readonly ModulePoolEntry[] = [
+  {
+    id: "working-memory",
+    source: "host-bootstrap:module-catalog",
+    factory: () => createWorkingMemoryModule(),
+  },
+  {
+    id: "world-canon",
+    source: "host-bootstrap:module-catalog",
+    factory: () => createWorldCanonModule(),
+  },
+  {
+    id: "character",
+    source: "host-bootstrap:module-catalog",
+    factory: () => createCharacterModule(),
+  },
+  {
+    id: "summary",
+    source: "host-bootstrap:module-catalog",
+    factory: () => createSummaryModule(),
+  },
 ];
-
-const CATALOG_BY_ID = new Map(MODULE_CATALOG.map((entry) => [entry.id, entry]));
 
 /**
  * Module profiles (specs/04 §4.2 — normative).
@@ -52,41 +57,11 @@ export function expandProfile(profile: ModuleProfileId): readonly string[] {
 }
 
 /**
- * Instantiates a list of catalog ids in list order.
- *
- * @param ids - catalog ids (order preserved)
- */
-export function instantiateFromCatalog(
-  ids: readonly string[],
-): Result<Module[], Failure> {
-  const modules: Module[] = [];
-  for (const id of ids) {
-    const entry = CATALOG_BY_ID.get(id);
-    if (!entry) {
-      const known = [...CATALOG_BY_ID.keys()];
-      const hint =
-        known.length > 0
-          ? known.slice(0, 8).join(", ") + (known.length > 8 ? ", …" : "")
-          : "(none)";
-      return err(
-        moduleFailure(
-          "MODULE_UNKNOWN",
-          `unknown module id "${id}" in host module list (module: ${id}). Hint: known catalog ids: ${hint}.`,
-          { moduleId: id },
-        ),
-      );
-    }
-    modules.push(entry.factory());
-  }
-  return ok(modules);
-}
-
-/**
  * Merges base + enabled lists **strictly** (specs/04 §4.1.1 locked decision):
  * a duplicate id after merge is a boot failure `MODULE_ID_DUPLICATE` — never
  * a silent dedupe. Order of first occurrence is preserved.
  *
- * @param baseIds - profile / env-derived first-party ids (list order)
+ * @param baseIds - profile / env-derived module ids (list order)
  * @param enabledIds - `enabledModuleIds` additions
  */
 export function resolveMergedIds(

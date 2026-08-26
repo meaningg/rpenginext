@@ -112,10 +112,38 @@ EngineConfig {
 | Mechanism | Role |
 |-----------|------|
 | `moduleProfile` / `RP_MODULE_PROFILE` | first-party set: `core-book` (default), `minimal`, `none` |
-| `RP_MODULES` / enable lists | replace or extend first-party ids from host catalog |
+| `RP_MODULES` / enable lists | replace or extend ids from host catalog **+ discovery pool** |
 | `RP_DISABLE_MODULES` / `disabledModuleIds` | remove ids after resolution |
 | `extraModules` | append prebuilt `Module` instances (external/tests), **always last** |
-| `modules` option | **exclusive** full override (then `extraModules` only) |
+| `modules` option | **exclusive** full override (then `extraModules` only; discovery skipped) |
+
+### 4.0 Local module discovery (ADR 0006)
+
+Модули в репозитории можно подключать **без единой строки кода** у хоста: пакет
+декларирует себя в `package.json`, host сканирует руты и строит **id-пул**
+(каталог first-party ⊕ discovery; каталог побеждает при коллизии id).
+Выбор остаётся явным — discovery **не загружает** модули автоматически:
+
+```jsonc
+// packages/modules/mood/package.json
+"rpengineext": { "module": { "id": "mood", "entry": "./src/index.ts", "factory": "createMoodModule" } }
+```
+
+| Knob | Meaning |
+|------|---------|
+| `RP_MODULE_DIRS` | comma list of scan roots; default `packages/modules` (workspace root); explicit roots must exist (`CONFIG_INVALID` otherwise) |
+| `moduleDirs` option | same, code-level |
+
+Rules (ADR 0006):
+
+- Пакет без поля `rpengineext.module` — не кандидат (skip + debug);
+- Поле есть, но невалидно / битый entry / нет фабрики → boot fail `CONFIG_INVALID`;
+- Дубль id внутри discovery → `MODULE_ID_DUPLICATE` (оба пакета в details);
+- Порядок: руты в порядке конфига, внутри рута — id-лексикографически (детерминизм);
+- Импорт только **выбранных** модулей (лениво; невыбранные не импортируются);
+- `options.modules` → discovery пропущен целиком;
+- Security: только доверенные локальные руты (операторская конфигурация, не пользовательский ввод);
+  без remote-загрузки и sandbox — модель доверия = git repo + install (ADR 0006 §6).
 
 Rules:
 
@@ -125,7 +153,6 @@ Rules:
 - Default production: **strict missing capability = ON** (`failOnMissingCapability`).
 - Equal `priority` tie-break = **registration order** (resolved `base ++ extraModules`), детерминировано.
 - Inventory: `listModules()` на runtime, CLI `--modules`, API `GET /modules`, structured boot log.
-- No silent auto-discovery of untrusted code / remote plugins in v1.
 
 ### 4.1 Module config & secrets (normative, spec 04 §4.6)
 

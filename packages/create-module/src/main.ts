@@ -17,6 +17,7 @@ import path from "node:path";
 import {
   buildTemplates,
   RECIPES,
+  toPascal,
   toSliceName,
 } from "./templates.ts";
 
@@ -114,6 +115,15 @@ async function main(): Promise<void> {
         type: "module",
         description: `rpengineext module ${id} (module-sdk Platform 1.0)`,
         exports: { ".": "./src/index.ts" },
+        // Local module discovery (ADR 0006): host scans this field to build
+        // the id pool — the module attaches with zero host code.
+        rpengineext: {
+          module: {
+            id,
+            entry: "./src/index.ts",
+            factory: `create${toPascal(id)}Module`,
+          },
+        },
         scripts: {
           test: "bun test",
           typecheck: "bunx tsc --noEmit -p tsconfig.json",
@@ -161,8 +171,9 @@ async function main(): Promise<void> {
   console.log(`next:
   bun install
   bun test packages/modules/${id}
-  # edit src/index.ts — docs/modules/README.md + sdk-reference.md
-  # wire createXxxModule() in host-bootstrap (profile or RP_MODULES) when ready
+  # attach with zero host code: discovery reads rpengineext.module (ADR 0006)
+  RP_MODULES=${id} bun run cli --modules
+  # optional: promote to first-party — add the factory to MODULE_CATALOG (host-bootstrap)
 `);
 }
 

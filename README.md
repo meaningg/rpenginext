@@ -61,6 +61,7 @@ bun run smoke:play:mock
 | [docs/adr/0003-tool-calling-and-background-system-turns.md](./docs/adr/0003-tool-calling-and-background-system-turns.md) | ADR: tools + background system turns |
 | [docs/adr/0004-module-sdk-cbmd.md](./docs/adr/0004-module-sdk-cbmd.md) | ADR: Module SDK / CBMD author path |
 | [docs/adr/0005-moments-native-core.md](./docs/adr/0005-moments-native-core.md) | ADR: moments-native core (deferred) |
+| [docs/adr/0006-local-module-discovery.md](./docs/adr/0006-local-module-discovery.md) | ADR: local module discovery (zero-wiring pool, proposed) |
 
 ## Архитектура в одном абзаце
 
