@@ -1,18 +1,21 @@
 import { describe, expect, test } from "bun:test";
 
 import type {
+  Failure,
   LlmCompletionRequest,
+  LlmCompletionResponse,
   LlmMessage,
   LlmPort,
   Result,
-  Failure,
-  LlmCompletionResponse,
 } from "@rpengineext/contracts";
-import { ok } from "@rpengineext/contracts";
+import { err, failure } from "@rpengineext/contracts";
 import {
-  createTestEngine,
-  MockAgentScript,
-} from "@rpengineext/core/testing";
+  expectCommitted,
+  expectRejected,
+  expectSlice,
+  fixedProseLlm,
+  testModule,
+} from "@rpengineext/module-sdk/test";
 
 import {
   COMMAND_TYPES,
@@ -20,81 +23,61 @@ import {
   SLICE_NAME,
 } from "../src/index.ts";
 
+/**
+ * Captures every LLM completion and delegates to fixedProseLlm so the
+ * narrative.write schema receives valid JSON prose.
+ */
 function capturingLlm(store: LlmCompletionRequest[]): LlmPort {
+  const inner = fixedProseLlm("Story after.");
   return {
     async complete(
       request: LlmCompletionRequest,
     ): Promise<Result<LlmCompletionResponse, Failure>> {
       store.push(request);
-      return ok({
-        text: JSON.stringify({
-          prose: `Story after: ${request.messages.at(-1)?.content?.slice(0, 40) ?? ""}`,
-        }),
-      });
+      return inner.complete(request);
     },
   };
 }
 
 describe("working-memory module integration", () => {
   test("appends pair on free_text commit", async () => {
-    const created = await createTestEngine({
-      modules: [createWorkingMemoryModule({ windowPairs: 3 })],
+    const h = await testModule(createWorkingMemoryModule({ windowPairs: 3 }), {
       moduleConfig: { working_memory: { windowPairs: 3 } },
     });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
 
-    const session = await created.value.engine.startSession();
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
-
-    const turn = await session.value.submitAction({
-      kind: "free_text",
-      text: "I open the door",
-    });
-    expect(turn.status).toBe("committed");
-    if (turn.status !== "committed") return;
+    const turn = await h.value.turn("I open the door");
+    expectCommitted(turn);
 
     expect(
       turn.acceptedCommands.some((c) => c.type === COMMAND_TYPES.appendPair),
     ).toBe(true);
 
-    const state = created.value.runtime.getSessionState(session.value.sessionId);
-    const slice = state?.slices[SLICE_NAME] as {
+    const slice = h.value.sliceOf<{
       entries: { user: string; assistant: string }[];
-    };
-    expect(slice.entries).toHaveLength(1);
-    expect(slice.entries[0]?.user).toBe("I open the door");
-    expect(slice.entries[0]?.assistant.length).toBeGreaterThan(0);
+    }>(SLICE_NAME);
+    expect(slice?.entries).toHaveLength(1);
+    expect(slice?.entries[0]?.user).toBe("I open the door");
+    expect(slice?.entries[0]?.assistant.length).toBeGreaterThan(0);
   });
 
   test("window N pairs appear as chat history on later turns", async () => {
     const requests: LlmCompletionRequest[] = [];
-    const created = await createTestEngine({
-      modules: [createWorkingMemoryModule({ windowPairs: 2 })],
-      moduleConfig: { working_memory: { windowPairs: 2 } },
+    const h = await testModule(createWorkingMemoryModule({ windowPairs: 2 }), {
       llm: capturingLlm(requests),
       agentsMode: "llm",
-      defaultModel: "test-model",
+      moduleConfig: { working_memory: { windowPairs: 2 } },
     });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-
-    const session = await created.value.engine.startSession();
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
 
     for (const text of ["one", "two", "three", "four"]) {
-      const turn = await session.value.submitAction({
-        kind: "free_text",
-        text,
-      });
-      expect(turn.status).toBe("committed");
+      expectCommitted(await h.value.turn(text));
     }
 
-    const state = created.value.runtime.getSessionState(session.value.sessionId);
-    const slice = state?.slices[SLICE_NAME] as { entries: unknown[] };
-    expect(slice.entries).toHaveLength(4);
+    const slice = h.value.sliceOf<{ entries: unknown[] }>(SLICE_NAME);
+    expect(slice?.entries).toHaveLength(4);
 
     // 4 narrative.write calls
     expect(requests.length).toBeGreaterThanOrEqual(4);
@@ -116,63 +99,40 @@ describe("working-memory module integration", () => {
   });
 
   test("agent failure does not append pair", async () => {
-    const script = new MockAgentScript().fail(
-      "narrative.write",
-      "LLM_DOWN",
-      "down",
-    );
-    const created = await createTestEngine({
-      modules: [createWorkingMemoryModule({ windowPairs: 4 })],
+    const failingLlm: LlmPort = {
+      async complete(): Promise<Result<LlmCompletionResponse, Failure>> {
+        return err(failure("LLM_DOWN", "down"));
+      },
+    };
+    const h = await testModule(createWorkingMemoryModule({ windowPairs: 4 }), {
+      llm: failingLlm,
+      agentsMode: "llm",
       moduleConfig: { working_memory: { windowPairs: 4 } },
-      mockAgentScript: script,
     });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
 
-    const session = await created.value.engine.startSession();
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
+    const turn = await h.value.turn("should fail");
+    expectRejected(turn);
 
-    const turn = await session.value.submitAction({
-      kind: "free_text",
-      text: "should fail",
-    });
-    expect(turn.status).toBe("rejected");
-
-    const state = created.value.runtime.getSessionState(session.value.sessionId);
-    const slice = state?.slices[SLICE_NAME] as { entries: unknown[] } | undefined;
-    expect(slice?.entries ?? []).toHaveLength(0);
+    expectSlice(h.value, SLICE_NAME, { entries: [] });
   });
 
   test("empty free_text is rejected and does not append pair", async () => {
-    const created = await createTestEngine({
-      modules: [createWorkingMemoryModule({ windowPairs: 4 })],
+    const h = await testModule(createWorkingMemoryModule({ windowPairs: 4 }), {
       moduleConfig: { working_memory: { windowPairs: 4 } },
     });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
 
-    const session = await created.value.engine.startSession();
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
+    const first = await h.value.turn("start");
+    expectCommitted(first);
 
-    const first = await session.value.submitAction({
-      kind: "free_text",
-      text: "start",
-    });
-    expect(first.status).toBe("committed");
+    const rejected = await h.value.turn("");
+    expectRejected(rejected);
 
-    const rejected = await session.value.submitAction({
-      kind: "free_text",
-      text: "",
-    });
-    expect(rejected.status).toBe("rejected");
-
-    const state = created.value.runtime.getSessionState(
-      session.value.sessionId,
-    );
-    const slice = state?.slices[SLICE_NAME] as { entries: unknown[] };
+    const slice = h.value.sliceOf<{ entries: unknown[] }>(SLICE_NAME);
     // only the successful free_text pair
-    expect(slice.entries).toHaveLength(1);
+    expect(slice?.entries).toHaveLength(1);
   });
 });

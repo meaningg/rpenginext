@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { defineModule, deny } from "../../src/index.ts";
+import { defineModule } from "../../src/index.ts";
 import { expectCommitted, expectSlice, testModules } from "../../src/test/index.ts";
 import { z } from "zod";
 
@@ -201,6 +201,3 @@ describe("stress S12 (moduleConfig invalid)", () => {
     if (good.ok) await good.value.stop();
   });
 });
-
-// Держим deny импортированным для будущих отрицательных кейсов
-void deny;

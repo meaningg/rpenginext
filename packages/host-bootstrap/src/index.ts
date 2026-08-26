@@ -19,5 +19,5 @@ export {
   type ModuleProfileId,
   expandProfile,
   instantiateFromCatalog,
-  dedupeIds,
+  resolveMergedIds,
 } from "./module-catalog.ts";

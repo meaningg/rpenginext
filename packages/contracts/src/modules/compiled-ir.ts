@@ -2,11 +2,23 @@ import type { ModuleManifest } from "./manifest.ts";
 
 /**
  * Compiled Module IR version.
- * Core / sdk may support N and N-1 during transitions.
+ * Core / sdk may support N and N-1 during transitions (specs/01 §5.2).
  */
 export const MODULE_IR_VERSION = 1 as const;
 
 export type ModuleIrVersion = typeof MODULE_IR_VERSION;
+
+/**
+ * IR versions accepted by the current engine.
+ *
+ * Platform 1.0 ships exactly one IR version (N-1 does not exist before the
+ * first release); the list exists so a future major bump can add N-1 loaders
+ * or document a hard cut with a migration guide (specs/01 §5.2).
+ * Boot rejects manifests outside this set with `MODULE_ENGINES_INCOMPATIBLE`.
+ */
+export const SUPPORTED_MODULE_IR_VERSIONS: readonly ModuleIrVersion[] = [
+  MODULE_IR_VERSION,
+] as const;
 
 /**
  * Declarative op descriptor in IR (handlers live beside IR at runtime).

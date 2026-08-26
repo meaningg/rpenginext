@@ -3,7 +3,7 @@ import { defineModule } from "../../src/index.ts";
 import { testModule, testModules } from "../../src/test/index.ts";
 import { z } from "zod";
 
-import { createNoopStressModule, runNoopStress } from "./fixtures.ts";
+import { createNoopStressModule } from "./fixtures.ts";
 
 /**
  * Perf tripwire baselines (specs/02 §5.4) — recorded on a local CI-class
@@ -143,6 +143,3 @@ describe("stress P02/P04 (turn with handlers, documented bounds)", () => {
     { timeout: 60_000 },
   );
 });
-
-// keep runNoopStress import used for future cases / debugging
-void runNoopStress;

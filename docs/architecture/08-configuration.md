@@ -29,7 +29,7 @@ Names from `HOST_ENV` / related readers:
 | `RP_LOG_LEVEL` | `debug` / `info` / `warn` / `error` | default `info` |
 | `RP_LOG_JSON` | `1` = JSON logs | default pretty |
 | `RP_WORKING_MEMORY_WINDOW` | last-N chat pairs | positive int; default `12` |
-| `RP_MODULE_PROFILE` | first-party module profile | `core-book` (default) \| `minimal` \| `none` — **Platform 1.0** ([specs/04](../specs/04-host-composition.md)); *current 0.x host may still hardcode core-book set* |
+| `RP_MODULE_PROFILE` | first-party module profile | `core-book` (default) \| `minimal` \| `none` — **Platform 1.0** ([specs/04](../specs/04-host-composition.md)); модули подключаются profiles / env / options (`RP_MODULE_PROFILE`, `RP_MODULES`, `RP_DISABLE_MODULES`) — никакого hardcode |
 | `RP_MODULES` | comma module ids | replaces profile first-party set (list order) |
 | `RP_DISABLE_MODULES` | comma module ids | remove from resolved set after profile/list |
 | `RP_AGENTS_STREAMING` | `0` disables draft stream | default on |

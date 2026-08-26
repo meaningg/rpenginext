@@ -7,53 +7,51 @@ import type {
   LlmPort,
   Result,
 } from "@rpengineext/contracts";
-import { ok } from "@rpengineext/contracts";
-import { createTestEngine } from "@rpengineext/core/testing";
+import {
+  expectCommitted,
+  expectSlice,
+  fixedProseLlm,
+  testModule,
+} from "@rpengineext/module-sdk/test";
 
 import { createWorldCanonModule, SLICE_NAME } from "../src/index.ts";
+
+/**
+ * Captures every LLM completion and delegates to fixedProseLlm so the
+ * narrative.write schema receives valid JSON prose.
+ */
+function capturingLlm(
+  store: LlmCompletionRequest[],
+  prose: string,
+): LlmPort {
+  const inner = fixedProseLlm(prose);
+  return {
+    async complete(
+      request: LlmCompletionRequest,
+    ): Promise<Result<LlmCompletionResponse, Failure>> {
+      store.push(request);
+      return inner.complete(request);
+    },
+  };
+}
 
 describe("world_canon module integration", () => {
   test("success: seeds from meta and injects into narrative system message", async () => {
     const requests: LlmCompletionRequest[] = [];
-    const llm: LlmPort = {
-      async complete(request): Promise<Result<LlmCompletionResponse, Failure>> {
-        requests.push(request);
-        return ok({
-          text: JSON.stringify({ prose: "The cantina hums with low chatter." }),
-        });
-      },
-    };
-
-    const created = await createTestEngine({
-      modules: [createWorldCanonModule()],
-      llm,
-      agentsMode: "llm",
-      defaultModel: "test-model",
-    });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-
     const canon =
       "Outer Rim ports run on bribes and rumor. Jedi are a dangerous legend.";
-    const session = await created.value.engine.startSession({
+    const h = await testModule(createWorldCanonModule(), {
+      llm: capturingLlm(requests, "The cantina hums with low chatter."),
+      agentsMode: "llm",
       meta: { worldCanon: canon },
     });
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
 
-    const state0 = created.value.runtime.getSessionState(session.value.sessionId);
-    const slice0 = state0?.slices[SLICE_NAME] as {
-      present: boolean;
-      text: string;
-    };
-    expect(slice0.present).toBe(true);
-    expect(slice0.text).toBe(canon);
+    expectSlice(h.value, SLICE_NAME, { present: true, text: canon });
 
-    const turn = await session.value.submitAction({
-      kind: "free_text",
-      text: "I look around",
-    });
-    expect(turn.status).toBe("committed");
+    const turn = await h.value.turn("I look around");
+    expectCommitted(turn);
 
     const narrativeReq = requests.find((r) =>
       r.messages.some(
@@ -77,32 +75,18 @@ describe("world_canon module integration", () => {
   });
 
   test("error path: missing story canon is no-op (no seed)", async () => {
-    const created = await createTestEngine({
-      modules: [createWorldCanonModule()],
-    });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-    const session = await created.value.engine.startSession();
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
-    const state = created.value.runtime.getSessionState(session.value.sessionId);
-    const slice = state?.slices[SLICE_NAME] as { present: boolean };
-    expect(slice.present).toBe(false);
+    const h = await testModule(createWorldCanonModule());
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    expectSlice(h.value, SLICE_NAME, { present: false });
   });
 
   test("edge: blank worldCanon string does not seed", async () => {
-    const created = await createTestEngine({
-      modules: [createWorldCanonModule()],
-    });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-    const session = await created.value.engine.startSession({
+    const h = await testModule(createWorldCanonModule(), {
       meta: { worldCanon: "   " },
     });
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
-    const state = created.value.runtime.getSessionState(session.value.sessionId);
-    const slice = state?.slices[SLICE_NAME] as { present: boolean };
-    expect(slice.present).toBe(false);
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    expectSlice(h.value, SLICE_NAME, { present: false });
   });
 });

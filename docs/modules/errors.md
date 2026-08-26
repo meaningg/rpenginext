@@ -66,6 +66,8 @@ Host/API всегда возвращает структурированный `F
 | `ENGINE_MISMATCH` | `MODULE_ENGINES_INCOMPATIBLE` (E11) |
 | `MANIFEST_INVALID` | `MODULE_DEFINE_INVALID` (E01) / `MODULE_IR_BIND_MISMATCH` (E03) |
 | `REGISTRATION_INVALID` | сохраняется для raw register (non-author path) |
+| `SCHEMA_INVALID` | сохраняется как действующий код (E09; теперь в централизованном union `TURN_FAILURE_CODES` + `MODULE_FAILURE_CODES`) для seed-meta / tool / agent-schema paths |
+| `INTERNAL` | **не author-facing** — не использовать как ответ author-путям (spec 03) |
 
 Legacy-коды остаются в type union `BOOT_FAILURE_CODES` для совместимости
 потребителей; новые paths эмитят только нормативные `MODULE_*` коды.

@@ -59,6 +59,11 @@ export interface CreateModuleCtxOptions<TSlice, TConfig> {
   readonly knownEmitNames?: ReadonlySet<string>;
   /** Payload schemas per canonical event name (fail → MODULE_EVENT_PAYLOAD_INVALID). */
   readonly emitSchemas?: ReadonlyMap<string, z.ZodType<JsonObject>>;
+  /** Op payload schemas (fail → MODULE_OP_PAYLOAD_INVALID, E13). */
+  readonly opSchemas?: ReadonlyMap<
+    string,
+    { safeParse(v: unknown): { success: boolean; data?: unknown; error?: unknown } }
+  >;
   /** Custom emit sink (event dispatch context); default = turnCtx.extras queue. */
   readonly emitSink?: (event: ModuleEvent) => void;
 }
@@ -109,6 +114,23 @@ export function createModuleCtx<TSlice, TConfig>(
       );
     }
     const body = (payload ?? {}) as JsonObject;
+    const schema = options.opSchemas?.get(op);
+    if (schema) {
+      const parsed = schema.safeParse(body);
+      if (!parsed.success) {
+        // E13: op payload fails the declared schema (moduleId, op, zod path).
+        const err = parsed.error as { issues?: { path?: (string | number)[] }[] } | undefined;
+        throw new ModuleCtxViolation(
+          "MODULE_OP_PAYLOAD_INVALID",
+          `[MODULE_OP_PAYLOAD_INVALID] op "${op}" payload failed declared schema (module: ${options.moduleId}). Hint: fix payload per state.ops[\"${op}\"].payload.`,
+          {
+            moduleId: options.moduleId,
+            op,
+            path: err?.issues?.[0]?.path ?? [],
+          },
+        );
+      }
+    }
     const why = reason ?? `${options.moduleId}.${op}`;
 
     if (options.opMode === "propose") {
@@ -191,18 +213,26 @@ export function createModuleCtx<TSlice, TConfig>(
   ): T => {
     const turnCtx = options.turnCtx;
     if (!turnCtx?.readModel) {
-      throw new ModuleCtxViolation(
-        "MODULE_READ_MODEL_UNKNOWN",
-        `[MODULE_READ_MODEL_UNKNOWN] readModel("${name}") unavailable in this context (module: ${options.moduleId}). Hint: readModel requires a running turn.`,
-        { moduleId: options.moduleId, name },
+      // init / ai.tasks.messages builder have no running turn: fail loud with
+      // the forbidden-moment code (specs/06 §8.3) instead of a silent miss.
+      throw forbidden(
+        "MODULE_MOMENT_OP_FORBIDDEN",
+        `readModel("${name}") is forbidden`,
+        options.momentName,
+        { moduleId: options.moduleId, name, moment: options.momentName },
       );
     }
     const result = turnCtx.readModel(name, args);
     if (!result.ok) {
-      throw new ModuleCtxViolation(
+      // Wrap preserving the provider failure code (specs/06 §6.2): unknown
+      // name → MODULE_READ_MODEL_UNKNOWN, args schema → READ_MODEL_ARGS_INVALID,
+      // provider throw → its own wrapped code. Never remap to a wrong code.
+      const code =
         result.error.code === "MODULE_READ_MODEL_UNKNOWN"
           ? "MODULE_READ_MODEL_UNKNOWN"
-          : "MODULE_READ_MODEL_ARGS_INVALID",
+          : result.error.code;
+      throw new ModuleCtxViolation(
+        code,
         `[${result.error.code}] readModel("${name}") failed (module: ${options.moduleId}). Hint: ${result.error.message}.`,
         {
           moduleId: options.moduleId,
@@ -243,7 +273,16 @@ export function createModuleCtx<TSlice, TConfig>(
         );
       }
       const world = options.world ?? options.turnCtx?.stateView;
-      if (!world) return undefined;
+      if (!world) {
+        // init / ai.tasks.messages: no world snapshot — fail loud (E15), never
+        // a silent undefined (specs/01 §4.2, specs/06 §8.3).
+        throw forbidden(
+          "MODULE_MOMENT_OP_FORBIDDEN",
+          `readSlice("${name}") is forbidden`,
+          options.momentName,
+          { moduleId: options.moduleId, slice: name, moment: options.momentName },
+        );
+      }
       return world.slices[name] as T | undefined;
     },
     readModel,

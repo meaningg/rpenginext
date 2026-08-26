@@ -7,8 +7,15 @@ import type {
   LlmPort,
   Result,
 } from "@rpengineext/contracts";
-import { ok } from "@rpengineext/contracts";
 import { createTestEngine } from "@rpengineext/core/testing";
+import {
+  expectCommitted,
+  expectSlice,
+  fixedProseLlm,
+  scriptedToolLlm,
+  testModule,
+  type ToolScriptStep,
+} from "@rpengineext/module-sdk/test";
 
 import {
   COMMAND_TYPES,
@@ -17,32 +24,31 @@ import {
   TOOL_IDS,
 } from "../src/index.ts";
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Captures every LLM completion and delegates to fixedProseLlm so the
+ * narrative.write schema receives valid JSON prose.
+ */
+function capturingLlm(
+  store: LlmCompletionRequest[],
+  prose: string,
+): LlmPort {
+  const inner = fixedProseLlm(prose);
+  return {
+    async complete(
+      request: LlmCompletionRequest,
+    ): Promise<Result<LlmCompletionResponse, Failure>> {
+      store.push(request);
+      return inner.complete(request);
+    },
+  };
 }
 
 describe("character module integration", () => {
   test("success: seeds from meta and injects into narrative system prompt", async () => {
     const requests: LlmCompletionRequest[] = [];
-    const llm: LlmPort = {
-      async complete(request): Promise<Result<LlmCompletionResponse, Failure>> {
-        requests.push(request);
-        return ok({
-          text: JSON.stringify({ prose: "You step forward in your jacket." }),
-        });
-      },
-    };
-
-    const created = await createTestEngine({
-      modules: [createCharacterModule()],
-      llm,
+    const h = await testModule(createCharacterModule(), {
+      llm: capturingLlm(requests, "You step forward in your jacket."),
       agentsMode: "llm",
-      defaultModel: "test-model",
-    });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-
-    const session = await created.value.engine.startSession({
       meta: {
         character: {
           name: "Alex",
@@ -52,27 +58,21 @@ describe("character module integration", () => {
         },
       },
     });
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
 
-    const state0 = created.value.runtime.getSessionState(session.value.sessionId);
-    const slice0 = state0?.slices[SLICE_NAME] as {
-      present: boolean;
-      name: string;
-      outfit: string;
-    };
-    expect(slice0.present).toBe(true);
-    expect(slice0.name).toBe("Alex");
-    expect(slice0.outfit).toBe("black jacket");
-
-    const turn = await session.value.submitAction({
-      kind: "free_text",
-      text: "I look around",
+    expectSlice(h.value, SLICE_NAME, {
+      present: true,
+      name: "Alex",
+      outfit: "black jacket",
     });
-    expect(turn.status).toBe("committed");
 
-    // Wait briefly for background outfit_sync (mock/default no change)
-    await sleep(50);
+    const turn = await h.value.turn("I look around");
+    expectCommitted(turn);
+
+    // Drain the background outfit_sync pump (mock/default: no change).
+    const idle = await h.value.waitIdle(5_000);
+    expect(idle.ok).toBe(true);
 
     const narrativeReq = requests.find((r) =>
       r.messages.some(
@@ -97,50 +97,41 @@ describe("character module integration", () => {
   });
 
   test("error path: missing story character is no-op (no seed)", async () => {
-    const created = await createTestEngine({
-      modules: [createCharacterModule()],
-    });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-    const session = await created.value.engine.startSession();
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
-    const state = created.value.runtime.getSessionState(session.value.sessionId);
-    const slice = state?.slices[SLICE_NAME] as { present: boolean };
-    expect(slice.present).toBe(false);
+    const h = await testModule(createCharacterModule());
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    expectSlice(h.value, SLICE_NAME, { present: false });
   });
 
   test("edge: background outfit tool updates outfit after player result", async () => {
+    // This scenario stays on createTestEngine (advanced/maintainer escape,
+    // specs/02 §5.2): the harness surface does not expose the MemoryTraceSink,
+    // and the assertions below verify the turn-trace dossier (## Follow-ups,
+    // tool Arguments/Result, LLM transcript) which is only reachable via the
+    // createTestEngine bundle. The LLM flow itself uses the scriptedToolLlm
+    // mock: tool call → engine runs the real update_outfit handler → final
+    // `{changed: true}` output.
     let narrativeCalls = 0;
+    const script: ToolScriptStep[] = [
+      {
+        tool: TOOL_IDS.updateOutfit,
+        args: { outfit: "crimson cloak over dark clothes" },
+        result: { ok: true, outfit: "crimson cloak over dark clothes" },
+      },
+    ];
+    const scripted = scriptedToolLlm(
+      script,
+      JSON.stringify({ changed: true }),
+      "You put on a crimson cloak over your clothes.",
+    );
     const llm: LlmPort = {
-      async complete(request): Promise<Result<LlmCompletionResponse, Failure>> {
-        const isOutfit = request.messages.some((m) =>
-          m.content.includes("character.outfit_sync"),
-        );
-        if (!isOutfit) {
+      async complete(
+        request: LlmCompletionRequest,
+      ): Promise<Result<LlmCompletionResponse, Failure>> {
+        if (!request.tools || request.tools.length === 0) {
           narrativeCalls += 1;
-          return ok({
-            text: JSON.stringify({
-              prose: "You put on a crimson cloak over your clothes.",
-            }),
-          });
         }
-
-        // First outfit call → tool call; second → final JSON
-        if ((request.tools?.length ?? 0) > 0 && !request.messages.some((m) => m.role === "tool")) {
-          return ok({
-            text: "",
-            toolCalls: [
-              {
-                id: "call_1",
-                name: TOOL_IDS.updateOutfit,
-                args: { outfit: "crimson cloak over dark clothes" },
-              },
-            ],
-            finishReason: "tool_calls",
-          });
-        }
-        return ok({ text: JSON.stringify({ changed: true }) });
+        return scripted.complete(request);
       },
     };
 
@@ -148,7 +139,6 @@ describe("character module integration", () => {
       modules: [createCharacterModule()],
       llm,
       agentsMode: "llm",
-      defaultModel: "test-model",
     });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
@@ -170,8 +160,7 @@ describe("character module integration", () => {
       kind: "free_text",
       text: "I put on a crimson cloak",
     });
-    expect(turn.status).toBe("committed");
-    if (turn.status !== "committed") return;
+    expectCommitted(turn);
 
     // Player turn itself must not include set_outfit (background only).
     expect(
@@ -179,18 +168,18 @@ describe("character module integration", () => {
     ).toBe(false);
     expect(narrativeCalls).toBe(1);
 
-    // Wait for background pump
-    let outfit = "black jacket";
-    for (let i = 0; i < 40; i++) {
-      await sleep(25);
-      const state = created.value.runtime.getSessionState(
-        session.value.sessionId,
-      );
-      const slice = state?.slices[SLICE_NAME] as { outfit: string };
-      outfit = slice.outfit;
-      if (outfit.includes("crimson")) break;
-    }
-    expect(outfit).toBe("crimson cloak over dark clothes");
+    // Wait for the background pump (tool loop → final output).
+    const idle = await created.value.runtime.waitIdle(
+      session.value.sessionId,
+      5_000,
+    );
+    expect(idle.ok).toBe(true);
+
+    const state = created.value.runtime.getSessionState(
+      session.value.sessionId,
+    );
+    const slice = state?.slices[SLICE_NAME] as { outfit: string };
+    expect(slice.outfit).toBe("crimson cloak over dark clothes");
 
     // Background system turn must not replace the player-facing lastPassage.
     const passage = await session.value.getPassage();

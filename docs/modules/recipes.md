@@ -7,7 +7,7 @@
 Все фрагменты живут **внутри** `defineModule({ … })`, если не сказано иное.
 
 Тесты авторов: `@rpengineext/module-sdk/test` (§10).  
-Scaffold recipes сейчас: `state | seed-narrative | guard | full`; Platform 1.0: + `ai-tool | access-read | migrate` ([spec 05](../specs/05-scaffold-and-migrations.md)).
+Scaffold recipes (Platform 1.0, [spec 05 §4](../specs/05-scaffold-and-migrations.md)): `state | seed-narrative | guard | full | ai-tool | access-read | migrate | events`.
 
 ---
 

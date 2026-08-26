@@ -1,6 +1,7 @@
 import {
   err,
   failure,
+  ModuleCtxViolation,
   ok,
   type CompiledModule,
   type Failure,
@@ -12,6 +13,7 @@ import {
 } from "@rpengineext/contracts";
 
 import type { NormalizedModuleDefinition } from "../types/definition.ts";
+import { isModuleDenial } from "../deny.ts";
 import { defaultSliceName } from "../util/ids.ts";
 import { bindCompiledModule } from "./bind-compiled-module.ts";
 import { buildBindings } from "./bindings.ts";
@@ -86,7 +88,20 @@ export function compileToModule(
             emitAllowed: false,
             scheduleAllowed: false,
           });
-          await normalized.init!(mctx);
+          try {
+            await normalized.init!(mctx);
+          } catch (e) {
+            if (isModuleDenial(e)) {
+              // deny() in init → fail-loud forbidden-moment violation
+              // (specs/06 §8.3: deny is not allowed in init ctx).
+              throw new ModuleCtxViolation(
+                "MODULE_MOMENT_OP_FORBIDDEN",
+                `[MODULE_MOMENT_OP_FORBIDDEN] deny() is forbidden in module init (module: ${normalized.id}). Hint: init is config/cleanup-only — no world access, no rejection.`,
+                { moduleId: normalized.id, moment: "init" },
+              );
+            }
+            throw e;
+          }
         }
       : undefined;
 

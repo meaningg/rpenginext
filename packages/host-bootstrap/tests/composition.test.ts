@@ -140,13 +140,45 @@ describe("host module composition (specs/04)", () => {
 
     const conflict = await boot({
       moduleProfile: "none",
-      enabledModuleIds: ["character"],
-      disabledModuleIds: ["character"],
+      enabledModuleIds: ["character", "world-canon"],
+      disabledModuleIds: ["character", "working-memory"],
     });
     expect(conflict.ok).toBe(false);
     if (conflict.ok) return;
     expect(conflict.error.code).toBe("CONFIG_INVALID");
     expect(conflict.error.message).toContain("character");
+    // Both full lists in details (specs/04 §4.1.1 locked decision).
+    expect(conflict.error.details).toMatchObject({
+      enabledModuleIds: ["character", "world-canon"],
+      disabledModuleIds: ["character", "working-memory"],
+    });
+  });
+
+  test("duplicate id after merge (RP_MODULES / enabledModuleIds) → boot fail MODULE_ID_DUPLICATE", async () => {
+    const viaEnv = await boot({
+      env: { ...BASE_ENV, RP_MODULES: "working-memory,character,working-memory" },
+    });
+    expect(viaEnv.ok).toBe(false);
+    if (viaEnv.ok) return;
+    expect(viaEnv.error.code).toBe("MODULE_ID_DUPLICATE");
+    expect(viaEnv.error.message).toContain("working-memory");
+
+    const viaOptions = await boot({
+      moduleProfile: "none",
+      enabledModuleIds: ["working-memory", "character", "character"],
+    });
+    expect(viaOptions.ok).toBe(false);
+    if (viaOptions.ok) return;
+    expect(viaOptions.error.code).toBe("MODULE_ID_DUPLICATE");
+    expect(viaOptions.error.message).toContain("character");
+  });
+
+  test("empty module set boots (profile none; core loop still runs)", async () => {
+    const created = await boot({ moduleProfile: "none" });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    expect(created.value.listModules()).toEqual([]);
+    await created.value.stop();
   });
 
   test("equal priority tie-break = registration order (deterministic)", async () => {

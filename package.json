@@ -23,6 +23,7 @@
     "test:character": "bun test packages/modules/character",
     "test:world-canon": "bun test packages/modules/world-canon",
     "test:host-bootstrap": "bun test packages/host-bootstrap",
+    "test:cli": "bun test apps/cli",
     "test:content-stories": "bun test packages/content-stories",
     "test:api": "bun test apps/api",
     "test:e2e": "bun test apps/api/tests/playable.e2e.test.ts",

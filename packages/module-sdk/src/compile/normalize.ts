@@ -89,12 +89,13 @@ export function normalizeModuleDefinition<
       }
     }
     for (const decl of cap.subscribe ?? []) {
-      if (!/^[a-z][a-z0-9_.-]*$/.test(decl.name)) {
+      // Canonical = <moduleId(-→_)>.<local kebab name> — exactly one dot
+      // (specs/06 §7.3): validated at define with MODULE_DEFINE_INVALID.
+      if (!/^[a-z][a-z0-9_]*\.[a-z][a-z0-9-]+$/.test(decl.name)) {
         return err(
           moduleFailure(
             "MODULE_DEFINE_INVALID",
-            `module ${def.id}: event subscribe name "${decl.name}" must be dot-complete canonical (<module>.<name>)`,
-            { field: "events.subscribe", name: decl.name },
+            `module ${def.id}: event subscribe name "${decl.name}" must be dot-complete canonical (<moduleId>.<kebab-name>, e.g. "working_memory.window_changed")`,            { field: "events.subscribe", name: decl.name },
           ),
         );
       }

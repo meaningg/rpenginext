@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { defineModule } from "../../src/index.ts";
-import { expectCommitted, testModule, testModules } from "../../src/test/index.ts";
+import { expectCommitted, testModule } from "../../src/test/index.ts";
 import { z } from "zod";
 import { createLogger } from "@rpengineext/logger";
 
@@ -141,11 +141,8 @@ describe("stress S21 (lifecycle init/shutdown)", () => {
     const { testModule } = await import("../../src/test/index.ts");
     const h = await testModule(mod);
     expect(h.ok).toBe(true);
-    void expectCommitted;
     if (!h.ok) return;
     await h.value.stop();
     expect(shut).toBe(true);
   });
 });
-
-void testModules;

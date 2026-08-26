@@ -82,20 +82,38 @@ export function instantiateFromCatalog(
 }
 
 /**
- * Dedupes while preserving first-occurrence order (later duplicates are
- * dropped silently — they carry the same factory and identical config).
+ * Merges base + enabled lists **strictly** (specs/04 §4.1.1 locked decision):
+ * a duplicate id after merge is a boot failure `MODULE_ID_DUPLICATE` — never
+ * a silent dedupe. Order of first occurrence is preserved.
  *
- * @param ids - candidate list
+ * @param baseIds - profile / env-derived first-party ids (list order)
+ * @param enabledIds - `enabledModuleIds` additions
  */
-export function dedupeIds(ids: readonly string[]): string[] {
+export function resolveMergedIds(
+  baseIds: readonly string[],
+  enabledIds: readonly string[],
+): Result<string[], Failure> {
   const seen = new Set<string>();
+  const duplicates: string[] = [];
   const out: string[] = [];
-  for (const id of ids) {
-    if (seen.has(id)) continue;
+  for (const id of [...baseIds, ...enabledIds]) {
+    if (seen.has(id)) {
+      if (!duplicates.includes(id)) duplicates.push(id);
+      continue;
+    }
     seen.add(id);
     out.push(id);
   }
-  return out;
+  if (duplicates.length > 0) {
+    return err(
+      moduleFailure(
+        "MODULE_ID_DUPLICATE",
+        `duplicate module id(s) "${duplicates.join(", ")}" in resolved host module list (module: ${duplicates[0]}). Hint: list each module id exactly once in RP_MODULES / enabledModuleIds.`,
+        { moduleIds: duplicates },
+      ),
+    );
+  }
+  return ok(out);
 }
 
 export { createWorkingMemoryModule, createWorldCanonModule, createCharacterModule, createSummaryModule };

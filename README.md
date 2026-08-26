@@ -11,6 +11,22 @@
 
 > Истина мира принадлежит core. AI предлагает. Commit атомарный.
 
+## Release verification (Module Platform 1.0)
+
+Все 8 команд обязательны зелёными перед любым production tag
+([spec 07 §5](./docs/specs/07-release-and-versioning.md)):
+
+```bash
+bun run typecheck
+bun run test:compat
+bun run test:modules-stress
+bun run test:module-boundaries
+bun run test:scaffold-smoke
+bun run test:platform
+bun run test:e2e
+bun run smoke:play:mock
+```
+
 ## Документация (источник истины)
 
 Начните здесь:

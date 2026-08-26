@@ -4,10 +4,11 @@ import {
   effectiveContributes,
   err,
   failure,
-  MODULE_IR_VERSION,
+  isModuleCtxViolation,
   moduleFailure,
   ok,
   parseModuleManifest,
+  SUPPORTED_MODULE_IR_VERSIONS,
   type Failure,
   type Module,
   type ModuleEventPublisher,
@@ -254,11 +255,11 @@ export class ModuleRegistry {
          */
         if (mod.compiled) {
           const ir = mod.compiled.ir;
-          if (ir.irVersion !== MODULE_IR_VERSION) {
+          if (!SUPPORTED_MODULE_IR_VERSIONS.includes(ir.irVersion)) {
             return err(
               moduleFailure(
                 "MODULE_ENGINES_INCOMPATIBLE",
-                `module "${manifest.id}" IR v${ir.irVersion} unsupported (engine supports v${MODULE_IR_VERSION}) (module: ${manifest.id}). Hint: recompile with the current module-sdk.`,
+                `module "${manifest.id}" IR v${ir.irVersion} unsupported (engine supports v${SUPPORTED_MODULE_IR_VERSIONS.join(", v")}) (module: ${manifest.id}). Hint: recompile with the current module-sdk.`,
                 { moduleId: manifest.id },
               ),
             );
@@ -302,6 +303,16 @@ export class ModuleRegistry {
           );
         }
       } catch (error) {
+        if (isModuleCtxViolation(error)) {
+          // Preserve stable author codes (e.g. MODULE_IR_BIND_MISMATCH E03)
+          // instead of masking as REGISTRATION_INVALID.
+          return err(
+            failure(error.code, error.message, {
+              ...(error.details ? { details: error.details } : {}),
+              causedBy: [manifest.id],
+            }),
+          );
+        }
         return err(
           failure(
             "REGISTRATION_INVALID",

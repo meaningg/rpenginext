@@ -125,25 +125,43 @@ export function bindCompiledModule(
   const moduleId = ir.manifest.id;
   const sliceName = ir.slice?.name ?? moduleId.replace(/-/g, "_");
   const knownOps = bindings.knownOps;
+  const opSchemas = new Map(
+    [...(bindings.state?.ops.entries() ?? [])].flatMap(([key, def]) =>
+      def.payloadSchema ? [[key, def.payloadSchema] as const] : [],
+    ),
+  );
   const m = ir.moments;
+
+  /**
+   * Structural IR ↔ binding mismatch → MODULE_IR_BIND_MISMATCH (specs/03 E03).
+   * Defense-in-depth for foreign IR producers (post-1.0): the compile step
+   * already enforces consistency for sdk-built modules.
+   */
+  const bindMismatch = (what: string): never => {
+    throw new ModuleCtxViolation(
+      "MODULE_IR_BIND_MISMATCH",
+      `[MODULE_IR_BIND_MISMATCH] ${what} (module: ${moduleId}). Hint: recompile the module with the current module-sdk / keep IR and bindings in sync.`,
+      { moduleId, detail: what },
+    );
+  };
 
   // --- structural IR ↔ bindings ---
   if (ir.slice) {
     if (!bindings.state) {
-      throw new Error(`${moduleId}: IR has slice but bindings.state missing`);
+      bindMismatch(`IR has slice but bindings.state missing`);
     }
     for (const op of ir.slice.ops) {
-      if (!bindings.state.ops.has(op.name)) {
-        throw new Error(`${moduleId}: IR op "${op.name}" missing binding`);
+      if (!bindings.state!.ops.has(op.name)) {
+        bindMismatch(`IR op "${op.name}" missing binding`);
       }
     }
-    for (const name of bindings.state.ops.keys()) {
+    for (const name of bindings.state!.ops.keys()) {
       if (!ir.slice.ops.some((o) => o.name === name)) {
-        throw new Error(`${moduleId}: binding op "${name}" not in IR`);
+        bindMismatch(`binding op "${name}" not in IR`);
       }
     }
   } else if (bindings.state) {
-    throw new Error(`${moduleId}: bindings.state without IR.slice`);
+    bindMismatch(`bindings.state without IR.slice`);
   }
 
   const has = {
@@ -167,10 +185,10 @@ export function bindCompiledModule(
 
   const requireMoment = (flag: keyof typeof has, label: string) => {
     if (m[flag] && !has[flag]) {
-      throw new Error(`${moduleId}: IR.moments.${label} without binding`);
+      bindMismatch(`IR.moments.${label} without binding`);
     }
     if (!m[flag] && has[flag]) {
-      throw new Error(`${moduleId}: binding ${label} but IR.moments.${label}=false`);
+      bindMismatch(`binding ${label} but IR.moments.${label}=false`);
     }
   };
 
@@ -194,42 +212,40 @@ export function bindCompiledModule(
   for (const rmId of m.hostReadModels) {
     const found = bindings.host.some((h) => Boolean(h.readModels?.[rmId]));
     if (!found) {
-      throw new Error(`${moduleId}: IR readModel ${rmId} missing binding`);
+      bindMismatch(`IR readModel ${rmId} missing binding`);
     }
   }
   for (const host of bindings.host) {
     for (const rmId of Object.keys(host.readModels ?? {})) {
       if (!m.hostReadModels.includes(rmId)) {
-        throw new Error(
-          `${moduleId}: binding readModel ${rmId} not listed in IR.hostReadModels`,
-        );
+        bindMismatch(`binding readModel ${rmId} not listed in IR.hostReadModels`);
       }
     }
   }
 
   for (const task of ir.aiTasks) {
     if (!bindings.aiTasks.has(task.localKey)) {
-      throw new Error(`${moduleId}: IR ai task ${task.localKey} missing binding`);
+      bindMismatch(`IR ai task ${task.localKey} missing binding`);
     }
   }
   for (const key of bindings.aiTasks.keys()) {
     if (!ir.aiTasks.some((t) => t.localKey === key)) {
-      throw new Error(`${moduleId}: binding ai task ${key} not in IR`);
+      bindMismatch(`binding ai task ${key} not in IR`);
     }
   }
   for (const tool of ir.aiTools) {
     if (!bindings.aiTools.has(tool.localKey)) {
-      throw new Error(`${moduleId}: IR ai tool ${tool.localKey} missing binding`);
+      bindMismatch(`IR ai tool ${tool.localKey} missing binding`);
     }
   }
   for (const key of bindings.aiTools.keys()) {
     if (!ir.aiTools.some((t) => t.localKey === key)) {
-      throw new Error(`${moduleId}: binding ai tool ${key} not in IR`);
+      bindMismatch(`binding ai tool ${key} not in IR`);
     }
   }
 
   if (Boolean(bindings.config) !== Boolean(ir.configKey)) {
-    throw new Error(`${moduleId}: config binding/IR.configKey mismatch`);
+    bindMismatch(`config binding/IR.configKey mismatch`);
   }
 
   /**
@@ -289,6 +305,7 @@ export function bindCompiledModule(
       world: opts.world ?? opts.turnCtx?.stateView,
       allowedReadSlices: bindings.allowedReadSlices,
       knownOps,
+      opSchemas,
       opMode: opts.opMode,
       momentName: opts.momentName,
       writeAllowed: opts.writeAllowed,
@@ -474,17 +491,26 @@ export function bindCompiledModule(
       if (!rules.soft) continue;
       ctx.addSoftGuard({
         async check({ action, intent }, turnCtx) {
-          const { ctx: mctx } = baseCtx({
-            turnCtx,
-            normalizedAction: action,
-            intent,
-            world: turnCtx.stateView,
-            opMode: "collect",
-            momentName: "rules.soft",
-            writeAllowed: false,
-          });
-          const warnings = (await rules.soft!(mctx)) ?? [];
-          return ok({ warnings: [...warnings] });
+          try {
+            const { ctx: mctx } = baseCtx({
+              turnCtx,
+              normalizedAction: action,
+              intent,
+              world: turnCtx.stateView,
+              opMode: "collect",
+              momentName: "rules.soft",
+              writeAllowed: false,
+            });
+            const warnings = (await rules.soft!(mctx)) ?? [];
+            return ok({ warnings: [...warnings] });
+          } catch (e) {
+            // deny()/violations in rules.soft fail loud with a stable code
+            // (specs/03 §6) — never an opaque INTERNAL.
+            if (isModuleDenial(e)) return err(failure(e.code, e.message));
+            const violation = violationToFailure(e);
+            if (violation) return err(violation);
+            throw e;
+          }
         },
       });
     }
@@ -726,6 +752,7 @@ export function bindCompiledModule(
               );
             }
           } catch (e) {
+            if (isModuleDenial(e)) return err(failure(e.code, e.message));
             const violation = violationToFailure(e);
             if (violation) return err(violation);
             throw e;
@@ -759,6 +786,7 @@ export function bindCompiledModule(
               data = { ...data, history: history as unknown as JsonValue };
             }
           } catch (e) {
+            if (isModuleDenial(e)) return err(failure(e.code, e.message));
             const violation = violationToFailure(e);
             if (violation) return err(violation);
             throw e;
@@ -803,9 +831,16 @@ export function bindCompiledModule(
       },
       buildMessages: taskDef.messages
         ? (task: AgentTask) => {
+            // Messages builder is a read-only prompt surface: any ctx.op /
+            // proposeOp here must fail loud (E15) — collected-and-discarded ops
+            // are banned (specs/03 §4.3 E15).
             const { ctx: mctx } = baseCtx({
               opMode: "collect",
               log: noopLog as never,
+              momentName: "ai.tasks.messages",
+              writeAllowed: false,
+              emitAllowed: false,
+              scheduleAllowed: false,
             });
             return taskDef.messages!(task.input, task, mctx);
           }

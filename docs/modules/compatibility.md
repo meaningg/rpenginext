@@ -39,6 +39,12 @@
 - На IR shape break: bump версии; **dual-load policy** — поддержка N и N-1
   загрузчиков минимум один release cycle, либо документированный hard cut
   с major + миграционный гайд.
+- На Module Platform 1.0 поддерживается **ровно одна IR-версия**:
+  `MODULE_IR_VERSION = 1`, `SUPPORTED_MODULE_IR_VERSIONS = [1]` в
+  `contracts`. Механизма N-1 нет — N-1 не существует до первого релиза.
+- Будущий IR-разрыв = **MAJOR** + bump `MODULE_IR_VERSION` + (загрузчики
+  N и N-1 на один release cycle **ИЛИ** документированный hard cut с
+  миграционным гайдом) — как и требует spec 01 §5.2.
 - Fixture: `packages/module-sdk/tests/compat/compat-ir-roundtrip.test.ts`
   (JSON round-trip, engines validation).
 

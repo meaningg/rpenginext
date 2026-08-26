@@ -4,6 +4,7 @@ import {
   err,
   failure,
   hasPermission,
+  isModuleCtxViolation,
   ok,
   type AgentResult,
   type AgentTask,
@@ -468,14 +469,24 @@ export class AgentOrchestrator {
       return success;
     } catch (error) {
       this.emitFinished(task, false);
+      // Surface ctx violations (e.g. MODULE_MOMENT_OP_FORBIDDEN from the
+      // ai.tasks.messages builder) with their stable code (specs/03 E15) —
+      // never mask as opaque AGENT_INTERNAL.
+      const violation = isModuleCtxViolation(error) ? error : undefined;
       const thrown: AgentResult = {
         ok: false,
         taskId: task.taskId,
-        error: {
-          code: "AGENT_INTERNAL",
-          message: "agent execution threw",
-          details: String(error),
-        },
+        error: violation
+          ? {
+              code: violation.code,
+              message: violation.message,
+              details: violation.details,
+            }
+          : {
+              code: "AGENT_INTERNAL",
+              message: "agent execution threw",
+              details: String(error),
+            },
       };
       this.logAgentFinished(task, thrown, started);
       return thrown;
@@ -785,7 +796,18 @@ export class AgentOrchestrator {
     if (def?.buildMessages) {
       try {
         return [...def.buildMessages(task)];
-      } catch {
+      } catch (error) {
+        // Never silent: a messages-builder violation (e.g. E15) must surface
+        // as a structured warning, not a swallowed audit-message failure.
+        const code =
+          error && typeof error === "object" &&
+          typeof (error as { code?: unknown }).code === "string"
+            ? (error as { code: string }).code
+            : "MODULE_EVENT_HANDLER_ERROR";
+        this.log.warn(
+          { moduleId: task.requester.id, taskType: task.type, code },
+          `[${code}] ai.tasks.messages builder failed for ${task.type} (audit messages skipped)`,
+        );
         return null;
       }
     }

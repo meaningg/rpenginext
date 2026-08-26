@@ -8,20 +8,22 @@ import type {
   Result,
 } from "@rpengineext/contracts";
 import { ok } from "@rpengineext/contracts";
-import { createTestEngine } from "@rpengineext/core/testing";
+import {
+  expectCommitted,
+  expectSlice,
+  scriptedToolLlm,
+  testModule,
+  testModules,
+  type ToolScriptStep,
+} from "@rpengineext/module-sdk/test";
 import { createWorkingMemoryModule } from "@rpengineext/module-working-memory";
 
 import {
   createSummaryModule,
   SLICE_NAME,
   TOOL_IDS,
-  WORKING_MEMORY_SLICE_NAME,
 } from "../src/index.ts";
 import type { SummarySlice } from "../src/schema.ts";
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 interface ScriptedLlm {
   readonly llm: LlmPort;
@@ -31,66 +33,52 @@ interface ScriptedLlm {
 }
 
 /**
- * Scripted LLM: narrative.write returns a fixed prose; the summary.make task
- * first calls summary.store (round 1), then returns { stored: true } (round 2).
- * When failSummary is true, the summary task returns non-JSON (task failure).
+ * Scripted LLM: narrative.write returns fixed prose via scriptedToolLlm; each
+ * summary.make background task runs its own scripted tool loop (summary.store
+ * tool call → final {stored:true} JSON). The script queue hands out exactly one
+ * step per task, because the scripted mock consumes one step per completion
+ * and the post-tool round of task N would otherwise consume task N+1's step.
+ * When failSummary is true, the summary task returns non-JSON (task failure)
+ * without consuming a script step, so the retry on the next turn still works.
  */
-function createScriptedLlm(): ScriptedLlm {
+function createScriptedLlm(script: readonly ToolScriptStep[]): ScriptedLlm {
   const narrativeRequests: LlmCompletionRequest[] = [];
   const summaryRequests: LlmCompletionRequest[] = [];
+  const queue = [...script];
   let failSummary = false;
+
+  // narrative.write never exposes tools → single fixed-prose instance.
+  const narrative = scriptedToolLlm(
+    [],
+    JSON.stringify({ stored: true }),
+    "Narrative prose continues.",
+  );
+  // Current summary.make task: one scripted tool step, then final JSON.
+  let task: LlmPort = scriptedToolLlm([], JSON.stringify({ stored: true }));
 
   const llm: LlmPort = {
     async complete(
       request: LlmCompletionRequest,
     ): Promise<Result<LlmCompletionResponse, Failure>> {
-      const isSummary = request.messages.some(
-        (m) =>
-          typeof m.content === "string" && m.content.includes("summary.make"),
-      );
-      if (isSummary) {
-        summaryRequests.push(request);
-        if (failSummary) {
-          return ok({ text: "this is definitely not json" });
-        }
-        const userMsg = request.messages.find(
-          (m) =>
-            m.role === "user" &&
-            typeof m.content === "string" &&
-            m.content.includes("taskType"),
-        );
-        let chunk = { fromPairIndex: 1, toPairIndex: 1 };
-        try {
-          const input = JSON.parse(String(userMsg?.content ?? "{}"));
-          if (input?.chunk?.toPairIndex) chunk = input.chunk;
-        } catch {
-          // keep default
-        }
-        const firstRound =
-          (request.tools?.length ?? 0) > 0 &&
-          !request.messages.some((m) => m.role === "tool");
-        if (firstRound) {
-          return ok({
-            text: "",
-            toolCalls: [
-              {
-                id: "call_summary_store",
-                name: TOOL_IDS.store,
-                args: {
-                  summary: `Chunk covers pairs ${chunk.fromPairIndex}..${chunk.toPairIndex}`,
-                },
-              },
-            ],
-            finishReason: "tool_calls",
-          });
-        }
-        return ok({ text: JSON.stringify({ stored: true }) });
+      const isSummary = (request.tools?.length ?? 0) > 0;
+      if (!isSummary) {
+        narrativeRequests.push(request);
+        return narrative.complete(request);
       }
-
-      narrativeRequests.push(request);
-      return ok({
-        text: JSON.stringify({ prose: "Narrative prose continues." }),
-      });
+      summaryRequests.push(request);
+      if (failSummary) {
+        return ok({ text: "this is definitely not json" });
+      }
+      // Round 1 of a new task (no tool result fed back yet) → next script step.
+      const hasToolResult = request.messages.some((m) => m.role === "tool");
+      if (!hasToolResult) {
+        const step = queue.shift();
+        task = scriptedToolLlm(
+          step ? [step] : [],
+          JSON.stringify({ stored: true }),
+        );
+      }
+      return task.complete(request);
     },
   };
 
@@ -107,80 +95,45 @@ function createScriptedLlm(): ScriptedLlm {
   };
 }
 
-async function waitForSummary(
-  runtime: {
-    getSessionState(sessionId: string): unknown;
-  },
-  sessionId: string,
-  predicate: (slice: SummarySlice) => boolean,
-  timeoutMs = 2_000,
-): Promise<SummarySlice | null> {
-  const deadline = Date.now() + timeoutMs;
-  let slice: SummarySlice | null = null;
-  while (Date.now() < deadline) {
-    const state = runtime.getSessionState(sessionId) as {
-      slices?: Record<string, unknown>;
-    };
-    slice = (state?.slices?.[SLICE_NAME] as SummarySlice | undefined) ?? null;
-    if (slice && predicate(slice)) return slice;
-    await sleep(25);
-  }
-  return slice;
-}
-
 function lastNarrativeSystem(requests: readonly LlmCompletionRequest[]): string {
   const req = requests[requests.length - 1];
   const system = req?.messages.find((m) => m.role === "system");
   return typeof system?.content === "string" ? system.content : "";
 }
 
-function readSummary(
-  runtime: {
-    getSessionState(sessionId: string): unknown;
-  },
-  sessionId: string,
-): SummarySlice | null {
-  const state = runtime.getSessionState(sessionId) as {
-    slices?: Record<string, unknown>;
-  };
-  return (state?.slices?.[SLICE_NAME] as SummarySlice | undefined) ?? null;
-}
-
 describe("summary module integration", () => {
   test("success: delta chunks every interval, all injected into narrative prompt", async () => {
-    const script = createScriptedLlm();
-    const created = await createTestEngine({
-      modules: [
+    const script = createScriptedLlm([
+      {
+        tool: TOOL_IDS.store,
+        args: { summary: "Chunk covers pairs 1..2" },
+        result: { ok: true, index: 1, fromPairIndex: 1, toPairIndex: 2 },
+      },
+      {
+        tool: TOOL_IDS.store,
+        args: { summary: "Chunk covers pairs 3..4" },
+        result: { ok: true, index: 2, fromPairIndex: 3, toPairIndex: 4 },
+      },
+    ]);
+    const h = await testModules(
+      [
         createWorkingMemoryModule({ windowPairs: 12 }),
         createSummaryModule({ intervalTurns: 2 }),
       ],
-      llm: script.llm,
-      agentsMode: "llm",
-      defaultModel: "test-model",
-    });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-
-    const session = await created.value.engine.startSession();
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
-    const sessionId = session.value.sessionId;
+      { llm: script.llm, agentsMode: "llm" },
+    );
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
 
     // Turn 1: not due (1 < 2). Turn 2: due → background summary for pairs 1..2.
     for (const text of ["I enter the tavern", "I order a drink"]) {
-      const turn = await session.value.submitAction({
-        kind: "free_text",
-        text,
-      });
-      expect(turn.status).toBe("committed");
+      expectCommitted(await h.value.turn(text));
     }
+    const idle1 = await h.value.waitIdle(5_000);
+    expect(idle1.ok).toBe(true);
 
-    const slice1 = await waitForSummary(
-      created.value.runtime,
-      sessionId,
-      (s) => s.lastSummarizedPairCount === 2,
-    );
-    expect(slice1).not.toBeNull();
+    const slice1 = h.value.sliceOf<SummarySlice>(SLICE_NAME);
+    expect(slice1?.lastSummarizedPairCount).toBe(2);
     expect(slice1?.summaries.length).toBe(1);
     expect(slice1?.summaries[0]).toMatchObject({
       index: 1,
@@ -190,19 +143,17 @@ describe("summary module integration", () => {
     expect(slice1?.summaries[0]?.text).toContain("covers pairs 1..2");
 
     // Turn 3: not due (3 < 4) → narrative already sees chunk #1.
-    await session.value.submitAction({ kind: "free_text", text: "I look around" });
+    expectCommitted(await h.value.turn("I look around"));
     const sys1 = lastNarrativeSystem(script.narrativeRequests);
     expect(sys1).toContain("STORY SUMMARY");
     expect(sys1).toContain("[1] turns #1–#2");
     expect(sys1).toContain("covers pairs 1..2");
 
     // Turn 4: due → second chunk for pairs 3..4.
-    await session.value.submitAction({ kind: "free_text", text: "I pay the bill" });
-    const slice2 = await waitForSummary(
-      created.value.runtime,
-      sessionId,
-      (s) => s.lastSummarizedPairCount === 4,
-    );
+    expectCommitted(await h.value.turn("I pay the bill"));
+    const idle2 = await h.value.waitIdle(5_000);
+    expect(idle2.ok).toBe(true);
+    const slice2 = h.value.sliceOf<SummarySlice>(SLICE_NAME);
     expect(slice2?.summaries.length).toBe(2);
     expect(slice2?.summaries[1]).toMatchObject({
       index: 2,
@@ -211,7 +162,7 @@ describe("summary module integration", () => {
     });
 
     // Turn 5: narrative sees BOTH chunks (all summaries, chronological).
-    await session.value.submitAction({ kind: "free_text", text: "I leave" });
+    expectCommitted(await h.value.turn("I leave"));
     const sys2 = lastNarrativeSystem(script.narrativeRequests);
     expect(sys2).toContain("[1] turns #1–#2");
     expect(sys2).toContain("[2] turns #3–#4");
@@ -219,52 +170,44 @@ describe("summary module integration", () => {
   });
 
   test("error: summary task failure is tolerated and retried on the next turn", async () => {
-    const script = createScriptedLlm();
+    const script = createScriptedLlm([
+      {
+        tool: TOOL_IDS.store,
+        args: { summary: "Chunk covers pairs 1..3" },
+        result: { ok: true, index: 1, fromPairIndex: 1, toPairIndex: 3 },
+      },
+    ]);
     script.failSummary = true;
-    const created = await createTestEngine({
-      modules: [
+    const h = await testModules(
+      [
         createWorkingMemoryModule({ windowPairs: 12 }),
         createSummaryModule({ intervalTurns: 2 }),
       ],
-      llm: script.llm,
-      agentsMode: "llm",
-      defaultModel: "test-model",
-    });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-
-    const session = await created.value.engine.startSession();
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
-    const sessionId = session.value.sessionId;
+      { llm: script.llm, agentsMode: "llm" },
+    );
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
 
     for (const text of ["First", "Second"]) {
-      const turn = await session.value.submitAction({
-        kind: "free_text",
-        text,
-      });
-      expect(turn.status).toBe("committed");
+      expectCommitted(await h.value.turn(text));
     }
+    const idle1 = await h.value.waitIdle(5_000);
+    expect(idle1.ok).toBe(true);
 
     // Task fails → no chunk stored, counter untouched.
-    await sleep(200);
-    let slice = readSummary(created.value.runtime, sessionId);
-    expect(slice?.summaries.length ?? 0).toBe(0);
-    expect(slice?.lastSummarizedPairCount ?? 0).toBe(0);
+    expectSlice(h.value, SLICE_NAME, {
+      lastSummarizedPairCount: 0,
+      summaries: [],
+    });
 
     // LLM recovers → the next due turn retries and covers pairs 1..3.
     script.failSummary = false;
-    const turn3 = await session.value.submitAction({
-      kind: "free_text",
-      text: "Third",
-    });
-    expect(turn3.status).toBe("committed");
+    const turn3 = await h.value.turn("Third");
+    expectCommitted(turn3);
 
-    slice = await waitForSummary(
-      created.value.runtime,
-      sessionId,
-      (s) => s.lastSummarizedPairCount === 3,
-    );
+    const idle2 = await h.value.waitIdle(5_000);
+    expect(idle2.ok).toBe(true);
+    const slice = h.value.sliceOf<SummarySlice>(SLICE_NAME);
     expect(slice?.summaries.length).toBe(1);
     expect(slice?.summaries[0]).toMatchObject({
       index: 1,
@@ -275,63 +218,52 @@ describe("summary module integration", () => {
   });
 
   test("edge: no chunk before the interval, no summary section in the prompt", async () => {
-    const script = createScriptedLlm();
-    const created = await createTestEngine({
-      modules: [
+    const script = createScriptedLlm([]);
+    const h = await testModules(
+      [
         createWorkingMemoryModule({ windowPairs: 12 }),
         createSummaryModule({ intervalTurns: 5 }),
       ],
-      llm: script.llm,
-      agentsMode: "llm",
-      defaultModel: "test-model",
-    });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-
-    const session = await created.value.engine.startSession();
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
-    const sessionId = session.value.sessionId;
+      { llm: script.llm, agentsMode: "llm" },
+    );
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
 
     for (const text of ["One", "Two"]) {
-      await session.value.submitAction({ kind: "free_text", text });
+      await h.value.turn(text);
     }
-    await sleep(200);
-    const slice = readSummary(created.value.runtime, sessionId);
-    expect(slice?.summaries.length ?? 0).toBe(0);
+    const idle = await h.value.waitIdle(5_000);
+    expect(idle.ok).toBe(true);
+    expectSlice(h.value, SLICE_NAME, {
+      lastSummarizedPairCount: 0,
+      summaries: [],
+    });
     expect(script.summaryRequests.length).toBe(0);
 
-    await session.value.submitAction({ kind: "free_text", text: "Three" });
+    await h.value.turn("Three");
     const sys = lastNarrativeSystem(script.narrativeRequests);
     expect(sys).not.toContain("STORY SUMMARY");
   });
 
   test("edge: no-op when working-memory module is absent", async () => {
-    const script = createScriptedLlm();
-    const created = await createTestEngine({
-      modules: [createSummaryModule({ intervalTurns: 2 })],
+    const script = createScriptedLlm([]);
+    const h = await testModule(createSummaryModule({ intervalTurns: 2 }), {
       llm: script.llm,
       agentsMode: "llm",
-      defaultModel: "test-model",
     });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-
-    const session = await created.value.engine.startSession();
-    expect(session.ok).toBe(true);
-    if (!session.ok) return;
-    const sessionId = session.value.sessionId;
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
 
     for (const text of ["One", "Two"]) {
-      const turn = await session.value.submitAction({
-        kind: "free_text",
-        text,
-      });
-      expect(turn.status).toBe("committed");
+      const turn = await h.value.turn(text);
+      expectCommitted(turn);
     }
-    await sleep(200);
-    const slice = readSummary(created.value.runtime, sessionId);
-    expect(slice?.summaries.length ?? 0).toBe(0);
+    const idle = await h.value.waitIdle(5_000);
+    expect(idle.ok).toBe(true);
+    expectSlice(h.value, SLICE_NAME, {
+      lastSummarizedPairCount: 0,
+      summaries: [],
+    });
     expect(script.summaryRequests.length).toBe(0);
   });
 });

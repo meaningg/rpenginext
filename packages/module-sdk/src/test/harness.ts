@@ -7,6 +7,7 @@ import {
   type PersistencePort,
   type Result,
   type SavePointer,
+  type TurnLogger,
   type TurnResult,
 } from "@rpengineext/contracts";
 import { createTestEngine } from "@rpengineext/core/testing";
@@ -24,6 +25,13 @@ export interface TestModuleOptions {
   readonly strictCapabilities?: boolean;
   /** Real or in-memory persistence capable of harness save/load. */
   readonly persistence?: PersistencePort;
+  /**
+   * Load an existing session id instead of starting a fresh one (used with
+   * `persistence` for save/migration round-trip tests). Default: new session.
+   */
+  readonly sessionId?: string;
+  /** Logger spy injected into the engine (warnings/behavior assertions). */
+  readonly log?: TurnLogger;
 }
 
 type TestEngineSuccess = Extract<
@@ -132,11 +140,18 @@ export async function testModules(
     ...(options.agentsMode ? { agentsMode: options.agentsMode } : {}),
     ...(options.moduleConfig ? { moduleConfig: options.moduleConfig } : {}),
     ...(options.persistence ? { persistence: options.persistence } : {}),
+    ...(options.log ? { log: options.log } : {}),
     ...(options.strictCapabilities !== undefined
       ? { strictCapabilities: options.strictCapabilities }
       : {}),
   });
   if (!created.ok) return created;
+
+  if (options.sessionId) {
+    const loaded = await created.value.engine.loadSession(options.sessionId);
+    if (!loaded.ok) return loaded;
+    return createHarness(created.value, options.sessionId);
+  }
 
   const session = await created.value.engine.startSession({
     ...(options.meta ? { meta: options.meta } : {}),

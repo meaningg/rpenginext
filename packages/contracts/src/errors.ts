@@ -22,6 +22,7 @@ export const TURN_FAILURE_CODES = [
   // These preserve the stable author-facing `code` end-to-end.
   "MODULE_OP_UNKNOWN",
   "MODULE_OP_PAYLOAD_INVALID",
+  "SCHEMA_INVALID", // E09 — seed meta / tool args+result / agent output schema (specs/03)
   "MODULE_READ_MODEL_UNKNOWN",
   "MODULE_READ_MODEL_ARGS_INVALID",
   "MODULE_MOMENT_OP_FORBIDDEN",
@@ -118,6 +119,7 @@ export const MODULE_FAILURE_CODES = [
   "MODULE_EVENT_DUPLICATE",
   "MODULE_EVENT_UNKNOWN",
   "MODULE_EVENT_PAYLOAD_INVALID",
+  "SCHEMA_INVALID", // E09 — also part of the author catalog; emitted by tool/agent paths
   "MODULE_EVENT_EMIT_FORBIDDEN",
   "MODULE_EVENT_DENY_FORBIDDEN",
   "MODULE_EVENT_HANDLER_ERROR",

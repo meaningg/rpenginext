@@ -30,9 +30,9 @@ import { SqlitePersistence } from "@rpengineext/persistence-sqlite";
 
 import { readHostEnv, type HostEnv } from "./env.ts";
 import {
-  dedupeIds,
   expandProfile,
   instantiateFromCatalog,
+  resolveMergedIds,
   type ModuleProfileId,
 } from "./module-catalog.ts";
 
@@ -108,11 +108,16 @@ export function resolveHostModules(
   const disabledSet = options.disabledModuleIds ?? [];
   const conflict = enabledSet.filter((id) => disabledSet.includes(id));
   if (conflict.length > 0) {
+    // Both full lists in details (specs/04 §4.1.1 locked decision).
     return err(
       moduleFailure(
         "CONFIG_INVALID",
         `module id(s) present in both enabledModuleIds and disabledModuleIds: ${conflict.join(", ")}. Hint: pick one side for each id.`,
-        { moduleIds: conflict },
+        {
+          moduleIds: conflict,
+          enabledModuleIds: [...enabledSet],
+          disabledModuleIds: [...disabledSet],
+        },
       ),
     );
   }
@@ -126,9 +131,10 @@ export function resolveHostModules(
     baseIds = expandProfile(profile);
   }
 
-  const merged = dedupeIds([...baseIds, ...enabledSet]);
+  const merged = resolveMergedIds(baseIds, enabledSet);
+  if (!merged.ok) return merged;
   const disabled = new Set([...disabledSet, ...env.disableModules]);
-  const finalIds = merged.filter((id) => !disabled.has(id));
+  const finalIds = merged.value.filter((id) => !disabled.has(id));
 
   const instantiated = instantiateFromCatalog(finalIds);
   if (!instantiated.ok) return instantiated;

@@ -140,14 +140,13 @@ describe("${id} module (recipe: state)", () => {
   });
 
   test("reject: unknown op fails with MODULE_OP_UNKNOWN", async () => {
-    const { defineModule, deny } = await import("@rpengineext/module-sdk");
+    const { defineModule } = await import("@rpengineext/module-sdk");
     const mod = defineModule({
       id: "${id}",
       version: "1.0.0",
       title: "${pascal}",
       turn: {
         change(ctx) {
-          void deny;
           ctx.op("no_such_op");
         },
       },
@@ -160,14 +159,43 @@ describe("${id} module (recipe: state)", () => {
     await h.value.stop();
   });
 
-  test("edge: flag stays false when op payload is invalid", async () => {
-    const h = await testModule(${factory}());
+  test("edge: op payload invalid rejects with MODULE_OP_PAYLOAD_INVALID", async () => {
+    const { defineModule } = await import("@rpengineext/module-sdk");
+    const z = (await import("zod")).z;
+    const bad = defineModule({
+      id: "${id}",
+      version: "1.0.0",
+      title: "${pascal}",
+      state: {
+        name: "${slice}",
+        schema: z
+          .object({ schemaVersion: z.literal(1), flag: z.boolean() })
+          .strict(),
+        initial: { schemaVersion: 1 as const, flag: false },
+        ops: {
+          set_flag: {
+            payload: z.object({ flag: z.boolean() }).strict(),
+            apply: (
+              s: { schemaVersion: 1; flag: boolean },
+              p: { flag: boolean },
+            ): { schemaVersion: 1; flag: boolean } => ({
+              schemaVersion: 1,
+              flag: p.flag,
+            }),
+          },
+        },
+      },
+      turn: {
+        change(ctx) {
+          ctx.op("set_flag", { flag: "not-a-boolean" });
+        },
+      },
+    });
+    const h = await testModule(bad);
     expect(h.ok).toBe(true);
     if (!h.ok) return;
-    const turn = await h.value.turn("x");
-    expectCommitted(turn);
-    const state = h.value.state()!;
-    expect((state.slices.${slice} as { flag: boolean }).flag).toBe(true);
+    const turn = await h.value.turn("go");
+    expectRejected(turn, "MODULE_OP_PAYLOAD_INVALID");
     await h.value.stop();
   });
 });
@@ -912,8 +940,11 @@ import {
   type SessionSnapshot,
 } from "@rpengineext/contracts";
 import { InMemoryPersistence } from "@rpengineext/core";
-import { createTestEngine } from "@rpengineext/core/testing";
 import { defineModule } from "@rpengineext/module-sdk";
+import {
+  expectCommitted,
+  testModule,
+} from "@rpengineext/module-sdk/test";
 import { z } from "zod";
 import { ${factory}, SLICE_NAME } from "../src/index.ts";
 
@@ -939,17 +970,14 @@ describe("${id} module (recipe: migrate)", () => {
   test("success: v1 save loads as v2 (migrated)", async () => {
     const persistence = new InMemoryPersistence();
     await persistence.save(v1Snapshot("mig-session"));
-    const created = await createTestEngine({
-      modules: [${factory}()],
-      persistence,
+    const h = await testModule(${factory}(), { persistence, sessionId: "mig-session" });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    expect(h.value.sliceOf(SLICE_NAME) as { schemaVersion: number; name: string }).toEqual({
+      schemaVersion: 2,
+      name: "legacy",
     });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-    const loaded = await created.value.engine.loadSession("mig-session");
-    expect(loaded.ok).toBe(true);
-    if (!loaded.ok) return;
-    const slice = created.value.runtime.getSessionState("mig-session")!.slices[SLICE_NAME];
-    expect(slice).toEqual({ schemaVersion: 2, name: "legacy" });
+    await h.value.stop();
   });
 
   test("reject: unmigratable version fails load with MODULE_SLICE_UNMIGRATABLE", async () => {
@@ -966,35 +994,25 @@ describe("${id} module (recipe: migrate)", () => {
     });
     const persistence = new InMemoryPersistence();
     await persistence.save(v1Snapshot("broken-session"));
-    const created = await createTestEngine({
-      modules: [frozen],
-      persistence,
-    });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-    const loaded = await created.value.engine.loadSession("broken-session");
-    expect(loaded.ok).toBe(false);
-    if (loaded.ok) return;
-    expect(loaded.error.code).toBe("MODULE_SLICE_UNMIGRATABLE");
+    const h = await testModule(frozen, { persistence, sessionId: "broken-session" });
+    expect(h.ok).toBe(false);
+    if (h.ok) return;
+    expect(h.error.code).toBe("MODULE_SLICE_UNMIGRATABLE");
   });
 
   test("edge: migrated slice stays writable via ops", async () => {
     const persistence = new InMemoryPersistence();
     await persistence.save(v1Snapshot("mig-session-2"));
-    const created = await createTestEngine({
-      modules: [${factory}()],
+    const h = await testModule(${factory}(), {
       persistence,
+      sessionId: "mig-session-2",
     });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-    const loaded = await created.value.engine.loadSession("mig-session-2");
-    expect(loaded.ok).toBe(true);
-    if (!loaded.ok) return;
-    const turn = await loaded.value.submitAction({ kind: "free_text", text: "x" });
-    expect(turn.status).toBe("committed");
-    const slice =
-      created.value.runtime.getSessionState("mig-session-2")!.slices[SLICE_NAME];
-    expect((slice as { schemaVersion: number }).schemaVersion).toBe(2);
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    const turn = await h.value.turn("x");
+    expectCommitted(turn);
+    expect((h.value.sliceOf(SLICE_NAME) as { schemaVersion: number }).schemaVersion).toBe(2);
+    await h.value.stop();
   });
 });
 `;
@@ -1182,6 +1200,56 @@ describe("${id} module (recipe: events)", () => {
     expectCommitted(turn);
     // the ${id} handler reacted to the ping (no crash; world intact)
     expectEvent(duo.value, "some_publisher.ping", {});
+    await duo.value.stop();
+  });
+
+  test("edge: subscriber handler throw → MODULE_EVENT_HANDLER_ERROR warning; turn committed (E21)", async () => {
+    const warnings: { code?: string }[] = [];
+    const logger = {
+      debug() {},
+      info() {},
+      warn(fields: unknown, _message?: string) {
+        warnings.push({ code: (fields as { code?: string } | undefined)?.code });
+      },
+      error() {},
+      child() {
+        return logger;
+      },
+    } as unknown as import("@rpengineext/contracts").TurnLogger;
+    const pub = defineModule({
+      id: "some-publisher",
+      version: "1.0.0",
+      title: "Publisher",
+      events: {
+        emit: [{ name: "ping", schema: z.object({}).strict() }],
+      },
+      turn: {
+        committed(ctx) {
+          ctx.emit("some_publisher.ping", {});
+        },
+      },
+    });
+    const boom = defineModule({
+      id: "${id}-boom",
+      version: "1.0.0",
+      title: "${pascal} Boom",
+      events: {
+        subscribe: [
+          {
+            name: "some_publisher.ping",
+            handler() {
+              throw new Error("handler boom");
+            },
+          },
+        ],
+      },
+    });
+    const duo = await testModules([pub, boom], { log: logger });
+    expect(duo.ok).toBe(true);
+    if (!duo.ok) return;
+    const turn = await duo.value.turn("go");
+    expectCommitted(turn);
+    expect(warnings.some((w) => w.code === "MODULE_EVENT_HANDLER_ERROR")).toBe(true);
     await duo.value.stop();
   });
 });

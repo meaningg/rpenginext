@@ -64,19 +64,3 @@ export function createNoopStressModule(i: number) {
     },
   });
 }
-
-/**
- * Boots `count` no-op stress modules in one engine + first turn.
- * Returns the committed state slices for verification.
- */
-export async function runNoopStress(
-  count: number,
-  opts: { turn?: string; modules?: ReturnType<typeof createNoopStressModule>[] } = {},
-) {
-  const { testModules } = await import("../../src/test/index.ts");
-  const modules = opts.modules ?? Array.from({ length: count }, (_, i) => createNoopStressModule(i + 1));
-  const h = await testModules(modules);
-  if (!h.ok) return h;
-  const turn = await h.value.turn(opts.turn ?? "hello");
-  return { ok: true as const, harness: h.value, turn };
-}

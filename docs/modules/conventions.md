@@ -13,8 +13,11 @@
 2. Свой slice — ед. поверхность записи; чужой slice — только
    `access.read` (объявлен в `access`) или readModel.
 3. `provides`/`requires` — capability tokens (`capability:<token>`);
-   **unversioned в 1.0** (versioned tokens — post-1.0). Два модуля с
-   одинаковым `provides` — boot fail (уникальность соблюдай в id/token).
+   **unversioned в 1.0** (versioned tokens — post-1.0). Duplicate
+   `provides` **разрешён** (spec 06 §5.1): граф трактует токен как
+   удовлетворённый при наличии ≥1 провайдера; порядок провайдеров =
+   registration order (см. §3). Breaking-изменение семантики capability =
+   MAJOR модуля + обновление public contract.
 4. Public contract — обязательная секция README каждого модуля (см. §5).
 
 ## 2. Priority bands

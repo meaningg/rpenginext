@@ -1890,7 +1890,11 @@ export class TurnPipeline {
         );
         if (!result.ok) {
           this.log.warn(
-            { moduleId: owned.moduleId, err: result.error },
+            {
+              moduleId: owned.moduleId,
+              code: result.error.code,
+              err: result.error,
+            },
             "AfterCommitHook failed (ignored)",
           );
           this.tracer.warn(
@@ -1899,7 +1903,11 @@ export class TurnPipeline {
         }
       } catch (error) {
         this.log.warn(
-          { moduleId: owned.moduleId, err: String(error) },
+          {
+            moduleId: owned.moduleId,
+            code: "MODULE_EVENT_HANDLER_ERROR",
+            err: String(error),
+          },
           "AfterCommitHook threw (ignored)",
         );
       }
@@ -1944,12 +1952,41 @@ export class TurnPipeline {
     if (!scratch.failure) return;
     for (const owned of this.index.onTurnRejected) {
       try {
-        await owned.value.onRejected(
+        const result = await owned.value.onRejected(
           { failure: scratch.failure },
           this.moduleCtx(owned.moduleId, ctx),
         );
-      } catch {
-        /* observe */
+        if (!result.ok) {
+          // Bind converted a handler violation (e.g. E15) into a Result error:
+          // surface as structured warning — never silent.
+          this.log.warn(
+            {
+              moduleId: owned.moduleId,
+              code: result.error.code,
+              failureCode: scratch.failure.code,
+            },
+            `[${result.error.code}] turn.rejected handler error in module ${owned.moduleId} (turn stays rejected; observe-only)`,
+          );
+          this.tracer.warn(
+            `turn.rejected handler ${owned.moduleId}: [${result.error.code}] ${result.error.message}`,
+          );
+        }
+      } catch (e) {
+        // Never silent (specs/01 §4.2 / specs/06 §7.3): the turn is already
+        // rejected, so handler errors surface as structured warnings. Context
+        // violations (E15/E19/…) keep their stable code.
+        const code =
+          (isModuleCtxViolation(e) && e.code) ||
+          (e && typeof e === "object" && typeof (e as { code?: unknown }).code === "string"
+            ? ((e as { code: string }).code)
+            : "MODULE_EVENT_HANDLER_ERROR");
+        this.log.warn(
+          { moduleId: owned.moduleId, code, failureCode: scratch.failure.code },
+          `[${code}] turn.rejected handler error in module ${owned.moduleId} (turn stays rejected; observe-only)`,
+        );
+        this.tracer.warn(
+          `turn.rejected handler ${owned.moduleId}: [${code}] ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
     }
   }
@@ -2293,6 +2330,7 @@ export class TurnPipeline {
               {
                 moduleId: sub.moduleId,
                 event: event.name,
+                code: "MODULE_EVENT_HANDLER_ERROR",
                 err: e instanceof Error ? e.message : String(e),
               },
               `[MODULE_EVENT_HANDLER_ERROR] event handler threw for ${event.name} (turn stays ${phase})`,
@@ -2450,11 +2488,7 @@ function isTurnFailureCode(code: string): code is TurnFailure["code"] {
 }
 
 function mapFailureCode(code: string): TurnFailure["code"] {
-  if (
-    code === "SCHEMA_INVALID" ||
-    code === "NO_HANDLER" ||
-    code === "NO_ADAPTER"
-  ) {
+  if (code === "NO_HANDLER" || code === "NO_ADAPTER") {
     return "AGENT_FAILED";
   }
   // Stable-token passthrough: module-platform codes (MODULE_*) and author

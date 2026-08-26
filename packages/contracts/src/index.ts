@@ -250,6 +250,7 @@ export type { ModuleRegisterContext } from "./modules/register-context.ts";
 
 export {
   MODULE_IR_VERSION,
+  SUPPORTED_MODULE_IR_VERSIONS,
   type ModuleIrVersion,
   type CompiledOpIr,
   type CompiledSliceIr,

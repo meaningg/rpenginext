@@ -257,12 +257,8 @@ describe("stress S09/S11/S19 (background + tool system turns)", () => {
     expect(sessionB.ok).toBe(true);
     if (!sessionB.ok) return;
 
-    const restored =
-      engineB.value.runtime.getPendingSystemTurns(sessionA.value.sessionId);
-    // The load-time pump drains synchronously; restoration is proven by the
+    // Load-time pump drains synchronously; restoration is proven by the
     // drained run below (the crafted pending turn executes exactly once).
-    void restored;
-
     const idle = await engineB.value.runtime.waitIdle(
       sessionA.value.sessionId,
       10_000,

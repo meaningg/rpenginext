@@ -11,8 +11,8 @@ import {
 import { z } from "zod";
 
 /**
- * Publisher + subscriber duo declaration. `id` drives both module ids and the
- * canonical event name so fan-out tests can register N subscribers.
+ * Fan-out publisher + subscriber duo declaration. `id` drives both module ids
+ * and the canonical event name so fan-out tests can register N subscribers.
  */
 function publisher(id: string, priority = 100) {
   return defineModule({
@@ -50,7 +50,12 @@ function publisher(id: string, priority = 100) {
   });
 }
 
-function subscriber(id: string, eventName: string, priority = 100) {
+function subscriber(
+  id: string,
+  eventName: string,
+  priority = 100,
+  track?: (id: string) => void,
+) {
   return defineModule({
     id,
     version: "1.0.0",
@@ -62,6 +67,7 @@ function subscriber(id: string, eventName: string, priority = 100) {
           name: eventName,
           priority,
           handler(ctx, event) {
+            track?.(id);
             ctx.log.info(`${id} ← ${event.payload.from}`);
           },
         },
@@ -70,11 +76,40 @@ function subscriber(id: string, eventName: string, priority = 100) {
   });
 }
 
+/**
+ * Spy logger capturing `warn` codes — children share the same sink (like the
+ * registry child logger chain), so every module-scoped warn is collected.
+ */
+function spyLogger(): {
+  warnings: { code?: string }[];
+  logger: import("@rpengineext/contracts").TurnLogger;
+} {
+  const warnings: { code?: string }[] = [];
+  const logger = {
+    debug() {},
+    info() {},
+    warn(fields: unknown, _message?: string) {
+      warnings.push({ code: (fields as { code?: string } | undefined)?.code });
+    },
+    error() {},
+    child() {
+      return logger;
+    },
+  } as unknown as import("@rpengineext/contracts").TurnLogger;
+  return { warnings, logger };
+}
+
 describe("stress S15–S18, S20, S22 (events)", () => {
   test("S15: fan-out — one emit → N=30 subscribers, priority order, payload intact", async () => {
     const pub = publisher("fan-pub", 50);
+    const order: string[] = [];
     const subs = Array.from({ length: 30 }, (_, i) =>
-      subscriber(`fan-sub-${String(i + 1).padStart(2, "0")}`, "fan_pub.changed", 100 - i),
+      subscriber(
+        `fan-sub-${String(i + 1).padStart(2, "0")}`,
+        "fan_pub.changed",
+        100 - i,
+        (id) => order.push(id),
+      ),
     );
     const h = await testModules([pub, ...subs]);
     expect(h.ok).toBe(true);
@@ -86,6 +121,11 @@ describe("stress S15–S18, S20, S22 (events)", () => {
     // All 30 subscribers fire deterministically (session event log length 1 —
     // one event, dispatched to all subscribers).
     expect(h.value.events.filter((e) => e.name === "fan_pub.changed")).toHaveLength(1);
+    // Locked ordering (specs/06 §7.3): priority asc → registration order asc.
+    // subscribers have priority 100 - i → fan-sub-30 (71) first … fan-sub-01 (100) last.
+    expect(order).toEqual(
+      Array.from({ length: 30 }, (_, i) => `fan-sub-${String(30 - i).padStart(2, "0")}`),
+    );
     await h.value.stop();
   });
 
@@ -112,6 +152,8 @@ describe("stress S15–S18, S20, S22 (events)", () => {
   });
 
   test("S17: subscriber ctx.op / deny in event dispatch → fail-loud; world unchanged", async () => {
+    const { warnings, logger } = spyLogger();
+
     const pub = publisher("s17-pub");
     const badOp = defineModule({
       id: "s17-badop",
@@ -135,7 +177,7 @@ describe("stress S15–S18, S20, S22 (events)", () => {
         ],
       },
     });
-    const h = await testModules([pub, badOp]);
+    const h = await testModules([pub, badOp], { log: logger });
     expect(h.ok).toBe(true);
     if (!h.ok) return;
     const turn = await h.value.turn("go");
@@ -144,6 +186,8 @@ describe("stress S15–S18, S20, S22 (events)", () => {
     expectCommitted(turn);
     expectSlice(h.value, "s17_badop", { n: 0 });
     expectSlice(h.value, "s17_pub", { n: 1 });
+    // Fail-loud code asserted (specs/03 E15): never silent.
+    expect(warnings.some((w) => w.code === "MODULE_MOMENT_OP_FORBIDDEN")).toBe(true);
     await h.value.stop();
 
     const badDeny = defineModule({
@@ -161,11 +205,13 @@ describe("stress S15–S18, S20, S22 (events)", () => {
         ],
       },
     });
-    const h2 = await testModules([pub, badDeny]);
+    const h2 = await testModules([pub, badDeny], { log: logger });
     expect(h2.ok).toBe(true);
     if (!h2.ok) return;
     const turn2 = await h2.value.turn("go");
     expectCommitted(turn2);
+    // deny() in dispatch → MODULE_EVENT_DENY_FORBIDDEN (specs/03 E20).
+    expect(warnings.some((w) => w.code === "MODULE_EVENT_DENY_FORBIDDEN")).toBe(true);
     await h2.value.stop();
   });
 
@@ -203,7 +249,9 @@ describe("stress S15–S18, S20, S22 (events)", () => {
     await h.value.stop();
   });
 
-  test("S20: subscriber handler throws post-commit → turn stays committed; world unchanged", async () => {
+  test("S20: subscriber handler throws post-commit → turn stays committed; warning MODULE_EVENT_HANDLER_ERROR", async () => {
+    const { warnings, logger } = spyLogger();
+
     const pub = publisher("s20-pub");
     const explode = defineModule({
       id: "s20-explode",
@@ -227,17 +275,21 @@ describe("stress S15–S18, S20, S22 (events)", () => {
         ],
       },
     });
-    const h = await testModules([pub, explode]);
+    const h = await testModules([pub, explode], { log: logger });
     expect(h.ok).toBe(true);
     if (!h.ok) return;
     const turn = await h.value.turn("go");
     expectCommitted(turn);
+    // Fail-loud warning with stable code (specs/02 S20, specs/03 E21) — never silent.
+    expect(warnings.some((w) => w.code === "MODULE_EVENT_HANDLER_ERROR")).toBe(true);
     expectSlice(h.value, "s20_pub", { n: 1 });
     expectSlice(h.value, "s20_explode", { n: 0 });
     await h.value.stop();
   });
 
-  test("S22: cascade depth cap → MODULE_EVENT_CASCADE_LIMIT; world unchanged", async () => {
+  test("S22: cascade depth cap → MODULE_EVENT_CASCADE_LIMIT warning; world unchanged", async () => {
+    const { warnings, logger } = spyLogger();
+
     // Chain: a1 → a2 → a3 → … each handler re-emits the next event.
     const mkChain = (i: number) =>
       defineModule({
@@ -273,15 +325,19 @@ describe("stress S15–S18, S20, S22 (events)", () => {
 
     // Depth chain of 12 (> cap 8) → cascade limit warning; turn still committed.
     const chain = [chain0, ...Array.from({ length: 12 }, (_, i) => mkChain(i + 1))];
-    const h = await testModules(chain);
+    const h = await testModules(chain, { log: logger });
     expect(h.ok).toBe(true);
     if (!h.ok) return;
     const turn = await h.value.turn("go");
     expectCommitted(turn);
+    // Fail-loud limit code (specs/03 E22) — dispatch interrupted with warning.
+    expect(warnings.some((w) => w.code === "MODULE_EVENT_CASCADE_LIMIT")).toBe(true);
     await h.value.stop();
   });
 
-  test("S22b: per-turn burst cap → MODULE_EVENT_BURST_LIMIT; remaining dropped, world unchanged", async () => {
+  test("S22b: per-turn burst cap → MODULE_EVENT_BURST_LIMIT warning; remaining dropped, world unchanged", async () => {
+    const { warnings, logger } = spyLogger();
+
     // Publisher emits 300 events in committed (> 256 cap).
     const mod = defineModule({
       id: "burst-pub",
@@ -298,7 +354,7 @@ describe("stress S15–S18, S20, S22 (events)", () => {
         },
       },
     });
-    const h = await testModule(mod);
+    const h = await testModule(mod, { log: logger });
     expect(h.ok).toBe(true);
     if (!h.ok) return;
     const turn = await h.value.turn("go");
@@ -306,6 +362,8 @@ describe("stress S15–S18, S20, S22 (events)", () => {
     expect(h.value.events.filter((e) => e.name === "burst_pub.ping").length).toBeLessThanOrEqual(
       256,
     );
+    // Fail-loud limit code (specs/03 E23) — remaining events dropped with warning.
+    expect(warnings.some((w) => w.code === "MODULE_EVENT_BURST_LIMIT")).toBe(true);
     await h.value.stop();
   });
 });
