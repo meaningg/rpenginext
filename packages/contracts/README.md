@@ -5,7 +5,7 @@ Public **schemas, ports, and extension surface** for rpengineext.
 This package is the semver heart of the monorepo:
 
 - `core` implements runtime against these types
-- `modules/*` depend **only** on contracts (use `@rpengineext/core/testing` in tests)
+- `modules/*` depend on `@rpengineext/module-sdk` + zod at runtime; `contracts` / `core` are test-only devDeps
 - `agents/*` and `persistence/*` implement ports defined here
 
 ## Install (workspace)

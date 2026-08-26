@@ -45,7 +45,7 @@ defineModule({
 
 Sugar и `capabilities[]` **нормализуются в один список**. Можно смешивать.
 
-Экспорт helpers: `stateCap`, `seedCap`, `rulesCap`, `turnCap`, `narrativeCap`, `aiCap`, `hostCap`, `configCap`, `accessCap`.
+Экспорт helpers: `stateCap`, `seedCap`, `rulesCap`, `turnCap`, `narrativeCap`, `aiCap`, `hostCap`, `configCap`, `accessCap`, `eventsCap`.
 
 ---
 
@@ -733,5 +733,5 @@ Options: `{ meta, moduleConfig, llm, agentsMode, seed, strictCapabilities, persi
 | [recipes.md](./recipes.md) | копируемые паттерны |
 | [schemas.md](./schemas.md) | Zod |
 | [ADR 0004](../adr/0004-module-sdk-cbmd.md) | почему CBMD / sdk |
-| [ADR 0005](../adr/0005-moments-native-core.md) | future core (не author path) |
-| Эталоны | `packages/modules/{world-canon,working-memory,character}` |
+| [ADR 0005](../adr/0005-moments-native-core.md) | deferred: моменты-native core (не реализовано) |
+| Эталоны | `packages/modules/{world-canon,working-memory,character,summary}` |

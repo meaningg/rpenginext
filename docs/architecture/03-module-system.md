@@ -25,9 +25,10 @@
 
 | Module id | Package | Назначение |
 |-----------|---------|------------|
-| `working_memory` | `@rpengineext/module-working-memory` | last-N chat pairs + archive slice |
+| `working-memory` | `@rpengineext/module-working-memory` | last-N chat pairs + archive slice (slice name: `working_memory`) |
 | `character` | `@rpengineext/module-character` | PC seed, narrative injection, background outfit sync |
-| `world_canon` | `@rpengineext/module-world-canon` | immutable story canon → narrative system prompt |
+| `world-canon` | `@rpengineext/module-world-canon` | immutable story canon → narrative system prompt |
+| `summary` | `@rpengineext/module-summary` | дельта-чанки working memory через фоновые system turns → все саммари в narrative system prompt; вне профилей по умолчанию |
 
 ### Future examples (not implemented until separate task)
 
@@ -36,7 +37,6 @@
 | `npc` | сущности NPC, отношения, инициативы реплик/поведения |
 | `plot-controller` | акты, beats, gates, fail-forward |
 | `fandom-canon` | RAG/поиск канона, proposal канон-фактов кампании |
-| `summarizer` | сжатие истории в memory items |
 
 Любой module (ваш или third-party) подключается одинаково: **`defineModule` → compiled Module** + host wiring (profile / `extraModules`). Runtime boundary types live in `contracts`; author API is **module-sdk** only.
 
@@ -48,20 +48,19 @@
 
 | Era | Typical engines ranges |
 |-----|------------------------|
-| Current monorepo **0.x** | `^0.1.0` (see `MODULE_SDK_VERSION` / package versions) |
-| After **Module Platform 1.0** tag | `^1.0.0` (spec 01 / 07) |
+| Current monorepo (**Module Platform 1.0**) | `^1.0.0` (SDK/CORE/CONTRACTS 1.0.0; see `MODULE_SDK_VERSION` / package versions / spec 01 / 07) |
 
 Example shape (illustrative module id; versions follow era above):
 
 ```json
 {
   "id": "npc",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "displayName": "NPC System",
   "description": "NPC entities, relations, turn intents",
   "engines": {
-    "core": "^0.1.0",
-    "contracts": "^0.1.0"
+    "core": "^1.0.0",
+    "contracts": "^1.0.0"
   },
   "priority": 40,
   "provides": ["capability:npc", "agent-task:npc.voice"],
@@ -92,7 +91,7 @@ Note: runtime field name is **`contributes`** (typed ports the compiled module i
 ### Правила манифеста
 
 - `id` — kebab-case / reverse-domain, уникален в process.
-- `priority` — число; **меньший** = раньше в детерминированном порядке (tie-break: `id` asc).
+- `priority` — число; **меньший** = раньше в детерминированном порядке (tie-break: registration order).
 - `provides`/`requires` — строки из registry vocabulary + module-defined capabilities.
 - `permissions` — subset known permission tokens; default-deny.
 - Незаявленный extension point implementation игнорируется или fail on strict mode (config).
@@ -132,7 +131,7 @@ discover → load manifest → import factory → register(ctx)
 Новый механизм  → ADR + core (редко)
 ```
 
-Product modules (npc/plot/canon/…) — **примеры**; не реализуются, пока нет отдельной задачи.
+First-party продукт-модули (working-memory, character, world-canon, summary) построены на module-sdk; npc/plot и дальнейшие — не реализованы, только отдельными задачами.
 
 ### Handler contract shape (logical)
 
@@ -168,7 +167,7 @@ Registry отвергает module, если handler пытается сдела
 1. Собрать все `provides`.
 2. Убедиться, что каждый `requires` удовлетворён.
 3. Обнаружить cycles в hard dependency (forbid).
-4. Построить order по priority + id.
+4. Построить order по priority (tie-break: registration order).
 
 Если missing capability:
 

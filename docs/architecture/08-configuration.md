@@ -33,6 +33,7 @@ Names from `HOST_ENV` / related readers:
 | `RP_MODULES` | comma module ids | replaces profile first-party set (list order) |
 | `RP_DISABLE_MODULES` | comma module ids | remove from resolved set after profile/list |
 | `RP_AGENTS_STREAMING` | `0` disables draft stream | default on |
+| `RP_AGENTS_MODE` | explicit agents mode | `mock` \| `llm`; wins over credentials-based resolution (default: `llm` if API key present, else `mock`) |
 | `RP_HTTP_HOST` | API bind host | default `127.0.0.1` |
 | `RP_HTTP_PORT` | API bind port | default `8787`; `0` = ephemeral (tests) |
 | `RP_CORS_ORIGIN` | CORS allow origin | default `http://127.0.0.1:5173` |
@@ -49,10 +50,9 @@ Agents mode: live if LLM credentials present; otherwise mock. CLI/API `--mock` f
 ```text
 EngineConfig {
   modules: {
-    enabled: string[]            // module ids (engine-level; host composition may pre-resolve)
-    paths?: string[]             // reserved; not required for trusted in-process catalog
     strictManifest: boolean
     failOnMissingCapability: boolean  // production default true
+    // enablement решается host-level (профили / RP_MODULES / extraModules) — не в EngineConfig
   }
   moduleConfig: {
     [moduleId]: object           // validated by registerConfigSchema
@@ -60,25 +60,23 @@ EngineConfig {
   turn: {
     // atomicity is always full-turn rollback; no mode switch in v1
     stageTimeoutsMs: Record<stage, number>
-    sessionBusyPolicy: "queue" | "error"
+    sessionBusyPolicy: "error"
   }
   agents: {
     mode: "mock" | "llm"
     defaultModel: string
     defaultTimeoutMs: number
     maxParallelPerTurn: number
-    maxTokensPerTurn: number
     maxRepairAttempts: number
-    enableActionInterpret?: boolean
-    streaming?: boolean
-    taskModels?: Record<taskType, string>
+    enableActionInterpret: boolean
+    streaming: boolean
+    maxToolRounds: number
+    temperature?: number
     // required agent/narrative failure always fails the whole turn
   }
   persistence: {
-    driver: "bun:sqlite"          // v1 only
     policy: "per_turn" | "manual"
-    dataDir: string               // directory for .sqlite file(s)
-    databaseFile?: string         // optional explicit path
+    // driver (bun:sqlite = v1) и пути к БД — host-level (host-bootstrap), не в EngineConfig
   }
   logging: {
     level: string
@@ -96,11 +94,6 @@ EngineConfig {
     writeOnReject: boolean           // default true
     writeOnCommit: boolean           // default true
     failTurnOnWriteError: boolean    // default false
-  }
-  safety?: {
-    rating: string
-    moderateInput: boolean
-    moderateOutput: boolean
   }
 }
 ```
@@ -139,7 +132,7 @@ Rules (ADR 0006):
 - Пакет без поля `rpengineext.module` — не кандидат (skip + debug);
 - Поле есть, но невалидно / битый entry / нет фабрики → boot fail `CONFIG_INVALID`;
 - Дубль id внутри discovery → `MODULE_ID_DUPLICATE` (оба пакета в details);
-- Порядок: руты в порядке конфига, внутри рута — id-лексикографически (детерминизм);
+- Порядок: merged-пул сортируется **глобально** по id (лексикографически) по всем рутам (детерминизм, ADR 0006 D5);
 - Импорт только **выбранных** модулей (лениво; невыбранные не импортируются);
 - `options.modules` → discovery пропущен целиком;
 - Security: только доверенные локальные руты (операторская конфигурация, не пользовательский ввод);

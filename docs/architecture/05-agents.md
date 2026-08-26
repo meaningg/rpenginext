@@ -39,7 +39,7 @@ AgentTask {
   type: string                 // "narrative.write" | "npc.voice" | "npc.intent" | ...
   turnId: string
   input: object                // schema by type
-  outputSchema: JsonSchema     // or shared zod id
+  outputSchemaId?: string     // logical schema id / inline JSON-schema ref (handled by core)
   constraints: {
     timeoutMs: number
     maxRepairAttempts: number
@@ -146,9 +146,7 @@ Fatal agent failure policy:
 
 Config-driven:
 
-- `maxParallelAgentCallsPerTurn`
-- `maxTokensPerTurn`
-- `maxAgentWallTimeMsPerTurn`
+- `maxParallelPerTurn`
 - per-task timeouts
 
 Orchestrator may cancel optional tasks if budget exhausted; required tasks fail turn.
@@ -167,8 +165,9 @@ Example: `fandom-canon.search(query) → passages[]`.
 ## 11. Provider adapters
 
 ```text
-contracts: LlmPort / AgentAdapter
-adapters: openai-compatible, etc. (outside core)
+contracts: LlmPort
+standard-task mapping: StandardTaskLlmAdapter (core; narrative.write / action.interpret)
+adapters: ResponsesLlmPort (`packages/agents/responses`), etc. (outside core)
 ```
 
 Adapter responsibilities:

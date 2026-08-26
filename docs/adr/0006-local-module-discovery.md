@@ -11,13 +11,16 @@
 
 ### Сегодня
 
-Все модули подключаются явно, двумя разными уровнями удобства:
+Композиция собирается на boot из пула id (`MODULE_CATALOG` ⊕ discovery) + `extraModules`:
 
 - **First-party** — статический `MODULE_CATALOG` в `packages/host-bootstrap/src/module-catalog.ts`
   (компиляционно известные id) → адресуются из env (`RP_MODULES`, `RP_MODULE_PROFILE`,
   `RP_DISABLE_MODULES`) и опций (`enabledModuleIds` / `disabledModuleIds`).
-- **Все остальные** (create-module, внешние, локальные) — только инстансом в точке композиции:
-  `extraModules: [createMoodModule()]` в `apps/api/src/main.ts`, `apps/cli/src/main.ts` или тестах.
+- **Остальные** (create-module, внешние, локальные) — пакеты с полем `rpengineext.module`
+  в скан-рутах (`moduleDirs` / `RP_MODULE_DIRS`, дефолт `packages/modules`) → попадают в пул
+  через discovery (`resolvePool`; каталог побеждает при коллизии id) и адресуются по id так же.
+- `extraModules` — append после отбора: только CLI-фикстура за флагом `--fixture`
+  (`apps/cli/src/main.ts`); `apps/api/src/main.ts` `extraModules` не передаёт.
 
 ### Почему это трение (а не «дизайн-каприз»)
 
@@ -85,7 +88,7 @@ Selection остаётся прежним и работает по id из пу�
 | D2 | Скан-руты: хост-опция `moduleDirs` + env `RP_MODULE_DIRS` (path-list). Дефолт: `["packages/modules"]` (относительно корня workspace). Отсутствующий **дефолтный** рут → warning + пустой пул (boot ok); явно заданный рут не существует → **boot fail** `CONFIG_INVALID`. |
 | D3 | Поле `rpengineext.module` **есть, но невалидно** (entry/factory пустые или не строки, id не kebab) → **boot fail** `CONFIG_INVALID` (пакет явно заявил намерение быть модулем — typos не молчат). Поле **отсутствует** → пакет не кандидат, skip + debug. |
 | D4 | Импорт entry не найден / `factory` не экспортируется / `factory()` бросил → **boot fail** `CONFIG_INVALID` (moduleId + путь + hint). |
-| D5 | Порядок: руты в порядке конфига; внутри рута — **id лексикографически** (стабильно на любой ОС/ФС). Мгновенная инстанциация в этом порядке = registration order → существующий tie-break равных priority (spec 04 §4.1.1) работает без изменений. Явные списки (`RP_MODULES` и т.п.) сохраняют семантику list order (уже реализовано). |
+| D5 | Порядок: пул сортируется **глобально по id, лексикографически** (порядок рутов не сохраняется; стабильно на любой ОС/ФС). Мгновенная инстанциация в этом порядке = registration order → существующий tie-break равных priority (spec 04 §4.1.1) работает без изменений. Явные списки (`RP_MODULES` и т.п.) сохраняют семантику list order (уже реализовано). |
 | D6 | Коллизия id: внутри пула discovery (два пакета, один id) → **boot fail** `MODULE_ID_DUPLICATE` (оба пути в details). Каталог vs discovery → **каталог побеждает**, discovered skip + warn (промоушн «discovery → first-party» не должен ломать boot). |
 | D7 | `options.modules` задан → discovery **пропущен целиком** (exclusive, spec 04 без изменений); `extraModules` — как раньше, append. |
 | D8 | Unknown id в `RP_MODULES`/`enabledModuleIds` → `MODULE_UNKNOWN` с hint по id пула (существующий код, пул расширяется). |
@@ -146,7 +149,7 @@ interface ModulePoolEntry {
 }
 ```
 
-Интерфейс: `discoverModulePool(roots: readonly string[]): Promise<Result<ModulePoolEntry[], Failure>>` —
+Интерфейс: `discoverModulePool(roots: readonly string[], opts: { strict?: boolean; log: TurnLogger }): Promise<Result<ModulePoolEntry[], Failure>>` —
 один проход: readdir → filter по наличию `package.json` → parse+validate поля →
 сортировка D5 → entries. Инстанциация — вне discovery (лениво, при отборе).
 
@@ -157,7 +160,7 @@ interface ModulePoolEntry {
 | `create-host-runtime.ts` | опции `moduleDirs?`; `resolveHostModules` принимает пул; D2/D6/D7 |
 | `module-catalog.ts` | merge-хеlper: `resolvePool(catalog, discovered)` (D6) |
 | `env.ts` | `RP_MODULE_DIRS` parse (path-list, как `RP_MODULES`) |
-| `packages/create-module/src/templates.ts` | генерирует `rpengineext.module` в package.json шаблона |
+| `packages/create-module/src/main.ts` | генерирует `rpengineext.module` в package.json шаблона |
 | `docs/architecture/08-configuration.md` | `RP_MODULE_DIRS`, правила discovery, security note |
 | `README.md` host-bootstrap + `docs/modules/README.md` | «wire = положить пакет + env» |
 
@@ -183,11 +186,11 @@ interface ModulePoolEntry {
 
 - Discovery импортирует **только доверенный локальный код**: каталоги, настроенные оператором
   (`moduleDirs` / `RP_MODULE_DIRS`), пакеты из репозитория/установки.
-- `RP_MODULE_DIRS` — операторская конфигурация (как `RN_LLM_API_KEY`), **не** пользовательский ввод;
+- `RP_MODULE_DIRS` — операторская конфигурация (как `RP_LLM_API_KEY`), **не** пользовательский ввод;
   валидируется пути (без wildcard-импорта, только прямые подкаталоги рута).
 - **Нет** remote-fetch, **нет** sandbox-обещания: модель доверия = git repo + `bun install`
-  (та же, что у `extraModules` сегодня). Sandbox/marketplace — отдельный будущий workstream
-  (spec 00 anti-scope: marketplace post-1.0).
+  (та же, что у `extraModules` сегодня). Sandbox/marketplace не входят в 1.x
+  (spec 00 anti-scope).
 - Discovery не создаёт канал module→module зависимостей: boundary CI
   (`test:module-boundaries`) продолжает действовать на package.json независимо от способа подключения.
 
@@ -226,7 +229,7 @@ interface ModulePoolEntry {
 | 0005 Moments-native | Независим: host-level фича; core-ривайт не затрагивается (и наоборот). |
 | 0001 CPA | Не затрагивает pipeline/commit; только источник `Module[]` на boot. |
 
-## 9. Checklist перед маркировкой Implemented
+## 9. Checklist (Implemented)
 
 - [x] `discoverModulePool` + merge-пул (D5/D6) + ленивая инстанциация
 - [x] `RP_MODULE_DIRS` + `moduleDirs` + валидации D2–D4

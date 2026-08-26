@@ -1,6 +1,6 @@
 # Module Platform 1.0 — Release Notes
 
-> **Module Platform 1.0 production tag.**  
+> **Module Platform 1.0 released (merge; production tag per spec 07 не срезался).**  
 > Date: 2026-08-26 · Specs 01–06 `done`, spec 00 §8 production DoD complete,
 > full release gate green (spec 07 §5).
 
@@ -29,6 +29,8 @@
   observe-only подписчики, caps (spec 06 §7).
 - **Module lifecycle** — `init`/`shutdown` с нормативными failure codes
   (spec 06 §8).
+- **`@rpengineext/module-summary`** — модуль вне профилей: дельта-чанки
+  working memory через фоновые system turns → саммари в narrative system prompt.
 - **CI gates** — `test:compat`, `test:modules-stress`, `test:module-boundaries`,
   `test:scaffold-smoke`, `test:platform`, `test:e2e`, `smoke:play:mock`.
 
@@ -58,24 +60,7 @@
 - `ctx.emit` вне post-outcome — fail-loud.
 - Тесты авторов: harness = SoT (`createTestEngine` — advanced escape).
 
-## 5. Deferred by design (не MVP cuts)
-
-- **ADR 0005** (moments-native core). До его реализации sdk IR bind ↔ ports
-  bus **dual-path** остаётся load-bearing: каждый sdk/core PR **обязан**
-  держать `test:compat` + `test:modules-stress` зелёными.
-  Целевой MomentRegistry ключуется нормативной моментной таблицей
-  (spec 01 §4.2); поверхности 1.0 (events dispatch, lifecycle) уже реализованы
-  момент-нативно — миграция = перенос старых портов под полными гейтами,
-  без переделки новых поверхностей (spec 06 §7.4, spec 07 §7).
-- `turn.plan` (spec 06 Item A) — pre-outcome decision moment.
-- costs / structured action kinds author API.
-- dynamic event subscriptions / event filters.
-- versioned capability tokens.
-- domain modules npc/plot/combat как content (отдельные tasks после tag).
-- marketplace, multiplayer, content-safety product hooks.
-- live-LLM CI blocker (optional job `test:e2e:live`).
-
-## 6. Ops
+## 5. Ops
 
 - Env: `RP_MODULE_PROFILE`, `RP_MODULES`, `RP_DISABLE_MODULES`
   ([08-configuration](../architecture/08-configuration.md)).
@@ -83,24 +68,24 @@
 - Strict capabilities ON по умолчанию; duplicate/unknown id — deterministic
   fail с stable code.
 
-## 7. Post-release rules
+## 6. Post-release rules
 
 1. Additive optional SDK API = **minor** — гейты compat + stress + boundaries.
 2. Author-breaking = **major** + migration notes + CHANGELOG.
 3. Core PR — только bugfix **или** ADR **или** письменное обоснование
    «не выражается в SDK».
 4. Каждый product module — своя задача, harness-тесты, без core drive-by.
-5. ADR 0005 / turn.plan — только по документированным триггерам.
+5. Новые авторские поверхности вне 1.x — только через ADR/spec-процесс.
 6. Никогда не возвращать MVP-теги для половинчатых платформ.
-7. До moments-native core sdk↔ports adapter — load-bearing; никаких
-   «быстрых» bind bypass без compat-фикстур.
+7. sdk↔ports adapter — load-bearing; никаких «быстрых» bind bypass без
+   compat-фикстур.
 8. Events/lifecycle: новый event / новый optional hook = **minor**; изменение
    dispatch semantics / moment permissions / hook ctx rules = **major**
    (spec 01 §5.2).
 9. Author-доки учат только **harness + defineModule** (никаких ports /
    pipeline stages как author API).
 
-## 8. Post-release core-change rule (v1)
+## 7. Post-release core-change rule (v1)
 
 Core меняется только: bugfix / ADR / spec-required wiring / письменное
 доказательство невозможности выразить в SDK (см. spec 00 §9).

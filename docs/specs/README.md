@@ -31,7 +31,6 @@ Production-ready платформа, на которой:
 
 - Author: [`docs/modules/README.md`](../modules/README.md), [`sdk-reference.md`](../modules/sdk-reference.md)
 - ADR: [0004](../adr/0004-module-sdk-cbmd.md), [0005 deferred](../adr/0005-moments-native-core.md)
-- Roadmap: [`docs/architecture/10-roadmap.md`](../architecture/10-roadmap.md)
 
 ## 3. Правила работ
 

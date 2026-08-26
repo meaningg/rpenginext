@@ -34,8 +34,8 @@
 - IR и compiled manifest — **fully serializable (JSON)**: никаких функций,
   замыканий, zod-инстансов в IR. Валидация схем живёт в SDK bindings;
   опционально допускаются портируемые дескрипторы схем (JSON Schema).
-  Жёсткий инвариант (spec 00 §4.11): foreign-language SDK (post-1.0) — второй
-  producer того же IR и проходит те же engines-валидации.
+  Жёсткий инвариант (spec 00 §4.11): авторская семантика language-agnostic —
+  любой SDK эмитит тот же IR и проходит те же engines-валидации.
 - На IR shape break: bump версии; **dual-load policy** — поддержка N и N-1
   загрузчиков минимум один release cycle, либо документированный hard cut
   с major + миграционный гайд.
@@ -80,14 +80,14 @@
 
 | Script | Когда обязателен |
 |--------|------------------|
-| `bun run test:compat` | **каждый** sdk/core PR (dual-path guard до ADR 0005) |
+| `bun run test:compat` | **каждый** sdk/core PR (dual-path guard sdk↔ports bus) |
 | `bun run test:modules-stress` | каждый sdk/core PR (N≥30 + события + lifecycle) |
 | `bun run test:module-boundaries` | каждый sdk/core/module PR |
 | `bun run typecheck` | workspace-wide |
 | `bun run test:scaffold-smoke` | каждый create-module PR |
 | `bun run test:platform` | release gate (spec 07) |
 
-До ADR 0005 sdk ↔ ports bus dual-path является **load-bearing**: «быстрый»
+sdk ↔ ports bus dual-path является **load-bearing**: «быстрый»
 bind bypass без compat-фикстур запрещён (spec 07 §11.7).
 
 ## 7. Stability promise

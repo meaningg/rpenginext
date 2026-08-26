@@ -54,7 +54,7 @@
 
 ## Карта возможностей (обзор)
 
-Девять capability-блоков. Подробности — только в reference.
+Десять capability-блоков. Подробности — только в reference.
 
 | Блок | Зачем в одном предложении |
 |------|---------------------------|
@@ -304,5 +304,5 @@ bun run cli:hello   # или api / web
 |-----|------|
 | [../architecture/12-extension-surface.md](../architecture/12-extension-surface.md) | ports bus (internal) |
 | [../architecture/03-module-system.md](../architecture/03-module-system.md) | runtime modules |
-| [../adr/0005-moments-native-core.md](../adr/0005-moments-native-core.md) | future core (deferred) |
+| [../adr/0005-moments-native-core.md](../adr/0005-moments-native-core.md) | deferred: моменты-native core (не реализовано; sdk↔ports dual-path остаётся) |
 | `bun run test:compat` | не ломать sdk ↔ core |

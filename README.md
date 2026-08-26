@@ -13,7 +13,7 @@
 
 ## Release verification (Module Platform 1.0)
 
-Все 8 команд обязательны зелёными перед любым production tag
+Все 8 команд обязательны зелёными перед любым production-релизом
 ([spec 07 §5](./docs/specs/07-release-and-versioning.md)):
 
 ```bash
@@ -43,7 +43,6 @@ bun run smoke:play:mock
 | [docs/architecture/07-persistence.md](./docs/architecture/07-persistence.md) | Save/load |
 | [docs/architecture/08-configuration.md](./docs/architecture/08-configuration.md) | Конфиг |
 | [docs/architecture/09-testing.md](./docs/architecture/09-testing.md) | Тесты |
-| [docs/architecture/10-roadmap.md](./docs/architecture/10-roadmap.md) | Фазы внедрения |
 | [docs/specs/README.md](./docs/specs/README.md) | **Module Platform 1.0** — specs, DoD, verification |
 | [docs/architecture/11-repository-structure.md](./docs/architecture/11-repository-structure.md) | Структура репо |
 | [docs/architecture/12-extension-surface.md](./docs/architecture/12-extension-surface.md) | Internal runtime ports (maintainers; не author API) |
@@ -61,7 +60,7 @@ bun run smoke:play:mock
 | [docs/adr/0003-tool-calling-and-background-system-turns.md](./docs/adr/0003-tool-calling-and-background-system-turns.md) | ADR: tools + background system turns |
 | [docs/adr/0004-module-sdk-cbmd.md](./docs/adr/0004-module-sdk-cbmd.md) | ADR: Module SDK / CBMD author path |
 | [docs/adr/0005-moments-native-core.md](./docs/adr/0005-moments-native-core.md) | ADR: moments-native core (deferred) |
-| [docs/adr/0006-local-module-discovery.md](./docs/adr/0006-local-module-discovery.md) | ADR: local module discovery (zero-wiring pool, proposed) |
+| [docs/adr/0006-local-module-discovery.md](./docs/adr/0006-local-module-discovery.md) | ADR: local module discovery (zero-wiring pool, implemented, host-bootstrap) |
 
 ## Архитектура в одном абзаце
 
@@ -80,7 +79,7 @@ Working memory (всегда включена в host): env `RP_WORKING_MEMORY_W
 Хосты v1: **CLI** + **HTTP API** (`apps/api`) + **Web UI** (`apps/web`).  
 Персистентность v1: **bun:sqlite**.  
 Отладка v1: core пишет подробные **turn `.md` traces** (state diff, LLM I/O, tool calls).  
-First-party modules: working-memory, character, world-canon. Дальнейшие domain modules — отдельными задачами.
+First-party modules: working-memory, character, world-canon, summary. Дальнейшие domain modules — отдельными задачами.
 
 ## Dev-окружение
 

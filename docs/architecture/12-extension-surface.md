@@ -43,6 +43,8 @@
 | `registerTemplate(def)` | named text/fallback fragments for host (not LLM truth) | error copy keys |
 | `registerConfigSchema(def)` | module-specific config section validation | `modules.npc.*` |
 | `registerMigration(def)` | slice schemaVersion migrate | v1→v2 |
+| `registerEventPublisher(def)` | canonical event: `name` + payload `schema`, ровно один publisher на имя (дубль → `MODULE_EVENT_DUPLICATE` E16) | `character.outfit_sync` |
+| `registerEventSubscription(def)` | подписка на canonical event: `priority` + handler (cascade/burst caps E22/E23; handler error пост-commit → warning E21) | `summary` слушает `character.outfit_sync` |
 
 ### Правило
 
@@ -194,7 +196,7 @@ Named ports (слой C) остаются для мест, где нужен **t
 
 ## 6. Merge, order, privileges
 
-1. Default order: `(module.priority asc, module.id asc, registration order)`.  
+1. Default order: `(module.priority asc, registration order)`.  
 2. Namespaced extras/brief keys: `moduleId.path` — чужие ns писать нельзя.  
 3. Deny/reject всегда сильнее allow.  
 4. Conflict without registered deterministic resolver → turn reject.  

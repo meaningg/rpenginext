@@ -178,15 +178,18 @@ TurnResult =
   | {
       status: "committed"
       turnId
+      sessionId
+      revision: number
       passage: Passage
-      stateRevision: number
+      acceptedCommands: StateCommand[]
       warnings?: string[]
     }
   | {
       status: "rejected"
       turnId
+      sessionId
       failure: TurnFailure
-      stateRevision: number   // unchanged
+      warnings?: string[]
     }
 ```
 
@@ -212,7 +215,7 @@ Trade-off (принят сознательно): при флаках LLM игр�
 ## 6. Concurrency
 
 - One active turn per `sessionId`.
-- Concurrent submit → queue or `SESSION_BUSY` error (config).
+- Concurrent submit: runtime waits for the busy session; on timeout → rejected with INTERNAL `SESSION_BUSY: timed out` (policy `sessionBusyPolicy: "error"`; queue mode нет в v1).
 - Cross-session parallelism ok.
 
 ## 7. Timeouts

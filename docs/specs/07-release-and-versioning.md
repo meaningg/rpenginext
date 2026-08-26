@@ -112,7 +112,6 @@ Document this block in root README and this spec.
 | `docs/modules/recipes.md` | all recipes + migrations |
 | `docs/releases/module-platform-1.0.md` | release notes |
 | `docs/specs/README.md` | statuses → done |
-| `docs/architecture/10-roadmap.md` | Phase 4.5 complete |
 | `docs/architecture/09-testing.md` | all scripts |
 | `docs/architecture/08-configuration.md` | module env/profile |
 | `docs/architecture/01-principles.md` or compatibility | post-release core-change rule |

@@ -73,16 +73,6 @@
 - Emit вне post-outcome моментов — fail-loud.
 - См. compatibility.md §8 (migration notes).
 
-### Deferred by design (not MVP cuts)
-
-- ADR 0005 (moments-native core) — dual-path sdk↔ports остаётся load-bearing.
-- `turn.plan` (spec 06 Item A).
-- costs / structured actions author API.
-- dynamic event subscriptions / event filters.
-- versioned capability tokens.
-- Polyglot SDK (Python и др.).
-- marketplace / multiplayer / content-safety product hooks.
-
 ---
 
 ## 0.1.x (до stamp)

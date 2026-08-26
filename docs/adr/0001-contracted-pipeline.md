@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (implemented through Phase 4)
+Accepted (implemented)
 
 ## Context
 
@@ -52,11 +52,11 @@ Accepted (implemented through Phase 4)
 - LLM cannot freely invent irreversible world facts in prose without commands;
 - new **engine** extension points require ADR discipline;
 - maintainers still reason about pipeline stages + ports; authors use moments/capabilities only;
-- until [ADR 0005](./0005-moments-native-core.md), sdk IR bind adapts onto ports bus (dual-path) — guarded by `test:compat` / stress.
+- sdk IR bind адаптируется на ports bus (dual-path) — guarded by `test:compat` / stress (см. [ADR 0005](./0005-moments-native-core.md), deferred).
 
 ### Neutral
 
-- product systems (npc/plot/canon/summary) will live as modules when requested, not in core.
+- product systems (npc/plot/canon/summary) live as modules when requested, not in core.
 
 ## Alternatives rejected for foundation
 
@@ -71,6 +71,4 @@ Accepted (implemented through Phase 4)
 - [x] Web host, SSE, draft streaming — [ADR 0002](./0002-web-host-and-streaming.md)
 - [x] Tool-calling agents + background system turns — [ADR 0003](./0003-tool-calling-and-background-system-turns.md)
 - [x] Module SDK author path — [ADR 0004](./0004-module-sdk-cbmd.md)
-- [ ] Module Platform 1.0 production tag — [docs/specs](../specs/README.md)
-- [ ] Moments-native core (optional) — [ADR 0005](./0005-moments-native-core.md)
-- [ ] Possibly ADR for soft-commit narrative invent loop (not v1; still rejected)
+- [x] Module Platform 1.0 released (merge; production tag не срезался) — [docs/specs](../specs/README.md)

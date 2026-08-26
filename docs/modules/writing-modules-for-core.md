@@ -33,4 +33,4 @@
 ### Не для авторов
 
 - [architecture/12-extension-surface.md](../architecture/12-extension-surface.md) — ports core  
-- [ADR 0005](../adr/0005-moments-native-core.md) — future core  
+- [ADR 0005](../adr/0005-moments-native-core.md) — deferred: моменты-native core (не реализовано)  

@@ -84,13 +84,16 @@ If module missing on load:
 
 ## 7. Replay tool (dev)
 
-CLI/dev command:
+REPL-команда в `apps/cli` (main.ts):
 
 ```text
-replay --session <id> --to-revision <n> --verify-snapshots
+/replay
 ```
 
-Uses only journal commands + initial snapshot. Must match committed state.
+→ `runtime.replaySessionJournal(sessionId)`: переигрывает journal из пустого
+состояния + slice initials (опциональный `toRevision` cap поддерживается),
+сверяет результат с live state (`matchesLive`) и печатает
+`applied=… revision=… matchesLive=…`.
 
 ## 8. Privacy
 

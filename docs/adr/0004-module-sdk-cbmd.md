@@ -50,8 +50,8 @@ That contradicted the product goal: **add gameplay without studying core**.
 
 ## Follow-ups
 
-- **Moments-native core** (optional core simplification): [ADR 0005](./0005-moments-native-core.md).
-  Does not block module authors; deferred until core port-bus cost justifies it.
+- **Moments-native core** (deferred direction): [ADR 0005](./0005-moments-native-core.md).
+  Не реализовано; sdk IR bind ↔ ports bus остаётся load-bearing.
 
 ## Non-goals
 

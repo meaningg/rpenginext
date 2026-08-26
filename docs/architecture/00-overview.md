@@ -66,7 +66,6 @@ AI предлагает. Модули помогают и ограничиваю
 | [07-persistence.md](./07-persistence.md) | Save/load, replay |
 | [08-configuration.md](./08-configuration.md) | Конфиг и секреты |
 | [09-testing.md](./09-testing.md) | Тестовая стратегия |
-| [10-roadmap.md](./10-roadmap.md) | Фазы внедрения |
 | [../specs/README.md](../specs/README.md) | Module Platform 1.0 specs (DoD / verification) |
 | [11-repository-structure.md](./11-repository-structure.md) | Структура репо |
 | [12-extension-surface.md](./12-extension-surface.md) | Ports bus (maintainers; **не** author API) |
@@ -77,7 +76,7 @@ AI предлагает. Модули помогают и ограничиваю
 | [../adr/0002-web-host-and-streaming.md](../adr/0002-web-host-and-streaming.md) | ADR: API + Web + SSE |
 | [../adr/0004-module-sdk-cbmd.md](../adr/0004-module-sdk-cbmd.md) | ADR: Module SDK / CBMD |
 | [../adr/0005-moments-native-core.md](../adr/0005-moments-native-core.md) | ADR: moments-native core (deferred) |
-| [../adr/0006-local-module-discovery.md](../adr/0006-local-module-discovery.md) | ADR: local module discovery (zero-wiring pool, proposed) |
+| [../adr/0006-local-module-discovery.md](../adr/0006-local-module-discovery.md) | ADR: local module discovery (zero-wiring pool, implemented, host-bootstrap) |
 | [../adr/0003-tool-calling-and-background-system-turns.md](../adr/0003-tool-calling-and-background-system-turns.md) | ADR: tools + background turns |
 
 ## 5. Высокоуровневая схема
@@ -145,7 +144,7 @@ Turn = **full-atomic** транзакция:
 - Persistence: **`bun:sqlite`** (engine) + host identity db (`data/host.sqlite`)
 - Turn debug traces: **core** → `.md` dossiers (prompts, tools, state diff, rollback)
 - Progress: observe-only `EventBus` → API SSE (`turn.stage`, agent tasks, draft `llm.stream.delta`)
-- First-party modules: working-memory, character, world-canon
+- First-party modules: working-memory, character, world-canon, summary
 - Further product modules (npc/plot/…): **не в scope**, пока нет отдельной задачи
 
 ## 8. Для кого какая «толстая» документация

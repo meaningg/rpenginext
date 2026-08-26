@@ -33,11 +33,11 @@ Host/API всегда возвращает структурированный `F
 | E01 | `MODULE_DEFINE_INVALID` | defineModule/normalize invalid (id/version/имя события/…) | проверь id (kebab-case), version (semver), pattern имён |
 | E02 | `MODULE_OP_UNKNOWN` | `ctx.op` на неизвестное имя | message содержит известные ops; проверь `state.ops` |
 | E03 | `MODULE_IR_BIND_MISMATCH` | IR/binding структурное несоответствие | пересобери модуль той же версией sdk |
-| E04 | `MODULE_ID_DUPLICATE` | duplicate module id | message называет оба id; смени один |
+| E04 | `MODULE_ID_DUPLICATE` | duplicate module id | message называет duplicate id (details.moduleIds); смени один |
 | E05 | `MODULE_SLICE_DUPLICATE` | duplicate slice name | message называет slice + оба модуля; смени slice name |
 | E06 | `MODULE_REQUIRES_MISSING` | неудовлетворённый `requires` | message называет capability token; загрузи модуль-провайдера или убери requires |
 | E07 | `CONFIG_INVALID` | moduleConfig schema fail | message называет config key + zod summary |
-| E08 | `MODULE_PERMISSION_DENIED` | propose/agent без permission | проверь permissions модуля на slice/op |
+| E08 | `MODULE_PERMISSION_DENIED` | объявлен, но не эмитится: permission-проверки эмитят legacy `PERMISSION_DENIED` (propose и tool allowlist) | см. таблицу Legacy mapping |
 | E09 | `SCHEMA_INVALID` | seed meta parse fail | message называет `fromMeta` key; поправь story JSON |
 | E10 | `MODULE_READ_MODEL_UNKNOWN` | unknown readModel name (все моменты) | message называет name + moduleId; каталог — в public contract README провайдера |
 | E11 | `MODULE_ENGINES_INCOMPATIBLE` | engines.core/contracts вне диапазона | message: required vs actual; обнови sdk или движок |
@@ -46,7 +46,7 @@ Host/API всегда возвращает структурированный `F
 | E14 | `MODULE_SLICE_UNMIGRATABLE` | unmigratable slice version на load | message: moduleId, slice, fromVersion; добавь `state.migrations[from]` или обнови save |
 | E15 | `MODULE_MOMENT_OP_FORBIDDEN` | `ctx.op` / mutate в write-forbidden моменте (`committed`, `narrative.*`, `event.dispatch`, …) | message: moduleId + moment name; вынеси запись в `turn.change` / `afterProse` / tool `proposeOp` |
 | E16 | `MODULE_EVENT_DUPLICATE` | duplicate publisher одного canonical event name | message: оба moduleId; один publisher на имя |
-| E17 | `MODULE_EVENT_UNKNOWN` | emit/subscription на неизвестное имя | message: moduleId, event name, known events hint (truncated); проверь типо |
+| E17 | `MODULE_EVENT_UNKNOWN` | emit/subscription на неизвестное имя | message: moduleId, event name, known events hint (truncated); проверь тип события |
 | E18 | `MODULE_EVENT_PAYLOAD_INVALID` | emit payload не прошёл publisher schema | message: moduleId, event, zod path |
 | E19 | `MODULE_EVENT_EMIT_FORBIDDEN` | `ctx.emit` в неразрешённом моменте | message: moduleId, moment name; emit только в `committed` / `rejected` / `event.dispatch` |
 | E20 | `MODULE_EVENT_DENY_FORBIDDEN` | `deny()` внутри event dispatch | message: moduleId, event name; хендлеры observe-only — follow-up через `scheduleSystem` |
@@ -57,20 +57,25 @@ Host/API всегда возвращает структурированный `F
 | E25 | `MODULE_SHUTDOWN_ERROR` | `shutdown` hook error | warning; stop не валится |
 | E26 | `MODULE_READ_MODEL_ARGS_INVALID` | readModel args не прошли провайдер-схему | message: caller moduleId, model name, zod path |
 
+> **Про «1:1» честно:** `MODULE_FAILURE_CODES` в contracts содержит **26 записей** — таблица E01–E26 плюс `MODULE_CAPABILITY_INVALID` (последняя, без E#), но без `CONFIG_INVALID` (E07; живёт в `BOOT_FAILURE_CODES` и эмитится config/boot paths). `MODULE_CAPABILITY_INVALID` **объявлен, но никогда не эмитится**: других упоминаний в коде нет; capability-циклы эмитят legacy `CAPABILITY_CYCLE` (core/src/registry/capability-graph.ts).
+
 ## Legacy mapping (0.x → 1.0)
 
 | Legacy code | 1.0 код |
 |-------------|---------|
 | `DUPLICATE_MODULE` | `MODULE_ID_DUPLICATE` (E04) |
 | `CAPABILITY_MISSING` | `MODULE_REQUIRES_MISSING` (E06) |
+| `CAPABILITY_CYCLE` | сохраняется как действующий код; capability-циклы |
 | `ENGINE_MISMATCH` | `MODULE_ENGINES_INCOMPATIBLE` (E11) |
 | `MANIFEST_INVALID` | `MODULE_DEFINE_INVALID` (E01) / `MODULE_IR_BIND_MISMATCH` (E03) |
 | `REGISTRATION_INVALID` | сохраняется для raw register (non-author path) |
 | `SCHEMA_INVALID` | сохраняется как действующий код (E09; теперь в централизованном union `TURN_FAILURE_CODES` + `MODULE_FAILURE_CODES`) для seed-meta / tool / agent-schema paths |
+| `PERMISSION_DENIED` | сохраняется как действующий код; см. E08 |
 | `INTERNAL` | **не author-facing** — не использовать как ответ author-путям (spec 03) |
 
-Legacy-коды остаются в type union `BOOT_FAILURE_CODES` для совместимости
-потребителей; новые paths эмитят только нормативные `MODULE_*` коды.
+Legacy-коды остаются в type unions (`BOOT_FAILURE_CODES` / `TURN_FAILURE_CODES`) для совместимости
+потребителей. Новые paths эмитят нормативные `MODULE_*` коды, кроме legacy-исключений из таблицы
+выше: `CAPABILITY_CYCLE` (capability-граф) и `PERMISSION_DENIED` (permission-проверки).
 
 ## Ключевые нормативные правила
 

@@ -42,9 +42,10 @@ That is how we debug LLM/tool failures without mutating world.
 
 ```text
 core/tracing/
-  turn-tracer.ts          # collects events during turn
-  markdown-renderer.ts    # TurnTrace → .md string
-  trace-sink.ts           # uses TraceSinkPort (fs default)
+  turn-tracer.ts              # collects events during turn
+  markdown-renderer.ts        # TurnTrace → .md string
+  memory-trace-sink.ts        # TraceSinkPort impl (tests)
+  filesystem-trace-sink.ts    # TraceSinkPort impl (fs; wired by host-bootstrap)
 ```
 
 ### Lifecycle
@@ -68,13 +69,12 @@ Flush file at end of turn (success or fail), so partial files are avoided (or wr
 ### 5.1 Header
 
 - `traceFormatVersion`
-- `sessionId`, `turnId`, `turnKind` (`player|system`)
+- `sessionId`, `turnId`, `turnKind` (`player|system|restore`)
 - `startedAt` / `finishedAt` / `durationMs`
 - `outcome`: `committed | rejected`
 - `failure` (code, message, stage) if any
 - `stateRevisionBefore` / `stateRevisionAfter` (after = before on reject)
 - `enabledModules` (id@version)
-- `configFingerprint` (hash of non-secret config)
 - `atomicity`: `full`
 
 ### 5.2 Player input
@@ -143,9 +143,9 @@ Always show:
 
 ### 5.8 Persistence
 
-- sqlite transaction attempt: begin/commit/rollback
-- rows/keys written (ids, not necessarily full blobs if huge — then hash + size)
-- path to db / save id
+- короткая строка `persistenceNote` (одна): результат commit-флаша или журнала
+  (например `commitTurn TX ok`, `save failed: …`, `manual policy — skipped auto flush`)
+  и путь к БД.
 
 ### 5.9 Module annotations
 
@@ -280,7 +280,7 @@ tracing: {
 Large prose/state fields truncate with:
 
 ```text
-… [truncated 120000 → 20000 chars, sha256=...]
+… [truncated 120000 → 20000 chars]
 ```
 
 so trace stays openable in editors.
@@ -311,14 +311,11 @@ Optional index file per session (non-normative helper):
 
 ```text
 TraceSinkPort {
-  write(input: { sessionId, turnId, relativePath, contents: string }): Promise<void>
-  // optional:
-  appendIndex?(...)
+  write(path: string, markdown: string): Promise<Result<void, Failure>>
 }
 ```
 
-v1 impl: filesystem under data dir (CLI host wiring).  
-Core depends only on port; fs adapter in app or small `packages/tracing-fs` if needed.
+v1 impl: `FilesystemTraceSink` **в core** (`packages/core/src/tracing/filesystem-trace-sink.ts`), подключается host-bootstrap (`createHostRuntime`); тесты используют `MemoryTraceSink`. Core зависит только от порта.
 
 `TurnTracer` itself stays in **core**.
 
@@ -370,7 +367,6 @@ Golden tests may snapshot markdown with normalized timestamps/ids.
 - using traces as reloadable source of truth (journal/state are SoT);
 - auto-uploading player stories.
 
-## 14. Implementation phase
+## 14. Implementation status
 
-- Phase 2: in-memory tracer + md render + sink mock (tests)
-- Phase 3: fs sink next to bun:sqlite data dir; enable in CLI default dev profile
+Реализовано: in-memory tracer + markdown renderer + `MemoryTraceSink` / `FilesystemTraceSink` в core; fs sink пишет в `${dataDir}/traces` и подключён в CLI/API через host-bootstrap (включён в dev profile по умолчанию).

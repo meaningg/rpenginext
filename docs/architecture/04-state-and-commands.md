@@ -23,7 +23,6 @@ WorldState
   slices: {
     [moduleSliceName]: unknown  // validated by slice schema
   }
-  relations?: ...               // optional shared indexes
 ```
 
 Правила:
@@ -133,7 +132,7 @@ END_TURN
 Порядок apply:
 
 1. `core.*` meta commands with reserved priority (documented).
-2. module commands sorted by `(module.priority asc, module.id asc, registration order, commandId)`.
+2. module commands: contributors отсортированы по `(module.priority asc, registration order)`; kernel применяет команды в порядке предложения (proposal order).
 3. Conflict policy: last-writer-wins **запрещён** silently.
    - Если два command конфликтуют на одном key path — нужен explicit resolver или reject turn.
 
@@ -198,10 +197,14 @@ Invariants run on draft end-state before commit.
 TurnFailure {
   turnId
   code: "GUARD_REJECTED" | "INVALID_INPUT" | "COMMAND_INVALID" |
-        "COMMAND_CONFLICT" | "AGENT_FAILED" | "TIMEOUT" | "INTERNAL"
+        "COMMAND_CONFLICT" | "AGENT_FAILED" | "TIMEOUT" | "INTERNAL" |
+        "PERMISSION_DENIED" | "INVARIANT_FAILED" | "PRESENT_FAILED" |
+        "PERSISTENCE_FAILED" | "AMBIGUOUS_TARGET" | "MODULE_ERROR" |
+        "MODULE_*" (module-platform коды; author deny(code) проходит as-is)
   message                 // player-safe
   details?: unknown       // logs / dev
   causedBy?: string[]     // module/agent ids
+  stage?: string          // stage id, если известен
 }
 ```
 
@@ -261,7 +264,7 @@ Passage immutable after commit.
 
 | type | slice | purpose |
 |------|-------|---------|
-| `core.advanceTurn` | core | turnIndex++ |
+| `core.bumpTurn` | core | turnIndex++ |
 | `core.setFlag` | core | boolean/enum flags |
 | `core.clearFlag` | core | remove flag |
 | `core.setClock` | core | world time |

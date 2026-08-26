@@ -52,7 +52,7 @@ core/
 - check `engines.core` / `engines.contracts`;
 - resolve `provides` / `requires`;
 - enforce permission declarations;
-- deterministic module order (explicit priority, then module id);
+- deterministic module order (explicit priority, then registration order);
 - lifecycle: `register → validateGraph → start → stop`.
 
 ### 2.2 SessionRuntime
@@ -116,9 +116,10 @@ Normative detail: [13-turn-tracing.md](./13-turn-tracing.md).
 
 Publish-only для observability и host projections:
 
-- `turn.started` / `turn.committed` / `turn.rejected`
-- `module.loaded` / `agent.task.finished`
-- `state.committed`
+- `turn.started` / `turn.stage` / `turn.committed` / `turn.rejected`
+- `agent.task.started` / `agent.task.finished` / `llm.stream.delta`
+- `state.committed` / `passage.published`
+- `background.job.started` / `background.job.finished`
 - `trace.finalized` / `trace.write_failed`
 
 **Запрет:** подписчик event bus не может мутировать world state.

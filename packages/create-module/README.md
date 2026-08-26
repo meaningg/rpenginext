@@ -10,13 +10,13 @@ bun run create-module mood
 bun run create-module lore --recipe seed-narrative
 ```
 
-**Recipes:** `state` | `seed-narrative` | `guard` | `full`
+**Recipes:** `state` | `seed-narrative` | `guard` | `full` | `ai-tool` | `access-read` | `migrate` | `events`
 
 ## После генерации
 
 1. `bun install`
 2. `bun test packages/modules/<id>`
 3. Править `src/index.ts`
-4. Подключить фабрику в host (`host-bootstrap`)
+4. Подключить: код хоста не нужен — discovery читает поле `rpengineext.module` в package.json (ADR 0006), включение = `RP_MODULES=<id>` из env/профиля (см. раздел «Подключить к host» в [docs/modules/README.md](../../docs/modules/README.md))
 
 **Доки:** [`docs/modules/README.md`](../../docs/modules/README.md) · [sdk-reference](../../docs/modules/sdk-reference.md) · [recipes](../../docs/modules/recipes.md)

@@ -162,10 +162,9 @@ module.manifest.engines.core satisfies loaded core version
 Каждый продукт-модуль — отдельная задача с harness-тестами; drive-by
 правок core нет. Аддитивный optional API SDK = **minor** (`test:compat` +
 `test:modules-stress` + `test:module-boundaries` зелёные); author-breaking =
-**major** + миграционный гайд + CHANGELOG. ADR 0005 / turn.plan — только
-по задокументированным триггерам. До moments-native core sdk↔ports adapter
-остаётся **load-bearing**: никаких «быстрых» bind bypass без
-compat-фикстур. Событие / опциональный хук = minor; смена dispatch
+**major** + миграционный гайд + CHANGELOG. sdk↔ports adapter —
+**load-bearing**: никаких «быстрых» bind bypass без compat-фикстур.
+Событие / опциональный хук = minor; смена dispatch
 semantics / moment permissions / hook ctx rules = major.
 
 ---

@@ -24,6 +24,8 @@ rpengineext/
       working-memory/            # first-party
       character/                 # first-party
       world-canon/               # first-party
+      summary/                   # first-party (index.ts, config.ts, schema.ts,
+                                 #   make-summary-messages.ts, constants.ts, selectors/summaries.ts)
       # further product modules (npc, plot, …) — separate tasks
   data/
     stories/                     # JSON templates (examples tracked; private gitignored)

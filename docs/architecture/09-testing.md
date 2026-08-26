@@ -92,20 +92,20 @@ describe("my-module", () => {
 ### Advanced / maintainer escape
 
 - **`@rpengineext/core/testing`** — `createTestEngine({ modules, … })` for core/pipeline fixtures and cases the harness does not cover yet.
-- Authors should **not** need this for normal module work once Platform 1.0 harness DoD is green.
+- Authors should **not** need this for normal module work — Platform 1.0 harness is shipped (`@rpengineext/module-sdk/test`, SDK 1.0.0).
 
 ### Gates
 
 | Script | Role |
 |--------|------|
-| `test:compat` | frozen sdk fixtures ↔ current core (**required** on sdk/core PRs; dual-path guard until ADR 0005) |
+| `test:compat` | frozen sdk fixtures ↔ current core (**required** on sdk/core PRs; dual-path guard (sdk IR bind ↔ ports bus)) |
 | `test:modules-stress` | N≥30 noop multi-module + S-cases (Platform 1.0) |
 | `test:module-boundaries` | no module→module runtime deps |
 | `test:scaffold-smoke` | all create-module recipes |
 | `test:platform` | compat + stress + core + first-party |
 | `test:e2e` / `smoke:play:mock` | host mock path |
 
-*Scripts beyond `test:compat` / package tests are Platform 1.0 deliverables — see specs/02 and specs/07.*
+*Все перечисленные скрипты — текущие gates в корневом `package.json` (см. specs/02 и specs/07).*
 
 Authors must not need full app UI. Production runtime dep: **module-sdk** + **zod**; `core` = devDependency only.
 
