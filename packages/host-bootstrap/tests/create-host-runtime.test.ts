@@ -10,7 +10,7 @@ const dataDir = path.join(tmpRoot, "data");
 const storiesDir = path.resolve(import.meta.dir, "../../../data/stories");
 
 afterAll(() => {
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
+  fs.rmSync(tmpRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe("createHostRuntime", () => {

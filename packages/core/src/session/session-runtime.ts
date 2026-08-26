@@ -68,6 +68,8 @@ type LiveSession = SessionTurnState & {
   backgroundPumping: boolean;
   /** In-flight pump promise (dedupes concurrent kicks). */
   backgroundPumpPromise?: Promise<void>;
+  /** Turn-scoped module events dispatched for this session (harness log; cleared on load). */
+  dispatchedEvents: import("@rpengineext/contracts").ModuleEvent[];
 };
 
 export class SessionRuntime implements Engine {
@@ -111,6 +113,12 @@ export class SessionRuntime implements Engine {
       contractsVersion: CONTRACTS_VERSION,
       getModulePermissions: (moduleId) =>
         this.registry.getModulePermissions(moduleId),
+      readModel: (name, state, args) =>
+        this.hostSurface.getReadModel(name, state, args),
+      onEventDispatched: (sessionId, event) => {
+        const live = this.sessions.get(sessionId);
+        live?.dispatchedEvents.push(event);
+      },
     });
   }
 
@@ -169,6 +177,7 @@ export class SessionRuntime implements Engine {
       meta: spec.meta ? { ...spec.meta } : {},
       busy: false,
       backgroundPumping: false,
+      dispatchedEvents: [],
     };
 
     const bootCommands: StateCommand[] = [];
@@ -285,10 +294,16 @@ export class SessionRuntime implements Engine {
       createdAt: snapshot.createdAt,
       seed,
       idempotency: new Map(),
-      pendingSystemTurns: [],
+      pendingSystemTurns: (snapshot.pendingSystemTurns ?? []).map((item) => ({
+        reason: item.reason,
+        ...(item.payload ? { payload: item.payload } : {}),
+        requestedByModuleId: item.requestedByModuleId,
+        mode: item.mode,
+      })),
       meta: snapshot.meta ? { ...snapshot.meta } : {},
       busy: false,
       backgroundPumping: false,
+      dispatchedEvents: [],
     };
 
     // Restore idempotency map from snapshot turnIds + passages
@@ -332,6 +347,13 @@ export class SessionRuntime implements Engine {
     }
 
     this.sessions.set(sessionId, sessionState);
+
+    // S19: pending scheduled system turns survive save/load — drain background
+    // work after load so waitIdle() observes a converged session.
+    if (sessionState.pendingSystemTurns.some((t) => t.mode === "background")) {
+      sessionState.backgroundPumping = true;
+      void this.pumpBackgroundJobs(sessionState);
+    }
 
     // Synthetic restore turn: rebuild public views without LLM / without state change.
     // Uses kind=restore; if no open narrative needed, still produces a soft passage only when last is missing.
@@ -620,6 +642,12 @@ export class SessionRuntime implements Engine {
         ...(session.seed ? { seed: session.seed } : {}),
         ...extraMeta,
       },
+      pendingSystemTurns: session.pendingSystemTurns.map((t) => ({
+        reason: t.reason,
+        ...(t.payload ? { payload: t.payload } : {}),
+        requestedByModuleId: t.requestedByModuleId ?? "unknown",
+        mode: t.mode,
+      })),
     });
     if (!saved.ok) return saved;
     return ok({
@@ -670,6 +698,36 @@ export class SessionRuntime implements Engine {
    */
   getPendingSystemTurns(sessionId: string): readonly PendingSystemTurn[] {
     return this.sessions.get(sessionId)?.pendingSystemTurns ?? [];
+  }
+
+  /**
+   * Read-only log of module events dispatched for a session (harness surface;
+   * cleared on load).
+   *
+   * @param sessionId - session id
+   */
+  getDispatchedEvents(
+    sessionId: string,
+  ): readonly import("@rpengineext/contracts").ModuleEvent[] {
+    return this.sessions.get(sessionId)?.dispatchedEvents ?? [];
+  }
+
+  /**
+   * Waits until a session is idle: no busy turn, no background pumping, and no
+   * pending background system turns. Fails on timeout (harness `waitIdle`).
+   *
+   * @param sessionId - session id
+   * @param timeoutMs - optional timeout (default 120_000)
+   */
+  async waitIdle(
+    sessionId: string,
+    timeoutMs = 120_000,
+  ): Promise<Result<void, Failure>> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return err(failure("INTERNAL", `unknown session: ${sessionId}`));
+    }
+    return this.waitForSessionIdle(session, timeoutMs);
   }
 
   private prepareKernel(kernel: StateKernel): Result<void, Failure> {

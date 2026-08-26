@@ -13,6 +13,16 @@ import { normalizeModuleDefinition } from "./compile/normalize.ts";
 import type { ModuleDefinition } from "./types/definition.ts";
 import type { NormalizedModuleDefinition } from "./types/definition.ts";
 
+/**
+ * Throws with the stable failure `code` attached (specs/03 E01/E03):
+ * callers can re-wrap without losing the token; message keeps the hint.
+ */
+function codeError(code: string, message: string): Error {
+  const error = new Error(message);
+  (error as Error & { code: string }).code = code;
+  return error;
+}
+
 export interface DefineModuleOptions {
   /**
    * Optional host moduleConfig bag (usually omitted; core validates at boot).
@@ -48,7 +58,8 @@ export function defineModule<
 ): DefinedModule {
   const normalized = normalizeModuleDefinition(def);
   if (!normalized.ok) {
-    throw new Error(
+    throw codeError(
+      normalized.error.code,
       `defineModule(${def.id ?? "?"}): ${normalized.error.code} ${normalized.error.message}`,
     );
   }
@@ -57,7 +68,8 @@ export function defineModule<
     moduleConfig: options.moduleConfig,
   });
   if (!compiled.ok) {
-    throw new Error(
+    throw codeError(
+      compiled.error.code,
       `defineModule(${def.id}): ${compiled.error.code} ${compiled.error.message}`,
     );
   }
@@ -91,9 +103,13 @@ export function tryDefineModule<
   try {
     return ok(defineModule(def, options));
   } catch (e) {
+    const code =
+      e && typeof e === "object" && typeof (e as { code?: unknown }).code === "string"
+        ? (e as { code: string }).code
+        : "SCHEMA_INVALID";
     return err(
       failure(
-        "SCHEMA_INVALID",
+        code,
         e instanceof Error ? e.message : "defineModule failed",
       ),
     );

@@ -79,7 +79,7 @@ export function createWorkingMemoryModule(
   return defineModule(
     {
       id: MODULE_ID,
-      version: "0.1.0",
+      version: "1.0.0",
       title: "Working Memory",
       description:
         "Stores all player free_text ↔ narrative pairs and injects last N pairs into narrative.write",

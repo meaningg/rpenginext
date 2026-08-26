@@ -1,5 +1,3 @@
-import { SLICE_NAME as WORKING_MEMORY_SLICE_NAME } from "@rpengineext/module-working-memory";
-
 /**
  * Stable ids for the summary module.
  */
@@ -44,5 +42,6 @@ export const PROMPT_SECTION_PRIORITY = 25;
 /** Max length of a single summary chunk text. */
 export const MAX_SUMMARY_LENGTH = 4_000;
 
-/** Working-memory slice this module reads (kept in sync with module-working-memory). */
-export { WORKING_MEMORY_SLICE_NAME };
+/** Working-memory slice this module reads (boundary rule: no module→module
+ * imports; must match the provider public contract). */
+export const WORKING_MEMORY_SLICE_NAME = "working_memory" as const;

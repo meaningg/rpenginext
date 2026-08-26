@@ -8,6 +8,7 @@ import {
 import type {
   AiCapability,
   ConfigCapability,
+  EventsCapability,
   HostCapability,
   NarrativeCapability,
   RulesCapability,
@@ -59,6 +60,10 @@ export function buildManifestAndIr(
   const hostCaps = normalized.capabilities.filter(
     (c): c is HostCapability => c.kind === "host",
   );
+  const eventCaps = normalized.capabilities.filter(
+    (c): c is EventsCapability => c.kind === "events",
+  );
+
 
   const sliceName = stateCap?.name ?? defaultSliceName(normalized.id);
   const schemaVersion = stateCap?.schemaVersion ?? 1;
@@ -164,6 +169,14 @@ export function buildManifestAndIr(
 
   // access.read does not need extra permission tokens in v1 vocabulary
 
+  // events capability (specs/06 §7): strict-register tokens for publishers/subscriptions
+  for (const emit of bindings.events.emit) {
+    registers.push(`event-emit:${emit.name}`);
+  }
+  for (const sub of bindings.events.subscribe) {
+    registers.push(`event-sub:${sub.name}`);
+  }
+
   const requires = normalized.requires.includes(CORE_STATE_CAPABILITY)
     ? [...normalized.requires]
     : [CORE_STATE_CAPABILITY, ...normalized.requires];
@@ -213,6 +226,21 @@ export function buildManifestAndIr(
     aiTasks: aiTasksIr,
     aiTools: aiToolsIr,
     capabilityKinds: unique(normalized.capabilities.map((c) => c.kind)),
+    lifecycle: {
+      init: Boolean(normalized.init),
+      shutdown: Boolean(normalized.shutdown),
+    },
+    events: {
+      emit: bindings.events.emit.map((decl) => ({
+        name: decl.name,
+        hasSchema: Boolean(decl.schema),
+        ...(decl.description ? { description: decl.description } : {}),
+      })),
+      subscribe: [...bindings.events.subscribe].map((sub) => ({
+        name: sub.name,
+        priority: sub.priority,
+      })),
+    },
   };
 
   return { manifest, ir };

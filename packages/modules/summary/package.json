@@ -1,6 +1,6 @@
 {
   "name": "@rpengineext/module-summary",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Summary: delta chunks of working memory via background system turns, all chunks injected into the narrative system prompt",
@@ -13,13 +13,13 @@
   },
   "dependencies": {
     "@rpengineext/module-sdk": "workspace:*",
-    "@rpengineext/module-working-memory": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@rpengineext/contracts": "workspace:*",
     "@rpengineext/core": "workspace:*",
     "@rpengineext/logger": "workspace:*",
+    "@rpengineext/module-working-memory": "workspace:*",
     "@types/bun": "latest",
     "typescript": "^5"
   },

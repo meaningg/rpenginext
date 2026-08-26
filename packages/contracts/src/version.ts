@@ -1,8 +1,10 @@
 /**
  * Semver of the published contracts surface.
  * Modules declare `engines.contracts` against this value.
+ *
+ * Aligned with Module Platform 1.0 (specs/07 version matrix).
  */
-export const CONTRACTS_VERSION = "0.1.0" as const;
+export const CONTRACTS_VERSION = "1.0.0" as const;
 
 /**
  * Capability id always provided by core (state kernel).

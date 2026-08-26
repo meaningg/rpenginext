@@ -22,6 +22,10 @@ export const HOST_ENV = {
   maxSessionsPerPlayer: "RP_MAX_SESSIONS_PER_PLAYER",
   maxConcurrentTurns: "RP_MAX_CONCURRENT_TURNS",
   agentsStreaming: "RP_AGENTS_STREAMING",
+  moduleProfile: "RP_MODULE_PROFILE",
+  modules: "RP_MODULES",
+  disableModules: "RP_DISABLE_MODULES",
+  moduleDirs: "RP_MODULE_DIRS",
 } as const;
 
 const DEFAULT_DATA_DIR = "data";
@@ -52,6 +56,12 @@ export interface HostEnv {
   readonly agentsStreaming: boolean;
   readonly llm: HostLlmEnv;
   readonly agentsMode: "mock" | "llm";
+  /** Module composition env (specs/04 §4.4). */
+  readonly moduleProfile: "core-book" | "minimal" | "none" | undefined;
+  readonly modules: readonly string[] | undefined;
+  readonly disableModules: readonly string[];
+  /** Module discovery scan roots (ADR 0006); undefined = default root. */
+  readonly moduleDirs: readonly string[] | undefined;
 }
 
 /**
@@ -101,6 +111,10 @@ export function readHostEnv(
     agentsStreaming: env[HOST_ENV.agentsStreaming] !== "0",
     llm,
     agentsMode,
+    moduleProfile: parseModuleProfile(env[HOST_ENV.moduleProfile]),
+    modules: parseCommaList(env[HOST_ENV.modules]),
+    disableModules: parseCommaList(env[HOST_ENV.disableModules]) ?? [],
+    moduleDirs: parseCommaList(env[HOST_ENV.moduleDirs]),
   };
 }
 
@@ -129,4 +143,34 @@ function readHttpPort(raw: string | undefined, fallback: number): number {
   const n = Number(trimmed);
   if (n === 0) return 0;
   return n > 0 ? n : fallback;
+}
+
+/**
+ * Parses a comma-separated module id list (empty/whitespace → undefined).
+ *
+ * @param raw - env value
+ */
+function parseCommaList(raw: string | undefined): readonly string[] | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  const items = trimmed
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  return items.length > 0 ? items : undefined;
+}
+
+/**
+ * Parses RP_MODULE_PROFILE; invalid values stay undefined (default applies).
+ *
+ * @param raw - env value
+ */
+function parseModuleProfile(
+  raw: string | undefined,
+): "core-book" | "minimal" | "none" | undefined {
+  const trimmed = raw?.trim();
+  if (trimmed === "core-book" || trimmed === "minimal" || trimmed === "none") {
+    return trimmed;
+  }
+  return undefined;
 }

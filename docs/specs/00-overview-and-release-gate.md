@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|--------|
-| **Status** | `ready` |
+| **Status** | `done` |
 | **Priority** | foundation |
 | **Depends on** | — |
 | **Blocks** | all other specs (definition of done) |
@@ -27,7 +27,7 @@
 
 | Layer | Must be production-ready |
 |-------|--------------------------|
-| Runtime | atomic turns, permissions, system turns, persistence, traces |
+| Runtime | atomic turns, permissions, system turns, persistence, traces, cross-module events |
 | Author SDK | `defineModule` 1.0.0 frozen + compatibility policy |
 | Host | profile/env wiring, strict caps, module inventory CLI+API |
 | Data | multi-slice save/load + slice migrations path proven |
@@ -51,6 +51,9 @@ PR в packages/core не нужен (кроме bugfix / ADR / spec-required mec
 6. `committed` cannot mutate world (observe + `scheduleSystem` only).
 7. Default host profile: **fail on missing capability** (strict).
 8. Stable failure `code` for author-facing misconfig (spec 03).
+9. Events are turn-outcome notifications: `ctx.emit` only in `committed` / `rejected`; handlers observe-only (fail-loud); events never mutate the world.
+10. Lifecycle hooks optional: `init` does not write the world (fail-loud); `shutdown` is cleanup only.
+11. IR/manifest — **fully serializable protocol**: no functions/closures/zod instances in IR (schema validation lives in SDK bindings; optional portable schema descriptors, e.g. JSON Schema, only). Author-surface semantics (spec 01) are language-agnostic: any SDK — TS/JS in 1.0, foreign languages post-1.0 — emits the same IR and passes the same engines validation.
 
 ## 5. Anti-scope (не делать в этом workstream)
 
@@ -60,6 +63,8 @@ PR в packages/core не нужен (кроме bugfix / ADR / spec-required mec
 | Product domain modules as platform deliverable | separate tasks after tag |
 | Raw ports / interceptors as author API | breaks ADR 0004 |
 | Marketplace / remote plugin download | security + product later |
+| Author UI / web extension surface (module-defined screens, components, commands) | module system is **backend-only by design**; apps consume engine API (narrative output, host status, readModels, events) |
+| Foreign-language SDK as 1.0 deliverable (Python и др.) | 1.0 шипится на TS/JS `module-sdk`; polyglot SDK + remote module driver — post-1.0 (§5 backlog, invariant 11) |
 | Multiplayer simultaneous turns | different architecture |
 | Content-safety product hooks | optional later; not platform core |
 | Pipeline rewrite “for beauty” | risk without author win |
@@ -70,6 +75,9 @@ PR в packages/core не нужен (кроме bugfix / ADR / spec-required mec
 - ADR 0005 (moments-native core; until then sdk↔ports dual-path — compat+stress mandatory on every sdk/core change)
 - `turn.plan` / advanced plan extras (spec 06 item A)
 - `rules.costs`, structured action kinds beyond free_text
+- Dynamic event subscriptions / event filters (spec 06 §3)
+- Versioned capability tokens (spec 06 §5.1)
+- Polyglot SDK (Python и др.): foreign-language SDK = второй producer того же IR (invariant 11) + remote module driver на host-уровне (IPC, batch-per-moment, timeouts, kill); не author surface, не создаёт «третьего пути» в core — modules land через те же IR bind + engines validation
 - Live-LLM as release blocker (optional CI job only)
 - npm public marketplace
 
@@ -82,7 +90,7 @@ PR в packages/core не нужен (кроме bugfix / ADR / spec-required mec
 | 03 | [03-author-errors.md](./03-author-errors.md) | Stable author errors |
 | 04 | [04-host-composition.md](./04-host-composition.md) | Host profiles + ops surface |
 | 05 | [05-scaffold-and-migrations.md](./05-scaffold-and-migrations.md) | Scaffold + migrations |
-| 06 | [06-inter-module-and-sdk-gaps.md](./06-inter-module-and-sdk-gaps.md) | Boundaries + readModel |
+| 06 | [06-inter-module-and-sdk-gaps.md](./06-inter-module-and-sdk-gaps.md) | Boundaries + readModel + events + lifecycle |
 | 07 | [07-release-and-versioning.md](./07-release-and-versioning.md) | Tag gate |
 
 ## 7. Sprint order (delivery, not quality tiers)
@@ -93,7 +101,7 @@ PR в packages/core не нужен (кроме bugfix / ADR / spec-required mec
 | **S2** | Stress + freeze draft | 02, 01 | multi-module hell caught; contract drafting |
 | **S3** | Host composition production | 04 | env/profile/CLI/API; strict default |
 | **S4** | Scaffold + migrations | 05 | all recipes + migrate proven |
-| **S5** | Inter-module + readModel | 06 | safe composition at scale |
+| **S5** | Inter-module + readModel + events | 06 | safe composition at scale |
 | **S6** | 1.0 stamp + freeze + gate | 01 final, 07 | **production tag** |
 
 Parallel: docs inside sprints; S3 ∥ late S2 docs.  
@@ -112,8 +120,11 @@ Tag **запрещён**, пока не выполнено **всё** ниже.
 - [ ] Author docs **не** требуют `12-extension-surface.md`
 - [ ] Moments permissions locked: `committed` cannot mutate; `ctx.op` there **fail-loud** (not silent drop) — spec 03 E15
 - [ ] `ctx.readModel` shipped; unknown name → stable `MODULE_READ_MODEL_UNKNOWN` (fail loud, all moments) — spec 06
+- [ ] `ctx.emit` + `events` capability normative: emit post-outcome only; handlers observe-only (fail-loud) — spec 06
+- [ ] Lifecycle `init`/`shutdown`: init failure → boot fail `MODULE_INIT_FAILED`; shutdown error → warning
 
 ### 8.2 Stability & CI
+- [ ] IR/manifest JSON round-trip in compat fixtures (serializable, no closures) — polyglot-readiness lock
 - [ ] `bun run typecheck` green (workspace)
 - [ ] `bun run test:compat` green
 - [ ] `bun run test:modules-stress` green (N≥30, cases S01–S12 per spec 02)
@@ -135,13 +146,16 @@ Tag **запрещён**, пока не выполнено **всё** ниже.
 - [ ] Multi-slice save/load roundtrip under stress
 - [ ] Background system turn + tool `proposeOp` covered by harness (**scripted tool LLM**)
 - [ ] Slice **migrations** documented + automated v1→v2 load test (no “defer”)
-- [ ] Journal replay / atomicity pack A01–A08 green (spec 02)
+- [ ] Journal replay / atomicity pack A01–A09 green (spec 02)
+- [ ] Pending scheduled system turns survive save/load and drain after load (spec 02 S19)
 
 ### 8.5 Inter-module
 - [ ] No `module-*` → `module-*` runtime deps (CI)
 - [ ] Public contract section on all first-party module READMEs
 - [ ] `ctx.readModel` shipped, documented, tested (spec 06 D)
 - [ ] Unknown `readModel` name locked to `MODULE_READ_MODEL_UNKNOWN` (no silent undefined)
+- [ ] readModel providing norms documented (namespacing, args schema, MAJOR-break rule) — spec 06 §6.5
+- [ ] Events: duplicate/unknown event names fail boot (stable codes); handler errors post-commit → warning (never silent); no module→module deps via events
 - [ ] conventions.md published
 
 ### 8.6 Contract / release artifacts
@@ -158,7 +172,7 @@ Tag **запрещён**, пока не выполнено **всё** ниже.
 1. create-module <id> --recipe <…>
 2. defineModule (…)
 3. tests via @rpengineext/module-sdk/test
-4. public contract in README (provides/requires/readModels/…)
+4. public contract in README (provides/requires/readModels/events/…)
 5. wire: profile / RP_MODULES / extraModules
 6. bun test + CI (compat, stress, boundaries)
 7. NO packages/core change
@@ -181,9 +195,9 @@ Tag **запрещён**, пока не выполнено **всё** ниже.
 - [x] Specs index + 00–07 written
 - [x] Linked from roadmap / README / overview / modules README
 - [x] MVP dual-track removed — production-only gate
-- [ ] Child specs marked `done` as completed
-- [ ] §8 checkboxes verified in release PR
-- [ ] Tag cut per spec 07
+- [x] Child specs marked `done` as completed
+- [ ] §8 checkboxes claimed in release PR (verification block below green: typecheck, compat, stress, boundaries, platform, e2e, smoke)
+- [ ] Tag cut per spec 07 (`Module Platform 1.0`)
 
 ## 12. Verification
 

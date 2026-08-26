@@ -65,6 +65,10 @@ import type {
 } from "./extension-ports.ts";
 import type { StageInterceptor } from "./interceptors.ts";
 import type { ModuleManifest } from "./manifest.ts";
+import type {
+  ModuleEventPublisher,
+  ModuleEventSubscription,
+} from "./module-events.ts";
 
 /**
  * Registration API available during `module.register(ctx)`.
@@ -94,6 +98,12 @@ export interface ModuleRegisterContext {
   registerTemplate(def: TemplateDefinition): Result<void, Failure>;
   registerConfigSchema(def: ConfigSchemaDefinition): Result<void, Failure>;
   registerMigration(def: MigrationDefinition): Result<void, Failure>;
+
+  // --- Module events (specs/06 §7) ----------------------------------------
+  /** Declares one canonical publisher; duplicate name → boot fail MODULE_EVENT_DUPLICATE. */
+  registerEventPublisher(def: ModuleEventPublisher): Result<void, Failure>;
+  /** Declares one static subscription; binding validated at boot (MODULE_EVENT_UNKNOWN / warn). */
+  registerEventSubscription(def: ModuleEventSubscription): Result<void, Failure>;
 
   // --- Layer B: interceptors -----------------------------------------------
   addInterceptor(interceptor: StageInterceptor): Result<void, Failure>;

@@ -4,6 +4,7 @@ import type { Capability } from "./capabilities.ts";
 import type {
   AiCapability,
   ConfigCapability,
+  EventsCapability,
   HostCapability,
   NarrativeCapability,
   RulesCapability,
@@ -12,6 +13,7 @@ import type {
   TurnCapability,
   AccessCapability,
 } from "./capabilities.ts";
+import type { ModuleCtx } from "./context.ts";
 
 /**
  * Author module definition (sugar object and/or capabilities array).
@@ -46,6 +48,15 @@ export interface ModuleDefinition<
   readonly host?: Omit<HostCapability<TSlice, TConfig>, "kind">;
   readonly config?: Omit<ConfigCapability<TConfig>, "kind">;
   readonly access?: Omit<AccessCapability, "kind">;
+  readonly events?: Omit<EventsCapability<TSlice, TConfig>, "kind">;
+
+  /**
+   * Module lifecycle (specs/06 §8): once after boot validation, before first turn.
+   * `init` must not touch world state (op / emit / deny / readModel → fail-loud).
+   */
+  readonly init?: (ctx: ModuleCtx<TSlice, TConfig>) => void | Promise<void>;
+  /** Cleanup-only hook called at engine stop (reverse priority order). */
+  readonly shutdown?: () => void | Promise<void>;
 }
 
 /**
@@ -60,4 +71,8 @@ export interface NormalizedModuleDefinition {
   readonly provides: readonly string[];
   readonly requires: readonly string[];
   readonly capabilities: readonly Capability[];
+  readonly init?: (
+    ctx: import("./context.ts").ModuleCtx<any, any>,
+  ) => void | Promise<void>;
+  readonly shutdown?: () => void | Promise<void>;
 }

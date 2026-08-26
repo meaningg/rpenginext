@@ -97,6 +97,11 @@ export function createApiServer(deps: ApiServerDeps) {
       });
     }
 
+    // Ops contract (specs/04 §6.3): module inventory, dedicated route.
+    if (request.method === "GET" && pathname === "/modules") {
+      return Response.json({ modules: runtime.listModules() });
+    }
+
     if (request.method === "POST" && pathname === "/v1/players") {
       const body = await readJson(request);
       if (!body.ok) return body.response;

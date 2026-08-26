@@ -1,6 +1,5 @@
 import { defineModule, deny } from "@rpengineext/module-sdk";
 import type { JsonObject, JsonValue, WorldState } from "@rpengineext/contracts";
-import type { WorkingMemorySlice } from "@rpengineext/module-working-memory";
 import { z } from "zod";
 
 import {
@@ -97,6 +96,18 @@ export interface CreateSummaryModuleOptions {
 }
 
 /**
+ * Minimal structural read of the working-memory slice (boundary rule: no
+ * module→module imports; shape mirrors the provider public contract).
+ */
+interface WorkingMemoryReadShape {
+  readonly entries: readonly {
+    readonly turnId?: string;
+    readonly user?: string;
+    readonly assistant?: string;
+  }[];
+}
+
+/**
  * Creates the story-summary product module (sdk / CBMD).
  *
  * Every `intervalTurns` player free-text turns it schedules a background
@@ -106,6 +117,9 @@ export interface CreateSummaryModuleOptions {
  * consistent on long campaigns with no gap between the working-memory window
  * and the summaries (interval <= window guarantees it).
  *
+ * Reads the `working_memory` slice via access.read — no package dependency on
+ * module-working-memory (specs/06 §4.2 boundary).
+ *
  * @param options - factory options (intervalTurns, env for tests)
  */
 export function createSummaryModule(options: CreateSummaryModuleOptions = {}) {
@@ -114,7 +128,7 @@ export function createSummaryModule(options: CreateSummaryModuleOptions = {}) {
   return defineModule(
     {
       id: MODULE_ID,
-      version: "0.1.0",
+      version: "1.0.0",
       title: "Story Summary",
       description:
         "Delta summary chunks of working memory via background system turns; all chunks injected into the narrative system prompt",
@@ -179,7 +193,7 @@ export function createSummaryModule(options: CreateSummaryModuleOptions = {}) {
           const action = ctx.action;
           if (!action || action.kind !== "free_text") return;
 
-          const wm = ctx.readSlice<WorkingMemorySlice>(
+          const wm = ctx.readSlice<WorkingMemoryReadShape>(
             WORKING_MEMORY_SLICE_NAME,
           );
           if (!wm) return; // working-memory module absent → nothing to summarize
@@ -287,7 +301,7 @@ export function createSummaryModule(options: CreateSummaryModuleOptions = {}) {
                 deny("SCHEMA_INVALID", "summary must be non-empty");
               }
               const s = ctx.slice as SummarySlice;
-              const wm = ctx.readSlice<WorkingMemorySlice>(
+              const wm = ctx.readSlice<WorkingMemoryReadShape>(
                 WORKING_MEMORY_SLICE_NAME,
               );
               const fromPairIndex = s.lastSummarizedPairCount + 1;

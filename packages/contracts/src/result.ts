@@ -57,6 +57,77 @@ export function failure(
   };
 }
 
+export interface FailureDetails {
+  readonly moduleId?: string;
+  readonly moduleIds?: readonly string[];
+  readonly slice?: string;
+  readonly op?: string;
+  readonly capability?: string;
+  readonly configKey?: string;
+  readonly taskType?: string;
+  readonly toolId?: string;
+  readonly name?: string;
+  readonly moment?: string;
+  readonly event?: string;
+  readonly fromVersion?: number;
+  readonly [key: string]: unknown;
+}
+
+/**
+ * Builds a stable author-facing module failure (specs/03 §4.1).
+ *
+ * Message pattern: `[<code>] <what failed> (module: <id>). Hint: <what to do>.`
+ * Secret material (api keys, raw LLM dumps) must never be placed in details.
+ *
+ * @param code - stable machine code from the MODULE_FAILURE_CODES catalog
+ * @param message - what failed + hint
+ * @param details - structured details (moduleId / slice / op / …)
+ */
+export function moduleFailure(
+  code: string,
+  message: string,
+  details?: FailureDetails,
+): Failure {
+  const { moduleId, ...rest } = details ?? {};
+  const causedBy = moduleId ? [moduleId] : undefined;
+  return failure(code, message, {
+    details: Object.keys(rest).length > 0 ? rest : undefined,
+    ...(causedBy ? { causedBy } : {}),
+  });
+}
+
+/**
+ * Error thrown by the sdk for author ctx violations (forbidden moment misuse).
+ * Carries the stable module failure code; core/sdk wrap it into structured failures.
+ */
+export class ModuleCtxViolation extends Error {
+  readonly code: string;
+  override readonly message: string;
+  readonly details?: FailureDetails;
+
+  /**
+   * @param code - stable machine code (e.g. MODULE_MOMENT_OP_FORBIDDEN)
+   * @param message - what failed + hint
+   * @param details - structured details
+   */
+  constructor(code: string, message: string, details?: FailureDetails) {
+    super(message);
+    this.name = "ModuleCtxViolation";
+    this.code = code;
+    this.message = message;
+    this.details = details;
+  }
+}
+
+/**
+ * Type guard for {@link ModuleCtxViolation}.
+ *
+ * @param value - unknown thrown value
+ */
+export function isModuleCtxViolation(value: unknown): value is ModuleCtxViolation {
+  return value instanceof ModuleCtxViolation;
+}
+
 /**
  * Maps a successful Result value; leaves errors unchanged.
  *

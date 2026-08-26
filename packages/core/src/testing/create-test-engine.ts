@@ -3,6 +3,7 @@ import type {
   Failure,
   Module,
   ModuleFactory,
+  PersistencePort,
   Result,
   TurnLogger,
 } from "@rpengineext/contracts";
@@ -31,12 +32,16 @@ export interface CreateTestEngineOptions {
   readonly moduleConfig?: Readonly<
     Record<string, import("@rpengineext/contracts").JsonObject>
   >;
+  /** Custom persistence (harness save/load support). */
+  readonly persistence?: PersistencePort;
+  /** Strict capability satisfaction (specs/04 — default true). */
+  readonly strictCapabilities?: boolean;
 }
 
 export interface TestEngineBundle extends CreateEngineSuccess {
   readonly engine: Engine;
   readonly memoryTraceSink: MemoryTraceSink;
-  readonly persistence: InMemoryPersistence;
+  readonly persistence: PersistencePort;
 }
 
 /**
@@ -48,7 +53,7 @@ export async function createTestEngine(
   options: CreateTestEngineOptions = {},
 ): Promise<Result<TestEngineBundle, Failure>> {
   const memoryTraceSink = new MemoryTraceSink();
-  const persistence = new InMemoryPersistence();
+  const persistence = options.persistence ?? new InMemoryPersistence();
   const log =
     options.log ??
     createLogger({
@@ -82,6 +87,9 @@ export async function createTestEngine(
         directory: "memory://traces",
       },
       logging: { level: "error", json: true },
+      modules: {
+        failOnMissingCapability: options.strictCapabilities !== false,
+      },
     },
   });
 

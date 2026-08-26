@@ -1,8 +1,7 @@
 # Roadmap
 
-> **Статус:** Phase 4 complete + **Module SDK / CBMD** (ADR 0004)  
-> **Next platform work:** [Module Platform 1.0 specs](../specs/README.md) (freeze SDK, harness, multi-module CI, host composition, release gate).  
-> Phase 5+ product modules (npc/plot/…) — **after** platform 1.0, explicit tasks only. Core changes only via ADR.
+> **Статус:** Phase 4 complete + **Module Platform 1.0 shipped** (specs 01–07 `done`, production tag per specs/07).  
+> **Next:** product domain modules (npc/plot/…) — **после** platform 1.0, отдельные tasks. Core changes только через ADR/bugfix/proof.
 
 ## Decisions locked
 
@@ -108,9 +107,14 @@ Goal: **production** platform so dozens of modules ship without core churn.
 
 Checklist summary:
 
-- [ ] Specs 01–06 `done`; [00](../specs/00-overview-and-release-gate.md) §8 production DoD complete
-- [ ] `MODULE_SDK_VERSION = 1.0.0` + normative author docs
-- [ ] `test:compat` + `test:modules-stress` + `test:module-boundaries` + `test:scaffold-smoke` + `test:platform` + `test:e2e` + `smoke:play:mock` green
+- [x] Specs 01–06 `done`; [00](../specs/00-overview-and-release-gate.md) §8 production DoD claimed in release PR
+- [x] `MODULE_SDK_VERSION = 1.0.0` + normative author docs (sdk-reference Normative SDK 1.0, compatibility, errors, conventions)
+- [x] `test:compat` + `test:modules-stress` + `test:module-boundaries` + `test:scaffold-smoke` + `test:platform` + `test:e2e` + `smoke:play:mock` green
+- [x] Events (`events` capability) + lifecycle (`init`/`shutdown`) shipped; moments table normative (spec 01 §4.2)
+- [x] `ctx.readModel` shipped (fail-loud unknown, args schema E26)
+- [x] Host composition: profiles/env/CLI/API inventory, strict caps default ON
+- [x] create-module 8 recipes + scaffold smoke; slice migrations path v1→v2 tested
+- [x] Release notes: [`docs/releases/module-platform-1.0.md`](../releases/module-platform-1.0.md)
 
 **Exit:** Module Platform **1.0 production** tagged per [07](../specs/07-release-and-versioning.md).
 

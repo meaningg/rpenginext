@@ -33,7 +33,7 @@ function baseManifest(
     version: "0.1.0",
     displayName: partial.id,
     description: "",
-    engines: { core: "^0.1.0", contracts: "^0.1.0" },
+    engines: { core: "^1.0.0", contracts: "^1.0.0" },
     priority: 10,
     provides: [],
     requires: ["capability:state-core"],

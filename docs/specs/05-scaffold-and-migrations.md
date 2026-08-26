@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|--------|
-| **Status** | `ready` |
+| **Status** | `done` |
 | **Priority** | P1 |
 | **Depends on** | Spec 02 (harness), Spec 01 (surface), Spec 03 (migrate errors) |
 | **Blocks** | production author onboarding; Spec 07 |
@@ -20,14 +20,14 @@ Production author onboarding:
 ## 2. Current state
 
 - Recipes: `state | seed-narrative | guard | full`
-- Missing: `ai-tool`, `access-read`, `migrate`
+- Missing: `ai-tool`, `access-read`, `migrate`, `events`
 - Tests may not use harness
 - Migrations exist in SDK runtime but weak author proof
 
 ## 3. Scope
 
 ### In scope (all required)
-- Recipes: existing upgraded + `ai-tool`, `access-read`, `migrate`
+- Recipes: existing upgraded + `ai-tool`, `access-read`, `migrate`, `events`
 - All recipes: harness tests ≥3 via `@rpengineext/module-sdk/test` (success / reject / edge) — **not** raw `createTestEngine` as primary
 - README public contract section on every scaffold
 - Migrations recipe + docs + automated v1→v2 load test
@@ -50,6 +50,7 @@ Production author onboarding:
 | `ai-tool` | committed → scheduleSystem → ai.task + tool → proposeOp | background AI write |
 | `access-read` | access.read + narrative/read from foreign | composition |
 | `migrate` | v1→v2 migrations + load test | save compatibility |
+| `events` | publish (`events.emit`) + subscribe + follow-up `scheduleSystem` | push-уведомления между модулями |
 
 CLI:
 
@@ -80,6 +81,7 @@ packages/modules/<id>/   # or temp path in CI smoke
 - meta keys (seed)
 - config key
 - readModels
+- events (emitted: name + purpose; subscribed)
 - system reasons / task types / tools
 ```
 
@@ -101,6 +103,9 @@ not “boots only”. Must prove:
 
 **migrate:**  
 load old schemaVersion fixture → migrated new shape; unmigratable version → stable error (E14).
+
+**events:**  
+proves emit post-commit; subscriber receives payload; forbidden-moment emit fails (E19); handler error surfaces as warning with turn still committed (E21); follow-up system turn via `scheduleSystem` (scripted).
 
 **access-read:**  
 boots with foreign module present; reads without write; missing access behaves safely (documented).
@@ -137,7 +142,7 @@ boots with foreign module present; reads without write; missing access behaves s
 ## 8. Implementation checklist
 
 - [ ] Upgrade existing recipes to harness + contract README
-- [ ] Add ai-tool, access-read, migrate
+- [ ] Add ai-tool, access-read, migrate, events
 - [ ] Help text complete
 - [ ] Migration docs in recipes.md
 - [ ] v1→v2 + fail path tests
@@ -147,10 +152,11 @@ boots with foreign module present; reads without write; missing access behaves s
 
 ## 9. DoD (production — all required)
 
-- [ ] All 7 recipes implemented and documented
+- [ ] All 8 recipes implemented and documented
 - [ ] Every recipe: ≥3 harness tests green when scaffolded
 - [ ] ai-tool proves schedule + tool propose path (mock)
 - [ ] migrate proves load upgrade + hard-fail unmigratable
+- [ ] events proves emit post-commit + observe-only handlers + follow-up system turn
 - [ ] Public contract section always generated
 - [ ] `test:scaffold-smoke` green in CI
 - [ ] recipes.md complete; no ports leakage

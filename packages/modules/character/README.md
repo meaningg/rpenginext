@@ -35,6 +35,19 @@ Host must put this object on `session.meta.character` (API does this from the te
 4. `ai.tasks.outfit_sync` + `ai.tools.update_outfit` → op `set_outfit`
 5. `host.status`
 
+## Public contract
+
+| Field | Value |
+|-------|-------|
+| id / version / priority | `character` · `1.0.0` · 20 |
+| provides / requires | `capability:character` / — |
+| slice | `character` (schemaVersion 1) |
+| meta keys (seed) | `meta.character: { name, appearance, features, outfit }` |
+| config key | `character` (schema) |
+| readModels | — |
+| events | emitted: —; subscribed: — |
+| system reasons / tasks / tools | reason `character.outfit_sync` · task `character.outfit_sync` · tool `character.update_outfit` |
+
 ## Non-goals (v1)
 
 - Multiple characters / NPC wardrobe

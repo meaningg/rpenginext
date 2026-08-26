@@ -17,8 +17,10 @@
 | [**schemas.md**](./schemas.md) | Как описывать state/config/AI через Zod (один раз) |
 | [`_template.md`](./_template.md) | Скелет для копипасты |
 | [`packages/module-sdk/README.md`](../../packages/module-sdk/README.md) | Витрина пакета (коротко) |
+| [**compatibility.md**](./compatibility.md) | Политика совместимости SDK 1.x (semver, IR, gates) |
+| [**errors.md**](./errors.md) | Каталог E01–E26: коды + fix hints |
+| [**conventions.md**](./conventions.md) | Priority bands, readModel, events, lifecycle, public contract |
 | [**../specs/README.md**](../specs/README.md) | **Module Platform 1.0** — freeze, harness, CI, host, release DoD (maintainers / platform work) |
-| `compatibility.md` / `errors.md` / `conventions.md` | Platform 1.0 artifacts (appear as specs 01/03/04/06 land) |
 
 Если нужно **понять, что вообще умеет SDK** — сразу в [reference](./sdk-reference.md).  
 Если нужно **быстро набросать модуль** — разделы ниже + [recipes](./recipes.md).
@@ -65,8 +67,10 @@
 | `host` | status-панель, help, readModels |
 | `config` | секция `moduleConfig` |
 | `access` | read чужих slice (write чужих — нельзя) |
+| `events` | publish/subscribe push-уведомлений (1.0) |
 
-Мета модуля: `id`, `version`, `title`, `priority`, `provides` / `requires`.
+Мета модуля: `id`, `version`, `title`, `priority`, `provides` / `requires`.  
+Lifecycle hooks: `init` / `shutdown` (опциональны, 1.0).
 
 ---
 
@@ -80,8 +84,18 @@ bun run create-module mood
 bun run create-module lore --recipe seed-narrative
 ```
 
-Рецепты scaffold (сейчас): `state` | `seed-narrative` | `guard` | `full`  
-Platform 1.0 добавит: `ai-tool` | `access-read` | `migrate` — [spec 05](../specs/05-scaffold-and-migrations.md)
+Рецепты scaffold (все 8 для Platform 1.0):
+
+```text
+state | seed-narrative | guard | full | ai-tool | access-read | migrate | events
+```
+
+```bash
+bun run create-module mood                  # state
+bun run create-module lore --recipe seed-narrative
+bun run create-module stats --recipe migrate
+bun run create-module notify --recipe events
+```
 
 ```text
 packages/modules/mood/
@@ -151,12 +165,18 @@ export function createMoodModule() {
 
 ### 3. Тесты (минимум 3) — harness first
 
-**SoT для авторов:** `@rpengineext/module-sdk/test`.  
+**SoT для авторов (1.0):** `@rpengineext/module-sdk/test`.  
 `createTestEngine` (`@rpengineext/core/testing`) — advanced/maintainer escape, не основной путь.
 
 ```ts
 import { describe, expect, test } from "bun:test";
-import { testModule } from "@rpengineext/module-sdk/test";
+import {
+  testModule,
+  expectCommitted,
+  expectRejected,
+  expectSlice,
+  expectEvent,
+} from "@rpengineext/module-sdk/test";
 import { createMoodModule } from "../src/index.ts";
 
 describe("mood", () => {
@@ -166,15 +186,15 @@ describe("mood", () => {
     if (!t.ok) return;
 
     const turn = await t.value.turn("смотрю вокруг");
-    expect(turn.status).toBe("committed");
-    expect((t.value.slice as { level: number }).level).toBe(1);
+    expectCommitted(turn);
+    expectSlice(t.value, "mood", { level: 1 });
   });
 
   test("error: guard режет ход", async () => {
     const t = await testModule(createMoodModule());
     if (!t.ok) return;
     const turn = await t.value.turn("nope");
-    expect(turn.status).toBe("rejected");
+    expectRejected(turn, "MOOD_BLOCKED");
   });
 
   test("edge: модуль отдаёт IR", () => {
@@ -185,21 +205,40 @@ describe("mood", () => {
 });
 ```
 
-Platform 1.0 расширит harness (`testModules`, `save`/`load`, `waitIdle`, asserts, scripted tools) — [spec 02](../specs/02-testing-harness-stress-ci.md).
+Полный harness: `testModules`, `action`, `systemTurn`, `waitIdle`, `save`/`load`, `events` log + `expectEvent`, `readModel`, `fixedProseLlm` / `scriptedToolLlm` — [sdk-reference §6](./sdk-reference.md#6-утилиты-и-прочий-public-api) и [spec 02](../specs/02-testing-harness-stress-ci.md).
 
 ### 4. Подключить к host
 
-**Сейчас (0.x):** `extraModules` в `createHostRuntime` (или правка списка в host-bootstrap).
+**Без кода (рекомендуется, ADR 0006):** пакет, положенный в `packages/modules/`
+(create-module уже пишет поле `rpengineext.module` в `package.json`), сам попадает
+в id-пул хоста — подключение = одна env-строка:
+
+```bash
+RP_MODULES=mood bun run cli --modules    # модуль обнаружен и загружен
+```
+
+**1.0 классика:** profiles / env / catalog (spec 04):
+
+```bash
+# default = core-book (wm + canon + character)
+RP_MODULE_PROFILE=minimal          # working-memory only
+RP_MODULES=working-memory,character
+RP_DISABLE_MODULES=character       # drop character from resolved set
+RP_MODULE_DIRS=packages/modules    # discovery roots (default); comma-list
+```
+
+Либо кодом (приоритет: `options.modules` > env > profile):
 
 ```ts
-import { createMoodModule } from "@rpengineext/module-mood";
-
 await createHostRuntime({
-  extraModules: [createMoodModule()],
+  extraModules: [createMoodModule()],            // всегда после resolution
+  // moduleProfile, enabledModuleIds, disabledModuleIds, modules (exclusive), moduleDirs
 });
 ```
 
-**Platform 1.0:** profiles / `RP_MODULES` / catalog — [spec 04](../specs/04-host-composition.md). Не хардкодить product-модули в core.
+Discovery — это **пул, а не автозагрузка**: модуль адресуется по id/
+(`RP_MODULES`, `enabledModuleIds`, unknown-подсказки), но загружается только
+при явном выборе. Детали: [ADR 0006](../adr/0006-local-module-discovery.md).
 
 ### 5. Проверка
 
@@ -225,7 +264,10 @@ bun run cli:hello   # или api / web
 | Статус / help / read model | `host` | [recipe](./recipes.md#4-status--help) |
 | Настройка из конфига | `config` | [recipe](./recipes.md#5-config) |
 | Читать чужой slice | `access.read` | [reference → access](./sdk-reference.md#access) |
-| Стабильный cross-module query | `ctx.readModel` (Platform 1.0) | [spec 06](../specs/06-inter-module-and-sdk-gaps.md) |
+| Стабильный cross-module query | `ctx.readModel` | [reference → ModuleCtx](./sdk-reference.md#5-modulectx--полный-reference) |
+| Уведомить другие модули | `events` (emit в committed/rejected) | [reference → events](./sdk-reference.md#events) |
+| Поднять ресурсы при boot / закрыть при stop | `init` / `shutdown` | [reference → lifecycle](./sdk-reference.md#lifecycle-hooks-init--shutdown-spec-06-8) |
+| Менять schema slice без потери сейвов | `state.migrations` | [рецепт](./recipes.md#11-migrations-совместимость-сейвов) |
 | Описать схему slice | Zod | [schemas.md](./schemas.md) |
 
 ---
@@ -248,10 +290,11 @@ bun run cli:hello   # или api / web
 - [ ] State только через `ops` (и только в moments, где write разрешён)
 - [ ] `committed` — observe + `scheduleSystem` only (не `ctx.op`)
 - [ ] ≥3 теста через **`@rpengineext/module-sdk/test`**: success / reject / edge
-- [ ] README модуля: что чувствует игрок (+ public contract when Platform 1.0)
+- [ ] Public contract в README: provides/requires, slice+schemaVersion, meta keys, config key, readModels, events, system reasons/tools
 - [ ] Runtime deps: `module-sdk` + `zod` only; нет `module-*` → `module-*`
 - [ ] Нет импортов core internals / ports / LLM SDK
 - [ ] `bun test packages/modules/<id>` зелёный
+- [ ] `bun run test:module-boundaries` зелёный
 
 ---
 

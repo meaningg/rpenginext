@@ -28,6 +28,8 @@ export interface TurnContextHost {
   getStateView(): WorldState;
   propose(commands: readonly StateCommand[]): Result<void, Failure>;
   requestAgent(task: AgentTask): Promise<AgentResult>;
+  /** Resolves a registered readModel (fail-loud unknown → MODULE_READ_MODEL_UNKNOWN). */
+  readModel?(name: string, args?: JsonObject): Result<unknown, Failure>;
   note(note: TraceNote): void;
   readonly extras: MutableExtras;
   readonly log: TurnLogger;
@@ -49,6 +51,13 @@ export function createTurnContext(host: TurnContextHost): TurnContext {
     },
     rng: host.rng,
     permissions: host.permissions,
+    ...(host.readModel
+      ? {
+          readModel(name: string, args?: JsonObject) {
+            return host.readModel!(name, args);
+          },
+        }
+      : {}),
     propose(commands) {
       return host.propose(commands);
     },
@@ -119,6 +128,13 @@ export function withPermissions(
       return ctx.rng;
     },
     permissions,
+    ...(ctx.readModel
+      ? {
+          readModel(name: string, args?: JsonObject) {
+            return ctx.readModel!(name, args);
+          },
+        }
+      : {}),
     propose(commands) {
       return ctx.propose(commands);
     },

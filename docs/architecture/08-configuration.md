@@ -29,7 +29,7 @@ Names from `HOST_ENV` / related readers:
 | `RP_LOG_LEVEL` | `debug` / `info` / `warn` / `error` | default `info` |
 | `RP_LOG_JSON` | `1` = JSON logs | default pretty |
 | `RP_WORKING_MEMORY_WINDOW` | last-N chat pairs | positive int; default `12` |
-| `RP_MODULE_PROFILE` | first-party module profile | `core-book` (default) \| `minimal` \| `none` — **Platform 1.0** ([specs/04](../specs/04-host-composition.md)); *current 0.x host may still hardcode core-book set* |
+| `RP_MODULE_PROFILE` | first-party module profile | `core-book` (default) \| `minimal` \| `none` — **Platform 1.0** ([specs/04](../specs/04-host-composition.md)); модули подключаются profiles / env / options (`RP_MODULE_PROFILE`, `RP_MODULES`, `RP_DISABLE_MODULES`) — никакого hardcode |
 | `RP_MODULES` | comma module ids | replaces profile first-party set (list order) |
 | `RP_DISABLE_MODULES` | comma module ids | remove from resolved set after profile/list |
 | `RP_AGENTS_STREAMING` | `0` disables draft stream | default on |
@@ -107,25 +107,61 @@ EngineConfig {
 
 ## 4. Module enablement
 
-**Target (Module Platform 1.0)** — normative workstream: [specs/04-host-composition.md](../specs/04-host-composition.md).
+**Normative (Module Platform 1.0 done)** — [specs/04-host-composition.md](../specs/04-host-composition.md).
 
 | Mechanism | Role |
 |-----------|------|
 | `moduleProfile` / `RP_MODULE_PROFILE` | first-party set: `core-book` (default), `minimal`, `none` |
-| `RP_MODULES` / enable lists | replace or extend first-party ids from host catalog |
+| `RP_MODULES` / enable lists | replace or extend ids from host catalog **+ discovery pool** |
 | `RP_DISABLE_MODULES` / `disabledModuleIds` | remove ids after resolution |
-| `extraModules` | append prebuilt `Module` instances (external/tests) |
-| `modules` option | **exclusive** full override (then `extraModules` only) |
+| `extraModules` | append prebuilt `Module` instances (external/tests), **always last** |
+| `modules` option | **exclusive** full override (then `extraModules` only; discovery skipped) |
+
+### 4.0 Local module discovery (ADR 0006)
+
+Модули в репозитории можно подключать **без единой строки кода** у хоста: пакет
+декларирует себя в `package.json`, host сканирует руты и строит **id-пул**
+(каталог first-party ⊕ discovery; каталог побеждает при коллизии id).
+Выбор остаётся явным — discovery **не загружает** модули автоматически:
+
+```jsonc
+// packages/modules/mood/package.json
+"rpengineext": { "module": { "id": "mood", "entry": "./src/index.ts", "factory": "createMoodModule" } }
+```
+
+| Knob | Meaning |
+|------|---------|
+| `RP_MODULE_DIRS` | comma list of scan roots; default `packages/modules` (workspace root); explicit roots must exist (`CONFIG_INVALID` otherwise) |
+| `moduleDirs` option | same, code-level |
+
+Rules (ADR 0006):
+
+- Пакет без поля `rpengineext.module` — не кандидат (skip + debug);
+- Поле есть, но невалидно / битый entry / нет фабрики → boot fail `CONFIG_INVALID`;
+- Дубль id внутри discovery → `MODULE_ID_DUPLICATE` (оба пакета в details);
+- Порядок: руты в порядке конфига, внутри рута — id-лексикографически (детерминизм);
+- Импорт только **выбранных** модулей (лениво; невыбранные не импортируются);
+- `options.modules` → discovery пропущен целиком;
+- Security: только доверенные локальные руты (операторская конфигурация, не пользовательский ввод);
+  без remote-загрузки и sandbox — модель доверия = git repo + install (ADR 0006 §6).
 
 Rules:
 
-- Precedence: **code options > env > defaults** (see spec 04 matrix).
-- Unknown catalog id → boot fail `MODULE_UNKNOWN`.
-- `enabled ∩ disabled` non-empty → boot fail (no guess).
+- Precedence (locked): `options.modules` (exclusive) > `RP_MODULES` > profile (`options.moduleProfile` ?? `RP_MODULE_PROFILE` ?? `core-book`); затем `enabledModuleIds` add, `disabledModuleIds` + `RP_DISABLE_MODULES` remove.
+- Unknown catalog id → boot fail `MODULE_UNKNOWN` (E12).
+- `enabled ∩ disabled` non-empty → boot fail `CONFIG_INVALID` (no guess).
 - Default production: **strict missing capability = ON** (`failOnMissingCapability`).
-- No silent auto-discovery of untrusted code / remote plugins in v1.
+- Equal `priority` tie-break = **registration order** (resolved `base ++ extraModules`), детерминировано.
+- Inventory: `listModules()` на runtime, CLI `--modules`, API `GET /modules`, structured boot log.
 
-**Current 0.x (until spec 04 done):** `createHostRuntime` hardcodes working-memory + world-canon + character and accepts `extraModules` only. Env profile knobs above are **specified for 1.0**, not all implemented yet.
+### 4.1 Module config & secrets (normative, spec 04 §4.6)
+
+| Rule | Value |
+|------|-------|
+| `moduleConfig` — не secrets channel | значения могут попасть в конфиг-дампы/логи/error-контекст — api keys и токены запрещены |
+| Secrets | process env, читается кодом модуля напрямую; host не проксирует env в модули в 1.0 |
+| Failures | значения конфига/секретов не появляются в failure details (spec 03 §4.1) |
+| Validation | moduleConfig zod schema на boot; fail → `CONFIG_INVALID` (E07) |
 
 ## 5. Feature flags
 

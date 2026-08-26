@@ -1,11 +1,12 @@
 {
   "name": "@rpengineext/web",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "React web UI for rpengineext book loop",
   "scripts": {
     "dev": "vite",
+    "start": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json"

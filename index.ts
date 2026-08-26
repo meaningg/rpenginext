@@ -14,5 +14,5 @@ const log = createLogger({
 
 log.info(
   { coreVersion: CORE_VERSION, contractsVersion: CONTRACTS_VERSION },
-  "rpengineext — run: bun run cli | bun run api | bun run web",
+  "rpengineext — one command: bun start (api + web) | bun run cli",
 );

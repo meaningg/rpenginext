@@ -77,13 +77,22 @@ export class MockAgentScript {
 }
 
 /**
- * Default hello-turn narrative mock.
+ * Default hello-turn narrative mock. Prose embeds the player action text so
+ * each turn gets deterministic, distinct prose (smoke/e2e verify passage
+ * changes after a committed turn).
  */
 export function createDefaultMockAgentScript(): MockAgentScript {
   return new MockAgentScript()
-    .fixed("narrative.write", {
-      prose:
-        "Hello turn. The story begins as you take your first step into the interactive book.",
+    .on("narrative.write", (task) => {
+      const input = task.input as { playerAction?: { text?: string } };
+      const acted = input.playerAction?.text?.trim() ?? "";
+      return {
+        ok: true,
+        taskId: task.taskId,
+        data: {
+          prose: `Hello turn. The story begins as you take your first step into the interactive book.${acted ? ` You acted: ${acted}` : ""}`,
+        },
+      };
     })
     .on("action.interpret", (task) => {
       const text =

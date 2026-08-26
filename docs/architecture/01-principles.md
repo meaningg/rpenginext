@@ -149,6 +149,25 @@ module.manifest.engines.core satisfies loaded core version
 
 Иначе module не загружается.
 
+### Post-release core-change rule (Module Platform 1.0)
+
+После tag 1.0 core меняется **только** по одному из триггеров
+(spec 07 §11.3, §11.7):
+
+1. bugfix;
+2. ADR;
+3. письменное доказательство, что изменение невыразимо в SDK
+   ([specs/07](../specs/07-release-and-versioning.md)).
+
+Каждый продукт-модуль — отдельная задача с harness-тестами; drive-by
+правок core нет. Аддитивный optional API SDK = **minor** (`test:compat` +
+`test:modules-stress` + `test:module-boundaries` зелёные); author-breaking =
+**major** + миграционный гайд + CHANGELOG. ADR 0005 / turn.plan — только
+по задокументированным триггерам. До moments-native core sdk↔ports adapter
+остаётся **load-bearing**: никаких «быстрых» bind bypass без
+compat-фикстур. Событие / опциональный хук = minor; смена dispatch
+semantics / moment permissions / hook ctx rules = major.
+
 ---
 
 ## 7. Definition of “minimal core change”

@@ -6,7 +6,26 @@
 - **Modules** — независимые расширения (working-memory, character, world-canon, …).
 - **Agents** — LLM пишет историю и предлагает поведение NPC; **не** владеет истиной мира.
 
+> **Module Platform 1.0 shipped** (production): SDK frozen `1.0.0`, harness + stress, host composition, migrations, readModel, events, lifecycle.
+> Release notes: [`docs/releases/module-platform-1.0.md`](./docs/releases/module-platform-1.0.md) · Specs: [`docs/specs/README.md`](./docs/specs/README.md) · Compatibility: [`docs/modules/compatibility.md`](./docs/modules/compatibility.md)
+
 > Истина мира принадлежит core. AI предлагает. Commit атомарный.
+
+## Release verification (Module Platform 1.0)
+
+Все 8 команд обязательны зелёными перед любым production tag
+([spec 07 §5](./docs/specs/07-release-and-versioning.md)):
+
+```bash
+bun run typecheck
+bun run test:compat
+bun run test:modules-stress
+bun run test:module-boundaries
+bun run test:scaffold-smoke
+bun run test:platform
+bun run test:e2e
+bun run smoke:play:mock
+```
 
 ## Документация (источник истины)
 
@@ -30,14 +49,19 @@
 | [docs/architecture/12-extension-surface.md](./docs/architecture/12-extension-surface.md) | Internal runtime ports (maintainers; не author API) |
 | [docs/architecture/13-turn-tracing.md](./docs/architecture/13-turn-tracing.md) | Markdown-трейсы хода (core debug/AI control) |
 | [docs/modules/README.md](./docs/modules/README.md) | **Как сделать модуль** — старт |
-| [docs/modules/sdk-reference.md](./docs/modules/sdk-reference.md) | **SDK reference** — полный каталог capabilities / ctx |
+| [docs/modules/sdk-reference.md](./docs/modules/sdk-reference.md) | **SDK reference** — полный каталог capabilities / ctx (**Normative SDK 1.0**) |
 | [docs/modules/recipes.md](./docs/modules/recipes.md) | Рецепты модулей (без Zod-шума) |
 | [docs/modules/schemas.md](./docs/modules/schemas.md) | Zod-схемы state/config/AI |
+| [docs/modules/compatibility.md](./docs/modules/compatibility.md) | Совместимость SDK 1.x: semver, IR, engines, gates |
+| [docs/modules/errors.md](./docs/modules/errors.md) | Каталог author errors E01–E26 |
+| [docs/modules/conventions.md](./docs/modules/conventions.md) | Конвенции: priority bands, readModel, events, lifecycle |
+| [docs/releases/module-platform-1.0.md](./docs/releases/module-platform-1.0.md) | **Release notes** Module Platform 1.0 |
 | [docs/adr/0001-contracted-pipeline.md](./docs/adr/0001-contracted-pipeline.md) | ADR: выбор CPA |
 | [docs/adr/0002-web-host-and-streaming.md](./docs/adr/0002-web-host-and-streaming.md) | ADR: API + Web + SSE |
 | [docs/adr/0003-tool-calling-and-background-system-turns.md](./docs/adr/0003-tool-calling-and-background-system-turns.md) | ADR: tools + background system turns |
 | [docs/adr/0004-module-sdk-cbmd.md](./docs/adr/0004-module-sdk-cbmd.md) | ADR: Module SDK / CBMD author path |
 | [docs/adr/0005-moments-native-core.md](./docs/adr/0005-moments-native-core.md) | ADR: moments-native core (deferred) |
+| [docs/adr/0006-local-module-discovery.md](./docs/adr/0006-local-module-discovery.md) | ADR: local module discovery (zero-wiring pool, proposed) |
 
 ## Архитектура в одном абзаце
 
@@ -68,7 +92,13 @@ bun run cli:hello --mock --fixture
 bun run cli:book --mock
 ```
 
-Web UI (два терминала, localhost):
+Всё разом — движок (API host) и Web UI одной командой (один терминал):
+
+```bash
+bun start                 # API http://127.0.0.1:8787 + Web http://127.0.0.1:5173 (проксирует /v1 → API)
+```
+
+Без `.env` API стартует в **mock**-режиме (скриптованный LLM). Для раздельных логов — два терминала:
 
 ```bash
 bun run api:mock          # http://127.0.0.1:8787
@@ -80,10 +110,10 @@ bun run web               # http://127.0.0.1:5173 (проксирует /v1 → 
 ```bash
 cp .env.example .env
 # задать RP_LLM_API_KEY, RP_LLM_BASE_URL, RP_LLM_MODEL
+bun start
+# или раздельно: bun run api + bun run web
 bun run cli:hello
 bun run cli:book
-bun run api
-bun run web
 # продолжить: bun run apps/cli/src/main.ts --session <id> --repl
 ```
 
@@ -108,8 +138,8 @@ bun run web
 | [`@rpengineext/cli`](./apps/cli) | ready | hello turn / REPL book loop, save/load |
 | [`@rpengineext/api`](./apps/api) | ready | REST + SSE host, локальные multi-player сессии |
 | [`@rpengineext/web`](./apps/web) | ready | React + Tailwind book UI |
-| [`@rpengineext/module-sdk`](./packages/module-sdk) | ready | **единственный** author API модулей (`defineModule`) |
-| [`@rpengineext/create-module`](./packages/create-module) | ready | scaffold: `bun run create-module <id>` |
+| [`@rpengineext/module-sdk`](./packages/module-sdk) | **1.0.0 frozen** | **единственный** author API модулей (`defineModule`) |
+| [`@rpengineext/create-module`](./packages/create-module) | ready | scaffold: `bun run create-module <id> --recipe <…>` (8 recipes) |
 | [`@rpengineext/host-bootstrap`](./packages/host-bootstrap) | ready | общая wiring движка для CLI/API |
 | [`@rpengineext/content-stories`](./packages/content-stories) | ready | каталог шаблонов историй (`data/stories`) |
 | [`@rpengineext/module-working-memory`](./packages/modules/working-memory) | ready | последние N пар чата для narrative + полный архив пар в session state |
@@ -125,8 +155,7 @@ bun run web
 ```bash
 # 1. каркас
 bun run create-module mood
-# recipes: state | seed-narrative | guard | full
-# Platform 1.0 also: ai-tool | access-read | migrate
+# recipes (8): state | seed-narrative | guard | full | ai-tool | access-read | migrate | events
 # bun run create-module lore --recipe seed-narrative
 
 bun install
@@ -149,10 +178,11 @@ export function createMoodModule() {
 }
 ```
 
-3. Подключить: `extraModules` в `createHostRuntime` (0.x); profiles/env — Platform 1.0 ([specs/04](./docs/specs/04-host-composition.md)).  
-4. Тесты через **`@rpengineext/module-sdk/test`**: success / reject / edge.  
-5. Runtime dep только **`@rpengineext/module-sdk`** + zod (не core internals, не LLM SDK, не другие `module-*`).  
-6. Шаблон: [`docs/modules/_template.md`](./docs/modules/_template.md) · reference: [`sdk-reference.md`](./docs/modules/sdk-reference.md) · platform: [`docs/specs`](./docs/specs/README.md) · ADR: [0004](./docs/adr/0004-module-sdk-cbmd.md).
+3. Подключить: `extraModules` / `modules` / profiles / env (`RP_MODULES`, `RP_DISABLE_MODULES`) — [specs/04](./docs/specs/04-host-composition.md).  
+4. Тесты через **`@rpengineext/module-sdk/test`**: success / reject / edge (+ `expectEvent`, `scriptedToolLlm`).  
+5. Public contract в README модуля (provides/requires, slice, readModels, events).  
+6. Runtime dep только **`@rpengineext/module-sdk`** + zod (не core internals, не LLM SDK, не другие `module-*`).  
+7. Шаблон: [`docs/modules/_template.md`](./docs/modules/_template.md) · reference: [`sdk-reference.md`](./docs/modules/sdk-reference.md) · platform: [`docs/specs`](./docs/specs/README.md) · ADR: [0004](./docs/adr/0004-module-sdk-cbmd.md).
 
 ## Licence
 

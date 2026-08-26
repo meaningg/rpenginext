@@ -102,6 +102,8 @@ export interface MemoryKindDefinition {
 
 export interface ReadModelDefinition<TArgs = JsonObject, TOut = unknown> {
   readonly id: string;
+  /** Optional args schema validated on every call (fail → MODULE_READ_MODEL_ARGS_INVALID). */
+  readonly argsSchema?: z.ZodType<TArgs>;
   get(state: WorldState, args: TArgs): TOut;
 }
 

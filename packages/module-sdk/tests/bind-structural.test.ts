@@ -55,13 +55,13 @@ describe("bindCompiledModule structural", () => {
   test("error: IR guard without binding throws", () => {
     const ir = {
       irVersion: MODULE_IR_VERSION,
-      sdkVersion: "0.1.0",
+      sdkVersion: "1.0.0",
       manifest: {
         id: "bad",
         version: "1.0.0",
         displayName: "Bad",
         description: "",
-        engines: { core: "^0.1.0", contracts: "^0.1.0" },
+        engines: { core: "^1.0.0", contracts: "^1.0.0" },
         priority: 1,
         provides: [],
         requires: [],
@@ -94,6 +94,8 @@ describe("bindCompiledModule structural", () => {
       aiTasks: [],
       aiTools: [],
       capabilityKinds: ["rules"],
+      lifecycle: { init: false, shutdown: false },
+      events: { emit: [], subscribe: [] },
     } satisfies CompiledModuleIR;
 
     const bindings: ModuleBindings = {
@@ -106,6 +108,7 @@ describe("bindCompiledModule structural", () => {
       aiTasks: new Map(),
       aiTools: new Map(),
       knownOps: new Set(),
+      events: { emit: [], subscribe: [] },
     };
 
     const { ctx } = fakeCtx();
@@ -116,13 +119,13 @@ describe("bindCompiledModule structural", () => {
     const schema = z.object({ schemaVersion: z.literal(1), n: z.number() }).strict();
     const ir = {
       irVersion: MODULE_IR_VERSION,
-      sdkVersion: "0.1.0",
+      sdkVersion: "1.0.0",
       manifest: {
         id: "ok",
         version: "1.0.0",
         displayName: "Ok",
         description: "",
-        engines: { core: "^0.1.0", contracts: "^0.1.0" },
+        engines: { core: "^1.0.0", contracts: "^1.0.0" },
         priority: 1,
         provides: [],
         requires: [],
@@ -161,6 +164,8 @@ describe("bindCompiledModule structural", () => {
       aiTasks: [],
       aiTools: [],
       capabilityKinds: ["state", "turn"],
+      lifecycle: { init: false, shutdown: false },
+      events: { emit: [], subscribe: [] },
     } satisfies CompiledModuleIR;
 
     const ops = new Map([
@@ -181,6 +186,7 @@ describe("bindCompiledModule structural", () => {
       aiTasks: new Map(),
       aiTools: new Map(),
       knownOps: new Set(["bump"]),
+      events: { emit: [], subscribe: [] },
     };
 
     const { ctx, calls } = fakeCtx();

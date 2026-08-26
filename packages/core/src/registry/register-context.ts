@@ -1,6 +1,7 @@
 import {
   err,
   failure,
+  moduleFailure,
   ok,
   type ActionClassifier,
   type ActionTypeDefinition,
@@ -34,6 +35,8 @@ import {
   type LocalizationContributor,
   type MemoryKindDefinition,
   type MigrationDefinition,
+  type ModuleEventPublisher,
+  type ModuleEventSubscription,
   type ModuleManifest,
   type ModuleRegisterContext,
   type NarrativeContextProvider,
@@ -307,6 +310,35 @@ export function createRegisterContext(
       const check = requireRegister(`migration:${def.slice}`);
       if (!check.ok) return track(check);
       return track(push(index.migrations, def));
+    },
+    registerEventPublisher(def: ModuleEventPublisher) {
+      const existing = index.eventPublishers.get(def.name);
+      if (existing) {
+        // Duplicate publisher → MODULE_EVENT_DUPLICATE with BOTH module ids
+        // (specs/03 E16, specs/06 §7.3 uniqueness).
+        return track(
+          err(
+            moduleFailure(
+              "MODULE_EVENT_DUPLICATE",
+              `duplicate event publisher "${def.name}" (modules "${existing.moduleId}" and "${manifest.id}"). Hint: exactly one module may publish a canonical event name.`,
+              {
+                moduleId: manifest.id,
+                event: def.name,
+                moduleIds: [existing.moduleId, manifest.id],
+              },
+            ),
+          ),
+        );
+      }
+      const check = requireRegister(`event-emit:${def.name}`);
+      if (!check.ok) return track(check);
+      index.eventPublishers.set(def.name, { ...owner, value: def });
+      return ok(undefined);
+    },
+    registerEventSubscription(def: ModuleEventSubscription) {
+      const check = requireRegister(`event-sub:${def.name}`);
+      if (!check.ok) return track(check);
+      return track(push(index.eventSubscriptions, def));
     },
 
     addInterceptor(interceptor: StageInterceptor) {

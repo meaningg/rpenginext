@@ -11,8 +11,8 @@ const validManifest = {
   displayName: "Example Module",
   description: "Demonstrates the module contract",
   engines: {
-    core: "^0.1.0",
-    contracts: "^0.1.0",
+    core: "^1.0.0",
+    contracts: "^1.0.0",
   },
   priority: 500,
   provides: ["capability:example"],

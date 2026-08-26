@@ -7,7 +7,7 @@
 Все фрагменты живут **внутри** `defineModule({ … })`, если не сказано иное.
 
 Тесты авторов: `@rpengineext/module-sdk/test` (§10).  
-Scaffold recipes сейчас: `state | seed-narrative | guard | full`; Platform 1.0: + `ai-tool | access-read | migrate` ([spec 05](../specs/05-scaffold-and-migrations.md)).
+Scaffold recipes (Platform 1.0, [spec 05 §4](../specs/05-scaffold-and-migrations.md)): `state | seed-narrative | guard | full | ai-tool | access-read | migrate | events`.
 
 ---
 
@@ -447,6 +447,73 @@ await testModule(createMoodModule(), {
 
 ---
 
+## 11. Migrations (совместимость сейвов)
+
+*Scaffold: `bun run create-module <id> --recipe migrate`*  
+Полный путь в spec 05 §6: bump `schemaVersion` → `state.migrations[from]` → тест загрузки старого сейва.
+
+```ts
+state: {
+  name: "my_mod",
+  schemaVersion: 2,
+  schema: SliceV2Schema,
+  initial: { schemaVersion: 2 as const, name: "" },
+  ops: { /* ops уже под новую версию */ },
+  migrations: {
+    1: (old: unknown) => {
+      const v1 = old as { oldName?: string };
+      return { schemaVersion: 2 as const, name: v1.oldName?.trim() || "migrated" };
+    },
+  },
+},
+```
+
+- Core мигрирует при `loadSession`; **unmigratable** версия → fail load
+  `MODULE_SLICE_UNMIGRATABLE` (E14), никогда silent data drop.
+- Тест: сохрани snapshot со `schemaVersion: 1` (fixture) → загрузи → slice в v2.
+
+---
+
+## 12. Events (push между модулями)
+
+*Scaffold: `bun run create-module <id> --recipe events`*  
+Нормы: [sdk-reference → events](./sdk-reference.md#events) и [conventions.md §4](./conventions.md#4-events-norms-spec-06-7).
+
+**Publisher** (emit только в `committed` / `rejected`):
+
+```ts
+events: {
+  emit: [{ name: "changed", schema: ChangedPayloadSchema }],
+},
+turn: {
+  committed(ctx) {
+    ctx.emit("my_mod.changed", { n: (ctx.slice as { n: number }).n + 1 });
+  },
+},
+```
+
+**Subscriber** (observe-only; follow-up работу — через `scheduleSystem`):
+
+```ts
+events: {
+  subscribe: [
+    {
+      name: "my_mod.changed",
+      handler(ctx, { payload }) {
+        // ctx.op / deny здесь fail-loud (E15/E20)
+        ctx.scheduleSystem({ reason: "other_mod.sync", mode: "background" });
+      },
+    },
+  ],
+},
+```
+
+Тест (harness): `ctx.emit` в committed → `expectEvent(h, "my_mod.changed", { n: 1 })`;
+emit в turn.change → turn rejected `MODULE_EVENT_EMIT_FORBIDDEN`;
+handler throw → turn committed + warning (E21).
+
+---
+
 ## Куда дальше
 
 | Нужно | Документ |
@@ -454,5 +521,8 @@ await testModule(createMoodModule(), {
 | Все поля и границы | [sdk-reference.md](./sdk-reference.md) |
 | Как писать Zod | [schemas.md](./schemas.md) |
 | Старт с нуля | [README.md](./README.md) |
+| Коды ошибок E01–E26 | [errors.md](./errors.md) |
+| Политика совместимости | [compatibility.md](./compatibility.md) |
+| Конвенции (priority, readModel, events) | [conventions.md](./conventions.md) |
 | Platform 1.0 (harness/host/errors) | [../specs/README.md](../specs/README.md) |
 | Живой код | `packages/modules/*` |

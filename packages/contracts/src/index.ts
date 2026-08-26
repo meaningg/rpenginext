@@ -17,12 +17,16 @@ export {
 export {
   type Result,
   type Failure,
+  type FailureDetails,
   ok,
   err,
   failure,
+  moduleFailure,
   mapResult,
   isOk,
   isErr,
+  ModuleCtxViolation,
+  isModuleCtxViolation,
 } from "./result.ts";
 
 export {
@@ -59,6 +63,11 @@ export {
   BOOT_FAILURE_CODES,
   type BootFailureCode,
   BootFailureCodeSchema,
+  MODULE_FAILURE_CODES,
+  type ModuleFailureCode,
+  ModuleFailureCodeSchema,
+  MODULE_EVENT_MAX_CASCADE_DEPTH,
+  MODULE_EVENT_MAX_BURST_PER_TURN,
 } from "./errors.ts";
 
 export {
@@ -241,15 +250,33 @@ export type { ModuleRegisterContext } from "./modules/register-context.ts";
 
 export {
   MODULE_IR_VERSION,
+  SUPPORTED_MODULE_IR_VERSIONS,
   type ModuleIrVersion,
   type CompiledOpIr,
   type CompiledSliceIr,
   type CompiledMomentsIr,
+  type CompiledEventEmitIr,
+  type CompiledEventSubscribeIr,
+  type CompiledEventsIr,
+  type CompiledLifecycleIr,
   type CompiledAiTaskIr,
   type CompiledAiToolIr,
   type CompiledModuleIR,
   type CompiledModule,
 } from "./modules/compiled-ir.ts";
+
+export {
+  MODULE_EVENTS_EXTRAS_KEY,
+  type ModuleEventName,
+  type ModuleEmitDecl,
+  type ModuleSubscribeDecl,
+  type ModuleEvent,
+  type ModuleEventPublisher,
+  type ModuleEventSubscription,
+  type ModuleSubscribeCtx,
+  enqueueModuleEvent,
+  takeModuleEvents,
+} from "./modules/module-events.ts";
 
 export {
   MODULE_OP_PROPOSALS_EXTRAS_KEY,
@@ -327,6 +354,8 @@ export {
   type SessionMeta,
   SessionMetaSchema,
   EnabledModuleRefSchema,
+  type PendingSystemTurnSnapshot,
+  PendingSystemTurnSchema,
 } from "./persistence/snapshot.ts";
 
 export type {

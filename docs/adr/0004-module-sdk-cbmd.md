@@ -1,6 +1,6 @@
 # ADR 0004: Module SDK (CBMD) as the only author path
 
-> **Status:** Accepted  
+> **Status:** Accepted — **author path frozen at SDK 1.0.0** (Module Platform 1.0, 2026-08-26)
 > **Date:** 2026-08-18
 
 ## Context
@@ -57,3 +57,16 @@ That contradicted the product goal: **add gameplay without studying core**.
 
 - Open-ended third-party `.use(anyPlugin)` without a versioned capability kind.
 - Exposing pipeline stage interceptors on the author surface in v1.
+
+## Freeze note (SDK 1.0.0)
+
+As of Module Platform 1.0 the author path is **frozen**:
+
+- Capability kinds closed set (incl. `events`), lifecycle hooks `init`/`shutdown`
+  normative — [specs/01](../specs/01-sdk-contract-freeze.md).
+- Moment permissions table normative; changes = MAJOR
+  ([compatibility.md](../modules/compatibility.md)).
+- Author docs teach only `defineModule` + `@rpengineext/module-sdk/test`.
+- IR stays fully serializable (JSON) for polyglot readiness (spec 00 §4.11).
+- Post-release core-change rule: only bugfix / ADR / “cannot express in SDK” proof
+  ([specs/07 §11](../specs/07-release-and-versioning.md)).
