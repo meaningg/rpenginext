@@ -48,15 +48,70 @@ describe("passage helpers", () => {
     expect(parts.join(" ")).toContain("табаком");
   });
 
-  test("marks em-dash paragraphs as speech blocks", () => {
+  test("marks pure dialogue paragraphs as speech blocks", () => {
+    const blocks = parseNarrativeBlocks("Ты входишь в зал.\n\n— Садись.");
+    expect(blocks[0]?.role).toBe("narration");
+    expect(blocks[1]?.role).toBe("speech");
+    expect(blocks[1]?.spans.every((s) => s.kind === "speech")).toBe(true);
+  });
+
+  test("keeps mixed dialogue+narration blocks plain with speech spans", () => {
     const blocks = parseNarrativeBlocks(
-      "Ты входишь в зал.\n\n— Садись, — бросает бармен. — Пиво ещё тёплое.",
+      "— Садись, — бросает бармен. — Пиво ещё тёплое.",
     );
-    // Second replica after ". —" becomes its own speech block for readability.
+    // "бармен. — Пиво" splits the paragraph: attribution half stays plain,
+    // the attribution-less dialogue line keeps the speech plaque.
     expect(blocks.length).toBeGreaterThanOrEqual(2);
     expect(blocks[0]?.role).toBe("narration");
-    expect(blocks.slice(1).every((b) => b.role === "speech")).toBe(true);
-    expect(blocks[1]?.spans.some((s) => s.kind === "text")).toBe(true);
+    expect(blocks[1]?.role).toBe("speech");
+    const speech = blocks
+      .flatMap((b) => b.spans)
+      .filter((s) => s.kind === "speech")
+      .map((s) => s.text);
+    expect(speech).toEqual(["— Садись, —", "— Пиво ещё тёплое."]);
+  });
+
+  test("keeps guillemet dialogue with inner dashes intact", () => {
+    const blocks = parseNarrativeBlocks(
+      "«Ты часто здесь бываешь? — спросил он. — Лицо знакомое». Мию хихикнула.",
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.role).toBe("narration");
+    const speech = blocks[0]?.spans.find((s) => s.kind === "speech");
+    expect(speech?.text).toBe(
+      "«Ты часто здесь бываешь? — спросил он. — Лицо знакомое»",
+    );
+  });
+
+  test("highlights dash run and leaves trailing narration plain", () => {
+    const blocks = parseNarrativeBlocks(
+      "Она махнула рукой. — Это лейтенант Кейл с «Исполнителя», а это Лира, она только что вернулась с Набу». Лейтенант кивнул тебе.",
+    );
+    expect(blocks[0]?.role).toBe("narration");
+    const spans = blocks.flatMap((b) => b.spans);
+    const speech = spans.filter((s) => s.kind === "speech").map((s) => s.text);
+    expect(speech).toEqual([
+      "— Это лейтенант Кейл с «Исполнителя», а это Лира, она только что вернулась с Набу»",
+    ]);
+    const tail = spans
+      .filter((s) => s.kind === "text")
+      .map((s) => s.text)
+      .join("");
+    expect(tail).toContain("Лейтенант кивнул тебе.");
+  });
+
+  test("keeps parenthetical dashes as plain narration", () => {
+    const blocks = parseNarrativeBlocks(
+      "Несколько посетителей — в основном контрабандисты — поднимают головы.",
+    );
+    expect(blocks[0]?.role).toBe("narration");
+    expect(blocks[0]?.spans.every((s) => s.kind === "text")).toBe(true);
+  });
+
+  test("keeps attribution after guillemet plain", () => {
+    const blocks = parseNarrativeBlocks("«Конечно», — ответила она.");
+    expect(blocks[0]?.role).toBe("narration");
+    expect(blocks[0]?.spans.map((s) => s.kind)).toEqual(["speech", "text"]);
   });
 
   test("highlights guillemet speech inside narration", () => {

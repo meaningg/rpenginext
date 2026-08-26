@@ -1,6 +1,6 @@
 import {
   ArrowLeft,
-  MessagesSquare,
+  PanelRight,
   Save,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -17,23 +17,21 @@ export function PlayTopBar({
   title,
   stageHint,
   busy,
-  dialogueOpen,
-  dialogueCount,
+  panelOpen,
+  onTogglePanel,
   saving,
   readingSize,
   onReadingSizeChange,
-  onToggleDialogue,
   onSave,
 }: {
   readonly title: string;
   readonly stageHint: string | null;
   readonly busy: boolean;
-  readonly dialogueOpen: boolean;
-  readonly dialogueCount: number;
+  readonly panelOpen: boolean;
+  readonly onTogglePanel: () => void;
   readonly saving: boolean;
   readonly readingSize: ReadingSize;
   readonly onReadingSizeChange: (size: ReadingSize) => void;
-  readonly onToggleDialogue: () => void;
   readonly onSave: () => void;
 }) {
   return (
@@ -100,17 +98,17 @@ export function PlayTopBar({
         </div>
 
         <Button
-          variant={dialogueOpen ? "secondary" : "ghost"}
+          variant={panelOpen ? "secondary" : "ghost"}
           size="sm"
-          onClick={onToggleDialogue}
-          aria-pressed={dialogueOpen}
-          className={cn(dialogueOpen && "border-accent/25 bg-accent-muted")}
+          onClick={onTogglePanel}
+          aria-pressed={panelOpen}
+          aria-label={
+            panelOpen ? COPY.play.closePanel : COPY.play.panel
+          }
+          className={cn(panelOpen && "border-accent/25 bg-accent-muted")}
         >
-          <MessagesSquare className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{COPY.play.dialogue}</span>
-          <span className="font-mono text-[11px] text-fg-subtle">
-            {dialogueCount}
-          </span>
+          <PanelRight className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{COPY.play.panel}</span>
         </Button>
         <Button variant="secondary" size="sm" loading={saving} onClick={onSave}>
           <Save className="h-3.5 w-3.5" />

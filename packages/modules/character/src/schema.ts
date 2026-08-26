@@ -78,6 +78,47 @@ export const StoryCharacterSchema = z
 
 export type StoryCharacter = z.infer<typeof StoryCharacterSchema>;
 
+/**
+ * Host-facing profile: current authoritative character view (read-model).
+ * Always contains all four text fields (empty when not present) so callers
+ * can render uniformly without key checks.
+ */
+export const CharacterProfileSchema = z
+  .object({
+    present: z.boolean(),
+    name: z.string(),
+    appearance: z.string(),
+    features: z.string(),
+    outfit: z.string(),
+  })
+  .strict();
+
+export type CharacterProfile = z.infer<typeof CharacterProfileSchema>;
+
+/**
+ * Maps a slice to the public profile shape.
+ *
+ * @param slice - parsed character slice
+ */
+export function toCharacterProfile(slice: CharacterSlice): CharacterProfile {
+  if (!slice.present) {
+    return {
+      present: false,
+      name: "",
+      appearance: "",
+      features: "",
+      outfit: "",
+    };
+  }
+  return {
+    present: true,
+    name: slice.name,
+    appearance: slice.appearance,
+    features: slice.features,
+    outfit: slice.outfit,
+  };
+}
+
 export const OutfitSyncInputSchema = z
   .object({
     sourceTurnId: z.string().min(1),

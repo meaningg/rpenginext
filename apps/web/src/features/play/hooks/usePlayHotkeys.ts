@@ -9,19 +9,19 @@ import {
 /**
  * Global play hotkeys (layout-independent via event.code).
  *
- * - Esc: close dialogue drawer/panel
+ * - Esc: close play inspector panel
  * - physical `/` (Slash): focus composer when not already in an input
  */
 export function usePlayHotkeys(options: {
   readonly enabled?: boolean;
-  readonly dialogueOpen: boolean;
-  readonly onCloseDialogue: () => void;
+  readonly panelOpen: boolean;
+  readonly onClosePanel: () => void;
   readonly onFocusComposer: () => void;
 }): void {
   const {
     enabled = true,
-    dialogueOpen,
-    onCloseDialogue,
+    panelOpen,
+    onClosePanel,
     onFocusComposer,
   } = options;
 
@@ -32,9 +32,9 @@ export function usePlayHotkeys(options: {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
 
       if (isEscapeKey(event)) {
-        if (dialogueOpen) {
+        if (panelOpen) {
           event.preventDefault();
-          onCloseDialogue();
+          onClosePanel();
         }
         return;
       }
@@ -48,5 +48,5 @@ export function usePlayHotkeys(options: {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [enabled, dialogueOpen, onCloseDialogue, onFocusComposer]);
+  }, [enabled, panelOpen, onClosePanel, onFocusComposer]);
 }

@@ -84,6 +84,18 @@ export const COPY = {
     readingSizeMd: "A",
     readingSizeLg: "A+",
     focusComposer: "Фокус на ввод",
+    closePanel: "Скрыть панель",
+    inspector: "Панель игры",
+    panel: "Панель",
+  },
+  character: {
+    tab: "Персонаж",
+    appearance: "Внешность",
+    features: "Особенности",
+    outfit: "Наряд",
+    emptyTitle: "Персонаж пока не создан",
+    emptyBody: "Информация появится после начала истории.",
+    unavailable: "Профиль персонажа недоступен.",
   },
   errors: {
     offline: "Нет связи с сервером. Проверьте, что API запущен.",

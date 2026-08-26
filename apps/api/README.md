@@ -20,7 +20,7 @@ Default: `http://127.0.0.1:8787`
 | POST | `/v1/players` | no | local player + token |
 | GET | `/v1/templates` | no | story catalog |
 | GET/POST | `/v1/sessions` | yes | list / create from template |
-| GET | `/v1/sessions/:id` | yes | summary + passage |
+| GET | `/v1/sessions/:id` | yes | summary + passage + live character profile |
 | POST | `/v1/sessions/:id/actions` | yes | `?wait=1` for sync |
 | GET | `/v1/sessions/:id/events` | yes | SSE progress + draft stream |
 | POST | `/v1/sessions/:id/save` | yes | explicit save |

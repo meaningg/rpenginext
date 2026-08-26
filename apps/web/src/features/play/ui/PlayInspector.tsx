@@ -14,31 +14,35 @@ import {
   CHROME_HEADER_CLASS,
   CHROME_PANEL_CLASS,
 } from "../../../widgets/app-shell/chrome.ts";
+import type { CharacterProfile } from "../../../entities/session/model.ts";
+import { CharacterCard } from "./CharacterCard.tsx";
+
+/** Right-side play inspector tabs. */
+export type InspectorTab = "dialogue" | "character";
 
 /**
- * Dialogue inspector — same elevated material as product sidebar.
+ * Right-side inspector: dialogue archive + live character profile tabs.
+ * Same elevated material as the product sidebar.
  */
-export function DialoguePanel({
+export function PlayInspector({
   messages,
+  character,
   open,
+  tab,
+  onTabChange,
   onClose,
   onJump,
   className,
 }: {
   readonly messages: readonly ChatMessage[];
+  readonly character: CharacterProfile | null;
   readonly open: boolean;
+  readonly tab: InspectorTab;
+  readonly onTabChange: (tab: InspectorTab) => void;
   readonly onClose: () => void;
   readonly onJump: (id: string) => void;
   readonly className?: string;
 }) {
-  const [query, setQuery] = useState("");
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return messages;
-    return messages.filter((m) => m.content.toLowerCase().includes(q));
-  }, [messages, query]);
-
   if (!open) return null;
 
   return (
@@ -49,23 +53,98 @@ export function DialoguePanel({
         className,
       )}
     >
-      <div className={cn(CHROME_HEADER_CLASS, "justify-between gap-2 px-4")}>
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-fg">{COPY.play.dialogue}</p>
-          <p className="font-mono text-[11px] text-fg-subtle">
-            {COPY.play.dialogueCount(messages.length)}
-          </p>
+      <div className={cn(CHROME_HEADER_CLASS, "justify-between gap-2 px-3")}>
+        <div
+          className="flex items-center gap-0.5 rounded-lg border border-border p-0.5"
+          role="tablist"
+          aria-label={COPY.play.inspector}
+        >
+          <TabButton
+            active={tab === "dialogue"}
+            onClick={() => onTabChange("dialogue")}
+            label={COPY.play.dialogue}
+            count={messages.length}
+          />
+          <TabButton
+            active={tab === "character"}
+            onClick={() => onTabChange("character")}
+            label={COPY.character.tab}
+          />
         </div>
         <Button
           variant="ghost"
           size="icon-sm"
           onClick={onClose}
-          aria-label={COPY.play.closeDialogue}
+          aria-label={COPY.play.closePanel}
         >
           <X className="h-4 w-4" />
         </Button>
       </div>
 
+      {tab === "dialogue" ? (
+        <DialogueTab messages={messages} onJump={onJump} />
+      ) : (
+        <CharacterCard profile={character} />
+      )}
+    </aside>
+  );
+}
+
+/**
+ * Inspector tab button with active state.
+ */
+function TabButton({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  readonly active: boolean;
+  readonly onClick: () => void;
+  readonly label: string;
+  readonly count?: number;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium transition",
+        active
+          ? "bg-accent-muted text-accent"
+          : "text-fg-subtle hover:bg-white/[0.04] hover:text-fg",
+      )}
+    >
+      {label}
+      {typeof count === "number" ? (
+        <span className="font-mono text-[10px] text-fg-subtle">{count}</span>
+      ) : null}
+    </button>
+  );
+}
+
+/**
+ * Dialogue archive tab: search + jump list.
+ */
+function DialogueTab({
+  messages,
+  onJump,
+}: {
+  readonly messages: readonly ChatMessage[];
+  readonly onJump: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return messages;
+    return messages.filter((m) => m.content.toLowerCase().includes(q));
+  }, [messages, query]);
+
+  return (
+    <>
       <div className="border-b border-border px-3 py-2.5">
         <Input
           value={query}
@@ -119,6 +198,6 @@ export function DialoguePanel({
           )}
         </div>
       </ScrollArea>
-    </aside>
+    </>
   );
 }

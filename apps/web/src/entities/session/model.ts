@@ -1,6 +1,18 @@
 import type { Passage } from "../turn/model.ts";
 
 /**
+ * Current player-character profile (module `character.profile` read-model).
+ * All text fields are present; empty strings when no character is seeded.
+ */
+export interface CharacterProfile {
+  readonly present: boolean;
+  readonly name: string;
+  readonly appearance: string;
+  readonly features: string;
+  readonly outfit: string;
+}
+
+/**
  * Session row in the resume list.
  */
 export interface SessionSummary {
@@ -17,4 +29,6 @@ export interface SessionSummary {
  */
 export interface SessionView extends SessionSummary {
   readonly passage: Passage | null;
+  /** Character profile; null when the read-model is unavailable (module absent). */
+  readonly character: CharacterProfile | null;
 }

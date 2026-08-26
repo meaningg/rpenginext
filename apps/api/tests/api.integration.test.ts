@@ -46,17 +46,33 @@ describe("API integration", () => {
       method: "POST",
       headers: player.headers,
       body: JSON.stringify({
-        templateId: "demo.hello",
+        templateId: "demo.book",
         runOpening: true,
       }),
     });
     expect(sessionRes.status).toBe(201);
     const sessionBody = (await sessionRes.json()) as {
-      session: { sessionId: string; passage: { prose: string } | null };
+      session: {
+        sessionId: string;
+        passage: { prose: string } | null;
+        character: {
+          present: boolean;
+          name: string;
+          appearance: string;
+          features: string;
+          outfit: string;
+        } | null;
+      };
       openingTurn?: { status: string };
     };
     expect(sessionBody.session.sessionId).toBeTruthy();
     expect(sessionBody.openingTurn?.status ?? "committed").toBe("committed");
+
+    // Character module read-model: seeded from demo.book template.
+    expect(sessionBody.session.character?.present).toBe(true);
+    expect(sessionBody.session.character?.name).toBe("Алекс");
+    expect(sessionBody.session.character?.appearance).toContain("тёмные волосы");
+    expect(sessionBody.session.character?.outfit).toContain("кожаная куртка");
 
     const actionRes = await fetch(
       `${baseUrl}/v1/sessions/${sessionBody.session.sessionId}/actions?wait=1`,

@@ -16,6 +16,7 @@
     "@rpengineext/core": "workspace:*",
     "@rpengineext/host-bootstrap": "workspace:*",
     "@rpengineext/logger": "workspace:*",
+    "@rpengineext/module-character": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
