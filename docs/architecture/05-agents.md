@@ -213,3 +213,14 @@ Turn markdown trace (dossier, core `TurnTracer`):
 See [13-turn-tracing.md](./13-turn-tracing.md).
 
 Never write API keys. Extra redact keys via config.
+
+## 15. Narrative prompt profiles (ADR 0007)
+
+Промпт `narrative.write` — **версионируемый контент вне core**, а не код core.
+
+- Профиль = JSON-файл `{id}@{version}.json` (`labels` + `systemCore` + `rulesReminder` + `repair` + опциональные `constraints`), см. `data/prompts/README.md`.
+- Registry на boot: built-in `default@1.0.0` (текст Platform 1.0 1:1) + файлы из `RP_PROMPTS_DIR` (дефолт `data/prompts/`, верхний уровень). Валидация zod + закрытый словарь плейсхолдеров (`{{locale}}`, `{{lengthGuidance}}`, `{{playerActionLabel}}`, `{{issues}}`, `{{hints}}`); нарушение → `CONFIG_INVALID`.
+- Выбор per session: `RP_NARRATIVE_PROMPT_PROFILE` → `agents.promptProfiles[modelAlias]` → `agents.defaultPromptProfile` → `default@1.0.0`. Смена модели = правка маппинга, не текста промпта.
+- Профиль меняет только текст промпта и дефолтные `constraints` (явные `task.constraints` побеждают). JSON-контракт `{prose, meta}`, schema, repair-loop, streaming, rollback — не меняются. Секции модулей (`NarrativePromptContributor`) мержатся поверх как раньше.
+- Audit/trace: `promptProfile: "id@version"` в `rawMeta` (`buildLlmAuditMeta`), structured log и turn trace (заголовок «Agent task» + NarrativeBrief) — данные для внешнего evaluator по паре (model, promptProfile).
+- Механизм (registry, резолвер, подстановка) — в core один раз; дальше правка промпта = правка файла, без релизов core. `action.interpret` — та же схема позже, отдельной задачей.

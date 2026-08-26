@@ -110,6 +110,8 @@ export interface TurnPipelineDeps {
   readonly events: EventBusPort;
   readonly coreVersion: string;
   readonly contractsVersion: string;
+  /** Narrative prompt profile ref `id@version` (ADR 0007, written into brief). */
+  readonly promptProfileRef?: string;
   readonly getModulePermissions: (moduleId: string) => readonly PermissionToken[];
   onEventDispatched?: (sessionId: string, event: import("@rpengineext/contracts").ModuleEvent) => void;
   /** Resolves a registered readModel against a state view (fail-loud contract). */
@@ -161,6 +163,7 @@ export class TurnPipeline {
   private readonly events: EventBusPort;
   private readonly coreVersion: string;
   private readonly contractsVersion: string;
+  private readonly promptProfileRef?: string;
   private readonly getModulePermissions: (
     moduleId: string,
   ) => readonly PermissionToken[];
@@ -188,6 +191,7 @@ export class TurnPipeline {
     this.events = deps.events;
     this.coreVersion = deps.coreVersion;
     this.contractsVersion = deps.contractsVersion;
+    this.promptProfileRef = deps.promptProfileRef;
     this.getModulePermissions = deps.getModulePermissions;
     this.readModel = deps.readModel;
     this.onEventDispatched = deps.onEventDispatched;
@@ -1489,6 +1493,9 @@ export class TurnPipeline {
       },
       /** Compiled sections for traces/critics (not dumped into the LLM user msg). */
       narrativePromptSections: serializedPromptSections,
+      ...(this.promptProfileRef
+        ? { promptProfile: this.promptProfileRef }
+        : {}),
       ...(Object.keys(localeStrings).length > 0 ? { localeStrings } : {}),
       ...(resourceCosts ? { resourceCosts } : {}),
     };

@@ -56,6 +56,10 @@ export interface AgentOrchestratorOptions {
   ) => readonly PermissionToken[];
   /** Prefer LlmPort streaming and emit draft deltas. */
   readonly streaming?: boolean;
+  /** Narrative prompt profile resolved at boot (ADR 0007). */
+  readonly promptProfile?: import("./prompts/profile-types.ts").NarrativePromptProfile;
+  /** `id@version` ref for audit (no secrets). */
+  readonly promptProfileRef?: string;
 }
 
 export interface ToolInvokeRecord {
@@ -120,6 +124,8 @@ export class AgentOrchestrator {
           model: this.defaultModel,
           log: this.log,
           defaultTemperature: options.defaultTemperature,
+          promptProfile: options.promptProfile,
+          promptProfileRef: options.promptProfileRef,
         })
       : undefined;
   }
@@ -508,6 +514,10 @@ export class AgentOrchestrator {
     started: number,
   ): void {
     const durationMs = this.clock.nowMs() - started;
+    const promptProfile =
+      typeof result.rawMeta?.promptProfile === "string"
+        ? result.rawMeta.promptProfile
+        : undefined;
     if (result.ok) {
       this.log.info(
         {
@@ -515,6 +525,7 @@ export class AgentOrchestrator {
           type: task.type,
           durationMs,
           repaired: result.rawMeta?.repaired === true,
+          ...(promptProfile ? { promptProfile } : {}),
         },
         "agent task finished",
       );

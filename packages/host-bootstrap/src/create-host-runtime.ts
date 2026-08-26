@@ -285,6 +285,8 @@ export async function createHostRuntime(
         defaultTimeoutMs: hostEnv.llm.timeoutMs ?? 60_000,
         maxRepairAttempts: 2,
         streaming: hostEnv.agentsStreaming,
+        promptProfilesDir: hostEnv.promptsDir,
+        promptProfileOverride: hostEnv.narrativePromptProfile,
       },
       tracing: {
         enabled: true,

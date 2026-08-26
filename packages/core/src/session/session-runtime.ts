@@ -57,6 +57,8 @@ export interface SessionRuntimeOptions {
   readonly tracer: TurnTracer;
   readonly persistence: PersistencePort;
   readonly events: EventBus;
+  /** Narrative prompt profile ref `id@version` (ADR 0007, for brief/traces). */
+  readonly promptProfileRef?: string;
 }
 
 /**
@@ -111,6 +113,7 @@ export class SessionRuntime implements Engine {
       events: this.events,
       coreVersion: CORE_VERSION,
       contractsVersion: CONTRACTS_VERSION,
+      promptProfileRef: options.promptProfileRef,
       getModulePermissions: (moduleId) =>
         this.registry.getModulePermissions(moduleId),
       readModel: (name, state, args) =>

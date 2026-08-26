@@ -34,6 +34,8 @@ Names from `HOST_ENV` / related readers:
 | `RP_DISABLE_MODULES` | comma module ids | remove from resolved set after profile/list |
 | `RP_AGENTS_STREAMING` | `0` disables draft stream | default on |
 | `RP_AGENTS_MODE` | explicit agents mode | `mock` \| `llm`; wins over credentials-based resolution (default: `llm` if API key present, else `mock`) |
+| `RP_PROMPTS_DIR` | narrative prompt profiles dir (ADR 0007) | default `data/prompts`; явно заданный несуществующий рут → `CONFIG_INVALID`, дефолтный отсутствует → warn + built-in |
+| `RP_NARRATIVE_PROMPT_PROFILE` | narrative prompt profile quick override `id@version` (ADR 0007 D3) | побеждает маппинг `promptProfiles` и `defaultPromptProfile`; неизвестный ref → `CONFIG_INVALID` |
 | `RP_HTTP_HOST` | API bind host | default `127.0.0.1` |
 | `RP_HTTP_PORT` | API bind port | default `8787`; `0` = ephemeral (tests) |
 | `RP_CORS_ORIGIN` | CORS allow origin | default `http://127.0.0.1:5173` |
@@ -72,6 +74,11 @@ EngineConfig {
     streaming: boolean
     maxToolRounds: number
     temperature?: number
+    // Narrative prompt profiles (ADR 0007):
+    promptProfiles?: Record<modelAlias, "id@version">  // per-model mapping
+    defaultPromptProfile?: string                        // default "default@1.0.0"
+    promptProfileOverride?: string                      // env quick override, wins
+    promptProfilesDir?: string                          // default "data/prompts"
     // required agent/narrative failure always fails the whole turn
   }
   persistence: {
@@ -170,4 +177,14 @@ Boot fails if:
 - secret missing while live LLM mode enabled;
 - enabled module not found / manifest invalid under `strictManifest`;
 - capability graph unsatisfied under production profile;
-- stories directory missing or invalid example templates fail parse.
+- stories directory missing or invalid example templates fail parse;
+- prompt profile file invalid / unknown `id@version` / explicitly missing `RP_PROMPTS_DIR` (ADR 0007).
+
+## 7. Narrative prompt profiles (ADR 0007)
+
+Промпт `narrative.write` — версионируемый JSON-контент вне core (`data/prompts/`), не код.
+
+- Файлы: `{id}@{version}.json`, верхний уровень директории; формат и плейсхолдеры — [data/prompts/README.md](../../data/prompts/README.md).
+- Git-политика как у `data/stories`: `README.md` + `examples/` tracked, приватные профили в корне — gitignored.
+- Выбор: `RP_NARRATIVE_PROMPT_PROFILE` > `agents.promptProfiles[modelAlias]` > `agents.defaultPromptProfile` > `default@1.0.0`.
+- Валидация на boot: schema (zod), semver, имя файла, закрытый словарь плейсхолдеров, уникальность `id@version`; любая ошибка → `CONFIG_INVALID` (fail boot).

@@ -15,6 +15,13 @@ dist
 !/data/stories/demo.hello.json
 !/data/stories/demo.book.json
 
+# prompt profiles (ADR 0007): only README + examples are tracked
+!/data/prompts/
+/data/prompts/**
+!/data/prompts/README.md
+!/data/prompts/examples/
+!/data/prompts/examples/**
+
 packages/core/.tmp-test-traces/
 
 # code coverage
