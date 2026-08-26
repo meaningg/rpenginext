@@ -77,6 +77,8 @@ AI предлагает. Модули помогают и ограничиваю
 | [../adr/0004-module-sdk-cbmd.md](../adr/0004-module-sdk-cbmd.md) | ADR: Module SDK / CBMD |
 | [../adr/0005-moments-native-core.md](../adr/0005-moments-native-core.md) | ADR: moments-native core (deferred) |
 | [../adr/0006-local-module-discovery.md](../adr/0006-local-module-discovery.md) | ADR: local module discovery (zero-wiring pool, implemented, host-bootstrap) |
+| [../adr/0007-narrative-prompt-profiles.md](../adr/0007-narrative-prompt-profiles.md) | ADR: versioned narrative prompt profiles (JSON packs, model-mapped, implemented) |
+| [docs/adr/0007-narrative-prompt-profiles.md](./docs/adr/0007-narrative-prompt-profiles.md) | ADR: versioned narrative prompt profiles (JSON packs, model-mapped, implemented) |
 | [../adr/0003-tool-calling-and-background-system-turns.md](../adr/0003-tool-calling-and-background-system-turns.md) | ADR: tools + background turns |
 
 ## 5. Высокоуровневая схема

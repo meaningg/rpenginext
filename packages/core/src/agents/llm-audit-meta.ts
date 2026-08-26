@@ -17,6 +17,7 @@ export const LLM_AUDIT_META = {
   attempt: "attempt",
   repaired: "repaired",
   durationMs: "durationMs",
+  promptProfile: "promptProfile",
 } as const;
 
 /**
@@ -30,6 +31,8 @@ export function buildLlmAuditMeta(input: {
   readonly model?: string;
   readonly attempt?: number;
   readonly repaired?: boolean;
+  /** Narrative prompt profile ref `id@version` (ADR 0007 D6). */
+  readonly promptProfile?: string;
 }): JsonObject {
   const messages: JsonValue = input.messages.map((m) => {
     const row: { [key: string]: JsonValue } = {
@@ -62,6 +65,9 @@ export function buildLlmAuditMeta(input: {
   }
   if (input.repaired !== undefined) {
     meta[LLM_AUDIT_META.repaired] = input.repaired;
+  }
+  if (input.promptProfile !== undefined) {
+    meta[LLM_AUDIT_META.promptProfile] = input.promptProfile;
   }
   return meta;
 }

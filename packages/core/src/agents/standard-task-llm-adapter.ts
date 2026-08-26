@@ -21,12 +21,20 @@ import {
   buildNarrativeWriteMessages,
   buildNarrativeWriteRepairMessages,
 } from "./prompts/narrative-write.ts";
+import type { NarrativePromptProfile } from "./prompts/profile-types.ts";
 
 export interface StandardTaskLlmAdapterOptions {
   readonly llm: LlmPort;
   readonly model: string;
   readonly log?: TurnLogger;
   readonly defaultTemperature?: number;
+  /**
+   * Narrative prompt profile resolved at boot (ADR 0007). When absent the
+   * built-in `default@1.0.0` profile is used.
+   */
+  readonly promptProfile?: NarrativePromptProfile;
+  /** `id@version` ref written into rawMeta audit (no secrets). */
+  readonly promptProfileRef?: string;
 }
 
 export interface StandardTaskExecuteOptions {
@@ -55,6 +63,8 @@ export class StandardTaskLlmAdapter {
   private readonly model: string;
   private readonly log?: TurnLogger;
   private readonly defaultTemperature?: number;
+  private readonly promptProfile?: NarrativePromptProfile;
+  private readonly promptProfileRef?: string;
 
   /**
    * @param options - adapter options
@@ -66,6 +76,8 @@ export class StandardTaskLlmAdapter {
       ? options.log.child({ component: "standard-task-llm" })
       : options.log;
     this.defaultTemperature = options.defaultTemperature;
+    this.promptProfile = options.promptProfile;
+    this.promptProfileRef = options.promptProfileRef;
   }
 
   /**
@@ -101,7 +113,12 @@ export class StandardTaskLlmAdapter {
       };
     }
 
-    const maxRepairs = Math.max(0, task.constraints.maxRepairAttempts);
+    const maxRepairs = Math.max(
+      0,
+      task.constraints.maxRepairAttempts ??
+        this.promptProfile?.constraints?.maxRepairAttempts ??
+        0,
+    );
     let messages = this.buildInitialMessages(task);
     let lastRaw = "";
     let lastIssues = "";
@@ -124,7 +141,10 @@ export class StandardTaskLlmAdapter {
         model: this.model,
         messages,
         temperature:
-          task.constraints.temperature ?? this.defaultTemperature ?? 0.7,
+          task.constraints.temperature ??
+          this.promptProfile?.constraints?.temperature ??
+          this.defaultTemperature ??
+          0.7,
         timeoutMs: task.constraints.timeoutMs,
         responseFormat: "json" as const,
         metadata: {
@@ -161,6 +181,7 @@ export class StandardTaskLlmAdapter {
             model: this.model,
             attempt,
             repaired: attempt > 0,
+            promptProfile: this.promptProfileRef,
           }),
         };
       }
@@ -198,6 +219,7 @@ export class StandardTaskLlmAdapter {
           model: this.model,
           attempt,
           repaired: attempt > 0,
+          promptProfile: this.promptProfileRef,
         }),
       };
     }
@@ -216,13 +238,14 @@ export class StandardTaskLlmAdapter {
         model: this.model,
         attempt: maxRepairs,
         repaired: maxRepairs > 0,
+        promptProfile: this.promptProfileRef,
       }),
     };
   }
 
   private buildInitialMessages(task: AgentTask): LlmMessage[] {
     if (task.type === STANDARD_AGENT_TASK_TYPES.narrativeWrite) {
-      return buildNarrativeWriteMessages(task);
+      return buildNarrativeWriteMessages(task, this.promptProfile);
     }
     const input = ActionInterpretInputSchema.safeParse(task.input);
     const payload = input.success ? input.data : task.input;
@@ -255,6 +278,7 @@ export class StandardTaskLlmAdapter {
         previousText,
         issues,
         hints,
+        this.promptProfile,
       );
     }
     const hintBlock =

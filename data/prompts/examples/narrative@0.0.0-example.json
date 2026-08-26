@@ -1,0 +1,23 @@
+{
+  "id": "narrative",
+  "version": "0.0.0-example",
+  "description": "Minimal example profile for gpt-4o experiments (copy to data/prompts root and rename to narrative@0.0.0-example.json is NOT required — this file is only a reference; private profiles live in the root of data/prompts)",
+  "labels": {
+    "playerAction": "Действие игрока:"
+  },
+  "systemCore": "Ты — автор интерактивной книги-ролевой игры. Язык текста: {{locale}}. Ориентир длины: {{lengthGuidance}} Текущий поступок игрока помечен «{{playerActionLabel}} …». Ответ — РОВНО один JSON-объект: { \"prose\": string, \"meta\"?: object }.",
+  "rulesReminder": "---\nПамятка рассказчику: ход — один шаг сцены, дальше действует игрок; не предлагай выбор; пиши на языке locale.",
+  "repair": {
+    "title": "Ответ не прошёл проверку схемы.",
+    "instructions": [
+      "Исправь и верни ТОЛЬКО валидный JSON.",
+      "Проблемы: {{issues}}",
+      "Подсказки: {{hints}}"
+    ],
+    "hintsTitle": "Дополнительно:"
+  },
+  "constraints": {
+    "temperature": 0.6,
+    "maxRepairAttempts": 2
+  }
+}

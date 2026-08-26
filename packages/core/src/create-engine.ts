@@ -19,6 +19,10 @@ import {
   createEmptyMockAgentScript,
   type MockAgentScript,
 } from "./agents/mock-agent-script.ts";
+import {
+  createPromptProfileRegistry,
+  resolveNarrativePromptProfile,
+} from "./agents/prompts/profile-registry.ts";
 import { mergeEngineConfig } from "./config/defaults.ts";
 import type { EngineConfig } from "./config/types.ts";
 import { EventBus } from "./events/event-bus.ts";
@@ -103,6 +107,26 @@ export async function createEngine(
       ? createDefaultMockAgentScript()
       : createEmptyMockAgentScript());
 
+  // Narrative prompt profiles (ADR 0007): load files + resolve per session boot.
+  const promptRegistry = createPromptProfileRegistry({
+    dir: config.agents.promptProfilesDir,
+    explicitDir: config.agents.promptProfilesDir !== undefined,
+    log,
+  });
+  if (!promptRegistry.ok) {
+    return promptRegistry;
+  }
+  const narrativePrompt = resolveNarrativePromptProfile({
+    registry: promptRegistry.value,
+    model: config.agents.defaultModel,
+    profilesByModel: config.agents.promptProfiles,
+    defaultProfile: config.agents.defaultPromptProfile,
+    override: config.agents.promptProfileOverride,
+  });
+  if (!narrativePrompt.ok) {
+    return narrativePrompt;
+  }
+
   const orchestrator = new AgentOrchestrator({
     log,
     clock,
@@ -117,6 +141,8 @@ export async function createEngine(
     maxParallelPerTurn: config.agents.maxParallelPerTurn,
     getModulePermissions: (moduleId) => registry.getModulePermissions(moduleId),
     streaming: config.agents.streaming,
+    promptProfile: narrativePrompt.value.profile,
+    promptProfileRef: narrativePrompt.value.ref,
   });
 
   const tracer = new TurnTracer({
@@ -136,6 +162,7 @@ export async function createEngine(
     tracer,
     persistence,
     events,
+    promptProfileRef: narrativePrompt.value.ref,
   });
 
   log.info(
@@ -143,6 +170,7 @@ export async function createEngine(
       coreVersion: CORE_VERSION,
       contractsVersion: CONTRACTS_VERSION,
       agentsMode,
+      narrativePromptProfile: narrativePrompt.value.ref,
       modules: registry.getModules().map((m) => ({
         id: m.module.manifest.id,
         version: m.module.manifest.version,

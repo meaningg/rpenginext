@@ -217,6 +217,24 @@ describe("host module composition (specs/04)", () => {
   });
 });
 
+describe("readHostEnv (prompt profiles, ADR 0007)", () => {
+  test("parses RP_PROMPTS_DIR and RP_NARRATIVE_PROMPT_PROFILE", () => {
+    const env = readHostEnv({
+      ...BASE_ENV,
+      RP_PROMPTS_DIR: "data/custom-prompts",
+      RP_NARRATIVE_PROMPT_PROFILE: "narrative@2.0.0",
+    });
+    expect(env.promptsDir).toBe("data/custom-prompts");
+    expect(env.narrativePromptProfile).toBe("narrative@2.0.0");
+  });
+
+  test("defaults are undefined when env is absent", () => {
+    const env = readHostEnv({ ...BASE_ENV });
+    expect(env.promptsDir).toBeUndefined();
+    expect(env.narrativePromptProfile).toBeUndefined();
+  });
+});
+
 describe("resolveHostModules (precedence unit)", () => {
   const env = readHostEnv({ ...BASE_ENV, RP_AGENTS_MODE: undefined as never });
 

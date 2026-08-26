@@ -26,6 +26,8 @@ export const HOST_ENV = {
   modules: "RP_MODULES",
   disableModules: "RP_DISABLE_MODULES",
   moduleDirs: "RP_MODULE_DIRS",
+  promptsDir: "RP_PROMPTS_DIR",
+  narrativePromptProfile: "RP_NARRATIVE_PROMPT_PROFILE",
 } as const;
 
 const DEFAULT_DATA_DIR = "data";
@@ -62,6 +64,10 @@ export interface HostEnv {
   readonly disableModules: readonly string[];
   /** Module discovery scan roots (ADR 0006); undefined = default root. */
   readonly moduleDirs: readonly string[] | undefined;
+  /** Narrative prompt profiles dir (ADR 0007); undefined = default `data/prompts`. */
+  readonly promptsDir: string | undefined;
+  /** Narrative prompt profile quick override `id@version` (ADR 0007 D3). */
+  readonly narrativePromptProfile: string | undefined;
 }
 
 /**
@@ -115,6 +121,8 @@ export function readHostEnv(
     modules: parseCommaList(env[HOST_ENV.modules]),
     disableModules: parseCommaList(env[HOST_ENV.disableModules]) ?? [],
     moduleDirs: parseCommaList(env[HOST_ENV.moduleDirs]),
+    promptsDir: emptyToUndefined(env[HOST_ENV.promptsDir]),
+    narrativePromptProfile: emptyToUndefined(env[HOST_ENV.narrativePromptProfile]),
   };
 }
 

@@ -50,6 +50,26 @@ export interface EngineConfig {
     readonly streaming: boolean;
     /** Max model→tool→model rounds for generic tool-calling tasks. */
     readonly maxToolRounds: number;
+    /**
+     * Narrative prompt profiles (ADR 0007): model alias → `id@version`.
+     * Absent mapping falls back to `defaultPromptProfile` → `default@1.0.0`.
+     */
+    readonly promptProfiles?: Readonly<Record<string, string>>;
+    /**
+     * Fallback `id@version` when no per-model mapping matches.
+     * Default: `default@1.0.0` (built-in profile, always present).
+     */
+    readonly defaultPromptProfile?: string;
+    /**
+     * Env quick override (`RP_NARRATIVE_PROMPT_PROFILE`); wins over both
+     * per-model mapping and fallback (experiments without config edits).
+     */
+    readonly promptProfileOverride?: string;
+    /**
+     * Directory with `*.json` prompt profiles; default `data/prompts`.
+     * Explicitly set dir must exist (boot fail), default may be absent (warn).
+     */
+    readonly promptProfilesDir?: string;
   };
   readonly persistence: {
     readonly policy: "per_turn" | "manual";
