@@ -23,7 +23,10 @@ import {
   SLICE_NAME,
   TOOL_IDS,
 } from "../src/index.ts";
-import type { SummarySlice } from "../src/schema.ts";
+import {
+  STORE_SUMMARY_TOOL_PARAMETERS,
+  type SummarySlice,
+} from "../src/schema.ts";
 
 interface ScriptedLlm {
   readonly llm: LlmPort;
@@ -131,6 +134,14 @@ describe("summary module integration", () => {
     }
     const idle1 = await h.value.waitIdle(5_000);
     expect(idle1.ok).toBe(true);
+
+    const summaryRequest = script.summaryRequests[0];
+    expect(script.summaryRequests.length).toBeGreaterThan(0);
+    expect(summaryRequest?.tools).toHaveLength(1);
+    expect(summaryRequest?.tools?.[0]?.name).toBe(TOOL_IDS.store);
+    expect(summaryRequest?.tools?.[0]?.parameters).toEqual(
+      STORE_SUMMARY_TOOL_PARAMETERS,
+    );
 
     const slice1 = h.value.sliceOf<SummarySlice>(SLICE_NAME);
     expect(slice1?.lastSummarizedPairCount).toBe(2);

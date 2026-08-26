@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { JsonObject } from "@rpengineext/contracts";
+
 import { MAX_SUMMARY_LENGTH } from "./constants.ts";
 
 /**
@@ -141,6 +143,24 @@ export const StoreSummaryArgsSchema = z
   .strict();
 
 export type StoreSummaryArgs = z.infer<typeof StoreSummaryArgsSchema>;
+
+/**
+ * Strict JSON Schema advertised to the LLM for `summary.store`.
+ * The archive stays in the task prompt; only the generated summary text is a
+ * tool argument.
+ */
+export const STORE_SUMMARY_TOOL_PARAMETERS: JsonObject = {
+  type: "object",
+  properties: {
+    summary: {
+      type: "string",
+      minLength: 1,
+      maxLength: MAX_SUMMARY_LENGTH,
+    },
+  },
+  required: ["summary"],
+  additionalProperties: false,
+};
 
 /**
  * Tool result: stored chunk meta.
