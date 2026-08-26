@@ -92,7 +92,13 @@ bun run cli:hello --mock --fixture
 bun run cli:book --mock
 ```
 
-Web UI (два терминала, localhost):
+Всё разом — движок (API host) и Web UI одной командой (один терминал):
+
+```bash
+bun start                 # API http://127.0.0.1:8787 + Web http://127.0.0.1:5173 (проксирует /v1 → API)
+```
+
+Без `.env` API стартует в **mock**-режиме (скриптованный LLM). Для раздельных логов — два терминала:
 
 ```bash
 bun run api:mock          # http://127.0.0.1:8787
@@ -104,10 +110,10 @@ bun run web               # http://127.0.0.1:5173 (проксирует /v1 → 
 ```bash
 cp .env.example .env
 # задать RP_LLM_API_KEY, RP_LLM_BASE_URL, RP_LLM_MODEL
+bun start
+# или раздельно: bun run api + bun run web
 bun run cli:hello
 bun run cli:book
-bun run api
-bun run web
 # продолжить: bun run apps/cli/src/main.ts --session <id> --repl
 ```
 
