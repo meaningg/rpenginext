@@ -6,7 +6,7 @@ import { usePlayHotkeys } from "../features/play/hooks/usePlayHotkeys.ts";
 import { useSessionPlay } from "../features/play/hooks/useSessionPlay.ts";
 import { useSmartScroll } from "../features/play/hooks/useSmartScroll.ts";
 import { ActionComposer } from "../features/play/ui/ActionComposer.tsx";
-import { DialoguePanel } from "../features/play/ui/DialoguePanel.tsx";
+import { PlayInspector } from "../features/play/ui/PlayInspector.tsx";
 import { PlayTopBar } from "../features/play/ui/PlayTopBar.tsx";
 import { ReadingStream } from "../features/play/ui/ReadingStream.tsx";
 import { COPY } from "../shared/config/copy.ts";
@@ -42,8 +42,8 @@ export function PlayPage() {
   }, []);
 
   usePlayHotkeys({
-    dialogueOpen: play.dialogueOpen,
-    onCloseDialogue: () => play.setDialogueOpen(false),
+    panelOpen: play.panelOpen,
+    onClosePanel: play.closePanel,
     onFocusComposer: play.focusComposer,
   });
 
@@ -67,12 +67,17 @@ export function PlayPage() {
         title={play.session?.title ?? COPY.common.loading}
         stageHint={play.stageHint}
         busy={play.busy}
-        dialogueOpen={play.dialogueOpen}
-        dialogueCount={play.messages.length}
+        panelOpen={play.panelOpen}
+        onTogglePanel={() => {
+          if (play.panelOpen) {
+            play.closePanel();
+          } else {
+            play.openPanel(play.panelTab);
+          }
+        }}
         saving={saving}
         readingSize={readingSize}
         onReadingSizeChange={onReadingSizeChange}
-        onToggleDialogue={() => play.setDialogueOpen(!play.dialogueOpen)}
         onSave={() => void onSave()}
       />
 
@@ -122,37 +127,43 @@ export function PlayPage() {
         <div
           className={cn(
             "hidden min-h-0 border-l border-border transition-[width] duration-200 xl:block",
-            play.dialogueOpen
+            play.panelOpen
               ? "w-[var(--play-dialogue-width)]"
               : "w-0 overflow-hidden border-l-0",
           )}
         >
-          <DialoguePanel
+          <PlayInspector
             messages={play.messages}
-            open={play.dialogueOpen}
-            onClose={() => play.setDialogueOpen(false)}
+            character={play.session?.character ?? null}
+            open={play.panelOpen}
+            tab={play.panelTab}
+            onTabChange={play.setPanelTab}
+            onClose={play.closePanel}
             onJump={play.focusMessage}
             className="h-full"
           />
         </div>
       </div>
 
-      {play.dialogueOpen ? (
+      {play.panelOpen ? (
         <div className="fixed inset-0 z-40 xl:hidden">
           <button
             type="button"
             className="absolute inset-0 bg-black/55"
             aria-label={COPY.common.close}
-            onClick={() => play.setDialogueOpen(false)}
+            onClick={() => play.closePanel()}
           />
           <div className="absolute inset-y-0 right-0 w-[min(100%,22rem)] border-l border-border shadow-2xl shadow-black/50">
-            <DialoguePanel
+            <PlayInspector
               messages={play.messages}
+              character={play.session?.character ?? null}
               open
-              onClose={() => play.setDialogueOpen(false)}
+              tab={play.panelTab}
+              onTabChange={play.setPanelTab}
+              onClose={play.closePanel}
               onJump={(id) => {
                 play.focusMessage(id);
-                play.setDialogueOpen(false);
+                play.closePanel();
               }}
               className="h-full"
             />

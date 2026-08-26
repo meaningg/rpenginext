@@ -36,10 +36,13 @@ import {
 } from "../lib/passage.ts";
 
 const NARRATIVE_TASK = "narrative.write";
-const DIALOGUE_PREFS_KEY = "rp.ui.dialogueOpen";
+/** localStorage key: right play inspector visibility (legacy name kept for compat). */
+const INSPECTOR_PREFS_KEY = "rp.ui.dialogueOpen";
 const WIDE_MQ = "(min-width: 1280px)";
 /** Soft stall hint when a turn stays busy without stream progress. */
 const STALL_MS = 18_000;
+
+import type { InspectorTab } from "../ui/PlayInspector.tsx";
 
 export interface UseSessionPlayResult {
   readonly session: SessionView | null;
@@ -50,8 +53,11 @@ export interface UseSessionPlayResult {
   readonly stageHint: string | null;
   readonly text: string;
   readonly setText: (value: string) => void;
-  readonly dialogueOpen: boolean;
-  readonly setDialogueOpen: (open: boolean) => void;
+  readonly panelOpen: boolean;
+  readonly panelTab: InspectorTab;
+  readonly setPanelTab: (tab: InspectorTab) => void;
+  readonly openPanel: (tab: InspectorTab) => void;
+  readonly closePanel: () => void;
   readonly highlightId: string | null;
   readonly inputRef: RefObject<HTMLTextAreaElement | null>;
   readonly submit: () => Promise<void>;
@@ -79,7 +85,8 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
   const [text, setText] = useState("");
   const [stageHint, setStageHint] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [dialogueOpen, setDialogueOpenState] = useState(false);
+  const [panelOpen, setPanelOpenState] = useState(false);
+  const [panelTab, setPanelTabState] = useState<InspectorTab>("dialogue");
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -99,8 +106,8 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
   useEffect(() => {
     const wide =
       typeof window !== "undefined" && window.matchMedia(WIDE_MQ).matches;
-    const stored = loadDialoguePref();
-    setDialogueOpenState(stored ?? wide);
+    const stored = loadInspectorPref();
+    setPanelOpenState(stored ?? wide);
   }, []);
 
   const clearStallTimer = useCallback(() => {
@@ -119,14 +126,35 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
 
   useEffect(() => () => clearStallTimer(), [clearStallTimer]);
 
-  const setDialogueOpen = useCallback((open: boolean) => {
-    setDialogueOpenState(open);
+  const persistPanelOpen = useCallback((open: boolean) => {
     try {
-      localStorage.setItem(DIALOGUE_PREFS_KEY, open ? "1" : "0");
+      localStorage.setItem(INSPECTOR_PREFS_KEY, open ? "1" : "0");
     } catch {
       /* ignore */
     }
   }, []);
+
+  const setPanelOpen = useCallback(
+    (open: boolean) => {
+      setPanelOpenState(open);
+      persistPanelOpen(open);
+    },
+    [persistPanelOpen],
+  );
+
+  const openPanel = useCallback(
+    (tab: InspectorTab) => {
+      setPanelTabState(tab);
+      setPanelOpenState(true);
+      persistPanelOpen(true);
+    },
+    [persistPanelOpen],
+  );
+
+  const closePanel = useCallback(() => {
+    setPanelOpenState(false);
+    persistPanelOpen(false);
+  }, [persistPanelOpen]);
 
   const resizeComposer = useCallback((value: string) => {
     const el = inputRef.current;
@@ -609,8 +637,11 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
     stageHint,
     text,
     setText,
-    dialogueOpen,
-    setDialogueOpen,
+    panelOpen,
+    panelTab,
+    setPanelTab: setPanelTabState,
+    openPanel,
+    closePanel,
     highlightId,
     inputRef,
     submit,
@@ -625,9 +656,9 @@ export function useSessionPlay(sessionId: string): UseSessionPlayResult {
   };
 }
 
-function loadDialoguePref(): boolean | null {
+function loadInspectorPref(): boolean | null {
   try {
-    const raw = localStorage.getItem(DIALOGUE_PREFS_KEY);
+    const raw = localStorage.getItem(INSPECTOR_PREFS_KEY);
     if (raw === "1") return true;
     if (raw === "0") return false;
     return null;

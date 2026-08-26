@@ -3,6 +3,7 @@ import { createHostRuntime } from "@rpengineext/host-bootstrap";
 
 import { createApiServer } from "./server/create-server.ts";
 import { HostDb } from "./persistence/host-db.ts";
+import { createCharacterProfileReader } from "./services/character-reader.ts";
 import { SessionService } from "./services/session-service.ts";
 import { TurnService } from "./services/turn-service.ts";
 
@@ -40,6 +41,7 @@ async function main(): Promise<void> {
     hostDb,
     stories: runtime.storyCatalog,
     turns,
+    readCharacter: createCharacterProfileReader(runtime),
     log: runtime.log,
     maxSessionsPerPlayer: runtime.env.maxSessionsPerPlayer,
   });

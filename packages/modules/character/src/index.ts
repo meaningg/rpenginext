@@ -1,5 +1,5 @@
 import { defineModule, deny } from "@rpengineext/module-sdk";
-import type { AgentTask, JsonObject } from "@rpengineext/contracts";
+import type { AgentTask, JsonObject, WorldState } from "@rpengineext/contracts";
 import { z } from "zod";
 
 import {
@@ -9,6 +9,7 @@ import {
   EXTRAS_OUTFIT_PROPOSAL,
   MODULE_ID,
   NARRATIVE_NAMESPACE,
+  READ_MODEL_PROFILE,
   SLICE_NAME,
   SYSTEM_REASON_OUTFIT_SYNC,
   TASK_TYPES,
@@ -24,6 +25,7 @@ import {
   SeedCharacterPayloadSchema,
   SetOutfitPayloadSchema,
   StoryCharacterSchema,
+  toCharacterProfile,
   UPDATE_OUTFIT_PARAMETERS_JSON,
   UpdateOutfitArgsSchema,
   UpdateOutfitResultSchema,
@@ -40,6 +42,7 @@ export {
   EXTRAS_OUTFIT_PROPOSAL,
   MODULE_ID,
   NARRATIVE_NAMESPACE,
+  READ_MODEL_PROFILE,
   SLICE_NAME,
   SYSTEM_REASON_OUTFIT_SYNC,
   TASK_TYPES,
@@ -49,6 +52,8 @@ export {
   createEmptyCharacterSlice,
   parseCharacterSlice,
   StoryCharacterSchema,
+  toCharacterProfile,
+  type CharacterProfile,
   type CharacterSlice,
   type StoryCharacter,
 } from "./schema.ts";
@@ -227,6 +232,12 @@ export function createCharacterModule() {
           { slot: "character.name", text: `Character: ${s.name}` },
           { slot: "character.outfit", text: `Outfit: ${s.outfit}` },
         ];
+      },
+      readModels: {
+        [READ_MODEL_PROFILE]: (state: WorldState) => {
+          const s = parseCharacterSlice(state.slices[SLICE_NAME]);
+          return toCharacterProfile(s);
+        },
       },
     },
   });

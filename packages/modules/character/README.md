@@ -33,7 +33,7 @@ Host must put this object on `session.meta.character` (API does this from the te
 2. `narrative.system` + `brief`
 3. `turn.committed` → `scheduleSystem(outfit_sync, background)`
 4. `ai.tasks.outfit_sync` + `ai.tools.update_outfit` → op `set_outfit`
-5. `host.status`
+5. `host.status` + `host.readModels["character.profile"]` → debug / API surface
 
 ## Public contract
 
@@ -44,7 +44,7 @@ Host must put this object on `session.meta.character` (API does this from the te
 | slice | `character` (schemaVersion 1) |
 | meta keys (seed) | `meta.character: { name, appearance, features, outfit }` |
 | config key | `character` (schema) |
-| readModels | — |
+| readModels | `character.profile` (args: —) → `{ present, name, appearance, features, outfit }` |
 | events | emitted: —; subscribed: — |
 | system reasons / tasks / tools | reason `character.outfit_sync` · task `character.outfit_sync` · tool `character.update_outfit` |
 

@@ -28,6 +28,9 @@ export const TOOL_IDS = {
   updateOutfit: "character.update_outfit",
 } as const;
 
+/** Host read-model id: current player-character profile. */
+export const READ_MODEL_PROFILE = "character.profile" as const;
+
 /** System turn reason for background outfit sync. */
 export const SYSTEM_REASON_OUTFIT_SYNC = "character.outfit_sync" as const;
 

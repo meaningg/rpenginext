@@ -12,8 +12,10 @@ import {
 import type { StoryCatalog, StoryTemplate } from "@rpengineext/content-stories";
 import { normalizeLocale } from "@rpengineext/core";
 import type { Logger } from "@rpengineext/logger";
+import type { CharacterProfile } from "@rpengineext/module-character";
 
 import type { HostDb, HostPlayer, HostSessionRow } from "../persistence/host-db.ts";
+import type { ReadCharacterProfile } from "./character-reader.ts";
 import type { TurnService } from "./turn-service.ts";
 
 export interface SessionView {
@@ -24,6 +26,8 @@ export interface SessionView {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly passage: Passage | null;
+  /** Current player-character profile (module-owned read-model); null when unavailable. */
+  readonly character: CharacterProfile | null;
 }
 
 /**
@@ -34,6 +38,7 @@ export class SessionService {
   private readonly hostDb: HostDb;
   private readonly stories: StoryCatalog;
   private readonly turns: TurnService;
+  private readonly readCharacter: ReadCharacterProfile;
   private readonly log: Logger;
   private readonly maxSessionsPerPlayer: number;
   /** sessionIds loaded into engine memory this process */
@@ -47,6 +52,7 @@ export class SessionService {
     readonly hostDb: HostDb;
     readonly stories: StoryCatalog;
     readonly turns: TurnService;
+    readonly readCharacter: ReadCharacterProfile;
     readonly log: Logger;
     readonly maxSessionsPerPlayer: number;
   }) {
@@ -54,6 +60,7 @@ export class SessionService {
     this.hostDb = options.hostDb;
     this.stories = options.stories;
     this.turns = options.turns;
+    this.readCharacter = options.readCharacter;
     this.log = options.log.child({ component: "session-service" });
     this.maxSessionsPerPlayer = options.maxSessionsPerPlayer;
   }
@@ -207,6 +214,7 @@ export class SessionService {
       createdAt: row.value.createdAt,
       updatedAt: row.value.updatedAt,
       passage: passage.value,
+      character: this.readCharacter(sessionId),
     });
   }
 

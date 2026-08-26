@@ -28,13 +28,14 @@
     },
     "apps/api": {
       "name": "@rpengineext/api",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@rpengineext/content-stories": "workspace:*",
         "@rpengineext/contracts": "workspace:*",
         "@rpengineext/core": "workspace:*",
         "@rpengineext/host-bootstrap": "workspace:*",
         "@rpengineext/logger": "workspace:*",
+        "@rpengineext/module-character": "workspace:*",
         "zod": "^4.4.3",
       },
       "devDependencies": {
@@ -44,7 +45,7 @@
     },
     "apps/cli": {
       "name": "@rpengineext/cli",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "bin": {
         "rpengineext": "./src/main.ts",
       },
@@ -61,7 +62,7 @@
     },
     "apps/web": {
       "name": "@rpengineext/web",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@radix-ui/react-dialog": "^1.1.23",
         "@radix-ui/react-dropdown-menu": "^2.1.24",
@@ -90,7 +91,7 @@
     },
     "packages/agents/responses": {
       "name": "@rpengineext/agents-responses",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@rpengineext/contracts": "workspace:*",
       },
@@ -101,7 +102,7 @@
     },
     "packages/content-stories": {
       "name": "@rpengineext/content-stories",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@rpengineext/contracts": "workspace:*",
         "zod": "^4.4.3",
@@ -113,7 +114,7 @@
     },
     "packages/contracts": {
       "name": "@rpengineext/contracts",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "zod": "^4.4.3",
       },
@@ -124,7 +125,7 @@
     },
     "packages/core": {
       "name": "@rpengineext/core",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@rpengineext/contracts": "workspace:*",
         "@rpengineext/logger": "workspace:*",
@@ -138,7 +139,7 @@
     },
     "packages/create-module": {
       "name": "@rpengineext/create-module",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "bin": {
         "create-rp-module": "./src/main.ts",
       },
@@ -149,7 +150,7 @@
     },
     "packages/host-bootstrap": {
       "name": "@rpengineext/host-bootstrap",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@rpengineext/agents-responses": "workspace:*",
         "@rpengineext/content-stories": "workspace:*",
@@ -168,7 +169,7 @@
     },
     "packages/logger": {
       "name": "@rpengineext/logger",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "pino": "^9.9.0",
         "pino-pretty": "^13.1.1",
@@ -180,7 +181,7 @@
     },
     "packages/module-sdk": {
       "name": "@rpengineext/module-sdk",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@rpengineext/contracts": "workspace:*",
         "zod": "^4.4.3",
@@ -192,7 +193,7 @@
         "typescript": "^5",
       },
       "peerDependencies": {
-        "@rpengineext/core": "^0.1.0",
+        "@rpengineext/core": "^1.0.0",
       },
       "optionalPeers": [
         "@rpengineext/core",
@@ -200,7 +201,7 @@
     },
     "packages/modules/character": {
       "name": "@rpengineext/module-character",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@rpengineext/module-sdk": "workspace:*",
         "zod": "^4.4.3",
@@ -215,23 +216,23 @@
     },
     "packages/modules/summary": {
       "name": "@rpengineext/module-summary",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@rpengineext/module-sdk": "workspace:*",
-        "@rpengineext/module-working-memory": "workspace:*",
         "zod": "^4.4.3",
       },
       "devDependencies": {
         "@rpengineext/contracts": "workspace:*",
         "@rpengineext/core": "workspace:*",
         "@rpengineext/logger": "workspace:*",
+        "@rpengineext/module-working-memory": "workspace:*",
         "@types/bun": "latest",
         "typescript": "^5",
       },
     },
     "packages/modules/working-memory": {
       "name": "@rpengineext/module-working-memory",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@rpengineext/module-sdk": "workspace:*",
         "zod": "^4.4.3",
@@ -246,7 +247,7 @@
     },
     "packages/modules/world-canon": {
       "name": "@rpengineext/module-world-canon",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@rpengineext/module-sdk": "workspace:*",
         "zod": "^4.4.3",
@@ -261,7 +262,7 @@
     },
     "packages/persistence/sqlite": {
       "name": "@rpengineext/persistence-sqlite",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@rpengineext/contracts": "workspace:*",
       },
@@ -784,17 +785,29 @@
 
     "zod": ["zod@4.4.3", "", {}, "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="],
 
+    "@rpengineext/agents-responses/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+
+    "@rpengineext/api/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+
+    "@rpengineext/content-stories/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+
     "@rpengineext/contracts/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
     "@rpengineext/core/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
+    "@rpengineext/host-bootstrap/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+
     "@rpengineext/logger/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+
+    "@rpengineext/module-character/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
     "@rpengineext/module-sdk/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
     "@rpengineext/module-summary/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
     "@rpengineext/module-working-memory/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+
+    "@rpengineext/module-world-canon/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
     "@rpengineext/persistence-sqlite/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
@@ -812,17 +825,29 @@
 
     "pino-pretty/pino-abstract-transport": ["pino-abstract-transport@3.0.0", "", { "dependencies": { "split2": "^4.0.0" } }, "sha512-wlfUczU+n7Hy/Ha5j9a/gZNy7We5+cXp8YL+X+PG8S0KXxw7n/JXA3c46Y0zQznIJ83URJiwy7Lh56WLokNuxg=="],
 
+    "@rpengineext/agents-responses/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+
+    "@rpengineext/api/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+
+    "@rpengineext/content-stories/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+
     "@rpengineext/contracts/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "@rpengineext/core/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
+    "@rpengineext/host-bootstrap/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+
     "@rpengineext/logger/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+
+    "@rpengineext/module-character/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "@rpengineext/module-sdk/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "@rpengineext/module-summary/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "@rpengineext/module-working-memory/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+
+    "@rpengineext/module-world-canon/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "@rpengineext/persistence-sqlite/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
   }
