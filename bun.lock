@@ -13,6 +13,7 @@
         "@rpengineext/host-bootstrap": "workspace:*",
         "@rpengineext/logger": "workspace:*",
         "@rpengineext/module-character": "workspace:*",
+        "@rpengineext/module-scene-controller": "workspace:*",
         "@rpengineext/module-sdk": "workspace:*",
         "@rpengineext/module-summary": "workspace:*",
         "@rpengineext/module-working-memory": "workspace:*",
@@ -210,6 +211,21 @@
         "@rpengineext/contracts": "workspace:*",
         "@rpengineext/core": "workspace:*",
         "@rpengineext/logger": "workspace:*",
+        "@types/bun": "latest",
+        "typescript": "^5",
+      },
+    },
+    "packages/modules/scene-controller": {
+      "name": "@rpengineext/module-scene-controller",
+      "version": "1.0.0",
+      "dependencies": {
+        "@rpengineext/module-sdk": "workspace:*",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@rpengineext/contracts": "workspace:*",
+        "@rpengineext/core": "workspace:*",
+        "@rpengineext/module-working-memory": "workspace:*",
         "@types/bun": "latest",
         "typescript": "^5",
       },
@@ -521,6 +537,8 @@
 
     "@rpengineext/module-character": ["@rpengineext/module-character@workspace:packages/modules/character"],
 
+    "@rpengineext/module-scene-controller": ["@rpengineext/module-scene-controller@workspace:packages/modules/scene-controller"],
+
     "@rpengineext/module-sdk": ["@rpengineext/module-sdk@workspace:packages/module-sdk"],
 
     "@rpengineext/module-summary": ["@rpengineext/module-summary@workspace:packages/modules/summary"],
@@ -801,6 +819,8 @@
 
     "@rpengineext/module-character/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
+    "@rpengineext/module-scene-controller/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+
     "@rpengineext/module-sdk/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
     "@rpengineext/module-summary/@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
@@ -840,6 +860,8 @@
     "@rpengineext/logger/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "@rpengineext/module-character/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+
+    "@rpengineext/module-scene-controller/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "@rpengineext/module-sdk/@types/bun/bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 

@@ -146,6 +146,9 @@ async function main(): Promise<void> {
 
   if (onceText !== null) {
     const code = await runOnce(onceText);
+    // Drain background system turns (e.g. module follow-ups) before closing
+    // the sqlite store, otherwise an in-flight commit hits a closed database.
+    await runtime.waitIdle(session.sessionId, 10_000);
     await stop();
     process.exitCode = code;
     return;
@@ -158,6 +161,7 @@ async function main(): Promise<void> {
     const prompt = async (): Promise<void> => {
       const line = await readLine("> ");
       if (line === null || line === "/quit" || line === "/exit") {
+        await runtime.waitIdle(session.sessionId, 10_000);
         await stop();
         return;
       }
@@ -244,6 +248,7 @@ async function main(): Promise<void> {
   }
 
   const code = await runOnce("hello");
+  await runtime.waitIdle(session.sessionId, 10_000);
   await stop();
   process.exitCode = code;
 }
