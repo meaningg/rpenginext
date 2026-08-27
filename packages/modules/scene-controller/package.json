@@ -1,0 +1,35 @@
+{
+  "name": "@rpengineext/module-scene-controller",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Per-turn LLM scene judge: tracks progression, escalates resolution guidance, hard-stops recycled scenes",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@rpengineext/module-sdk": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@rpengineext/contracts": "workspace:*",
+    "@rpengineext/core": "workspace:*",
+    "@rpengineext/module-working-memory": "workspace:*",
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "rpengineext": {
+    "module": {
+      "id": "scene-controller",
+      "entry": "./src/index.ts",
+      "factory": "createSceneControllerModule"
+    }
+  }
+}

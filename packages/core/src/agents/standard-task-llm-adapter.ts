@@ -53,6 +53,10 @@ export interface StandardTaskExecuteOptions {
    * Called for each stream delta (draft only).
    */
   readonly onDelta?: (text: string) => void;
+  /**
+   * 0-based critic round (ADR 0008); written into LLM request metadata.
+   */
+  readonly round?: number;
 }
 
 /**
@@ -119,7 +123,19 @@ export class StandardTaskLlmAdapter {
         this.promptProfile?.constraints?.maxRepairAttempts ??
         0,
     );
+    // External semantic repair rounds (ADR 0008, critic loop): each round =
+    // assistant(failed prose) + user(profile repair templates {{issues}}/{{hints}}),
+    // applied before the schema-repair cycle. Schema-repairs stack on top.
     let messages = this.buildInitialMessages(task);
+    for (const round of task.repairRounds ?? []) {
+      messages = this.buildRepairMessages(
+        task,
+        messages,
+        round.prose,
+        round.issues,
+        round.hints ?? [],
+      );
+    }
     let lastRaw = "";
     let lastIssues = "";
 
@@ -152,6 +168,7 @@ export class StandardTaskLlmAdapter {
           taskType: task.type,
           turnId: task.turnId,
           attempt,
+          ...(options.round !== undefined ? { round: options.round } : {}),
         },
       };
 

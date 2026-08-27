@@ -79,6 +79,9 @@ EngineConfig {
     defaultPromptProfile?: string                        // default "default@1.0.0"
     promptProfileOverride?: string                      // env quick override, wins
     promptProfilesDir?: string                          // default "data/prompts"
+    // NarrativeCritic rewrite loop (ADR 0008):
+    maxNarrativeCriticRetries: number                  // default 2 (0 = hard-QA)
+    criticPolicy: "accept" | "fail"                   // default "accept"
     // required agent/narrative failure always fails the whole turn
   }
   persistence: {

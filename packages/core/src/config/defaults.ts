@@ -39,6 +39,8 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
     enableActionInterpret: false,
     streaming: true,
     maxToolRounds: 4,
+    maxNarrativeCriticRetries: 2,
+    criticPolicy: "accept",
   },
   persistence: {
     policy: "per_turn",

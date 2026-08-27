@@ -47,6 +47,11 @@ AgentTask {
     tools?: string[]           // AgentTool ids allowed
   }
   requester: { kind: "core" | "module"; id: string }
+  repairRounds?: Array<{   // ADR 0008 — внешние семантические раунды (critic loop)
+    prose: string          // неудачный вывод прошлой попытки («пример»)
+    issues: string         // причины (join отрицательных вердиктов критика)
+    hints?: string[]
+  }>
 }
 ```
 
@@ -135,6 +140,38 @@ call adapter
   → if fail && attempts left: repair prompt with errors
   → else fail task
 ```
+
+`task.repairRounds` (ADR 0008) применяются adapter'ом **до** schema-цикла:
+каждый раунд = `assistant(неудачная проза)` + `user(профильные repair-шаблоны
+с {{issues}}/{{hints}})` — для `narrative.write` ровно `buildNarrativeWriteRepairMessages`
+(ADR 0007). Schema-repairs стекаются поверх.
+
+## 8.1 NarrativeCritic (семантический гейт, ADR 0008)
+
+Порт `NarrativeCritic` — пост-генерационный read-only гейт с циклом переписывания:
+
+```text
+stageNarrate → requestAgent(task, { round })     // schema-repairs внутри adapter
+  → prose
+  → critics: critique({ prose, brief, draft, attempt }, ctx)   // read-only
+     ├─ все ok          → принять prose
+     └─ есть режект     → task.repairRounds += { prose, issues: причины }
+                          повторный requestAgent
+     ├─ бюджет исчерпан + criticPolicy "accept" (default) → принять + warn
+     └─ бюджет исчерпан + criticPolicy "fail" → AGENT_FAILED (rollback)
+```
+
+- Конфиг: `agents.maxNarrativeCriticRetries` (default 2; 0 = жёсткий QA
+  «режект → policy» без переписывания), `agents.criticPolicy` (default `accept`).
+- Каждый раунд — новый полный вызов; `llm.stream.delta` несёт `round`
+  (новый раунд ⇒ хост сбрасывает превью); `requestAgent(task, { stream: false })`
+  доступен хостам для тихих ретраев.
+- Критик — **read-only момент**: `op`/`proposeOp`/`emit`/`deny` → fail-loud
+  со стабильным кодом (как `rules.soft`). Пустая prose — аппаратный `AGENT_FAILED`,
+  критиками не переписывается.
+- SDK: capability `narrative.critic(ctx) → NarrativeCritique`; входы порта
+  доступны автору через `ctx.meta` (`{ prose, brief, attempt }`).
+- Audit: trace-блок «Critic results» (раунды + причины), `criticRounds`/`criticAccepted`.
 
 Fatal agent failure policy:
 

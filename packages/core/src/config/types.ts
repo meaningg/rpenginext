@@ -51,6 +51,16 @@ export interface EngineConfig {
     /** Max model→tool→model rounds for generic tool-calling tasks. */
     readonly maxToolRounds: number;
     /**
+     * NarrativeCritic rewrite budget (ADR 0008). Total narrative.write calls
+     * worst case = 1 + maxNarrativeCriticRetries. 0 = hard-QA (reject → policy).
+     */
+    readonly maxNarrativeCriticRetries: number;
+    /**
+     * What happens when the critic budget is exhausted (ADR 0008):
+     * "accept" (default) keeps the last draft (+ warn); "fail" → AGENT_FAILED.
+     */
+    readonly criticPolicy: "accept" | "fail";
+    /**
      * Narrative prompt profiles (ADR 0007): model alias → `id@version`.
      * Absent mapping falls back to `defaultPromptProfile` → `default@1.0.0`.
      */
