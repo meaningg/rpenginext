@@ -32,7 +32,7 @@ coverage
 logs
 _.log
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
-
+.rules
 # dotenv environment variable files
 .env
 .env.development.local
@@ -48,6 +48,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # IntelliJ based IDEs
 .idea
+
+.vscode
 
 # Finder (MacOS) folder config
 .DS_Store
