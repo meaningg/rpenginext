@@ -35,9 +35,6 @@ export const SYSTEM_REASON_PROBE = "scene_controller.probe" as const;
 export const READ_MODEL_STATUS = "scene_controller.status" as const;
 export const READ_MODEL_HISTORY = "scene_controller.history" as const;
 
-/** Guard denial code for the hard stop on recycled actions. */
-export const FAILURE_REPEAT_CAP = "SCENE_REPEAT_CAP" as const;
-
 /** Narrative section identity. */
 export const NARRATIVE_SECTION_ID = "scene_controller.control" as const;
 export const NARRATIVE_SECTION_TITLE = "SCENE CONTROL" as const;

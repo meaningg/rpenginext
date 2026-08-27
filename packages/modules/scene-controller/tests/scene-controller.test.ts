@@ -10,7 +10,6 @@ import type {
 import { createWorkingMemoryModule } from "@rpengineext/module-working-memory";
 import {
   expectCommitted,
-  expectRejected,
   expectSlice,
   fixedProseLlm,
   testModules,
@@ -97,6 +96,64 @@ function okJson(
   return {
     ok: true,
     value: { text: JSON.stringify(value), finishReason: "stop" },
+  };
+}
+
+/**
+ * Counts narrative.write completions (no tool-carrying requests) among the
+ * recorded LLM requests — used to prove a critic-triggered regeneration ran.
+ */
+function narrativeCalls(requests: readonly LlmCompletionRequest[]): number {
+  return requests.filter((r) => (r.tools?.length ?? 0) === 0).length;
+}
+
+/**
+ * Probe LLM with a scripted narrative queue (critic tests): non-tool
+ * completions consume the next narrative text; tool completions consume
+ * verdicts like {@link probeLlm}. Every request is recorded for assertions.
+ */
+function criticLlm(
+  verdicts: readonly Partial<Verdict>[],
+  narrativeScript: readonly string[],
+  requests: LlmCompletionRequest[],
+): LlmPort {
+  let probeIndex = 0;
+  let narrIndex = 0;
+  return {
+    async complete(
+      request: LlmCompletionRequest,
+    ): Promise<Result<LlmCompletionResponse, Failure>> {
+      requests.push(request);
+      const hasTools = (request.tools?.length ?? 0) > 0;
+      if (!hasTools) {
+        const text =
+          narrativeScript[Math.min(narrIndex, narrativeScript.length - 1)] ??
+          "prose";
+        narrIndex += 1;
+        return okJson({ prose: text });
+      }
+      const hasToolResult = request.messages.some((m) => m.role === "tool");
+      if (hasToolResult) {
+        return okJson({ reported: true });
+      }
+      const step = verdicts[probeIndex];
+      if (!step) return okJson({ reported: false });
+      probeIndex += 1;
+      return {
+        ok: true,
+        value: {
+          text: "",
+          finishReason: "tool_calls",
+          toolCalls: [
+            {
+              id: `call_critic_probe_${probeIndex}`,
+              name: TOOL_IDS.reportScene,
+              args: { ...DEFAULT_ARGS, ...step },
+            },
+          ],
+        },
+      };
+    },
   };
 }
 
@@ -194,49 +251,147 @@ describe("scene-controller lifecycle (working-memory integration)", () => {
     });
   });
 
-  test("reject: hard loop + identical action → SCENE_REPEAT_CAP; new action passes", async () => {
-    const h = await bootWithProbe([
-      verdict({
-        sameScene: false,
-        label: "Стычка у ворот",
-        type: "conflict",
-        loop: "soft",
-        urgency: 1,
-        stall: true,
-      }),
-      verdict({
-        sameScene: true,
-        loop: "hard",
-        urgency: 3,
-        stall: true,
-        progress: 0.3,
-      }),
-    ]);
+  test("critic: hard loop + identical action → turn commits, narration is regenerated (player never denied)", async () => {
+    const requests: LlmCompletionRequest[] = [];
+    const llm = criticLlm(
+      [
+        verdict({
+          sameScene: false,
+          label: "Стычка у ворот",
+          type: "conflict",
+          loop: "soft",
+          urgency: 1,
+          stall: true,
+        }),
+        verdict({
+          sameScene: true,
+          loop: "hard",
+          urgency: 3,
+          stall: true,
+          progress: 0.3,
+        }),
+        verdict({
+          sameScene: true,
+          loop: "hard",
+          stall: true,
+          progress: 0.3,
+        }),
+      ],
+      ["первый бой", "второй бой", "третий бой", "четвёртый бой"],
+      requests,
+    );
+    const h = await testModules(
+      [createWorkingMemoryModule(), createSceneControllerModule()],
+      { llm, agentsMode: "llm" },
+    );
     expect(h.ok).toBe(true);
     if (!h.ok) return;
 
-    // Turn 1: begin (loop soft).
     await h.value.turn("атакую стражу");
-    const idle1 = await h.value.waitIdle(5_000);
-    expect(idle1.ok).toBe(true);
-    expect(sliceOf(h.value)?.loopLevel).toBe("soft");
+    let idle = await h.value.waitIdle(5_000);
+    expect(idle.ok).toBe(true);
 
-    // Turn 2: refresh judged hard — accumulated loopLevel = hard. The last
-    // user text now lives in working-memory (guard reads it via readModel).
     await h.value.turn("атакую стражу");
-    const idle2 = await h.value.waitIdle(5_000);
-    expect(idle2.ok).toBe(true);
+    idle = await h.value.waitIdle(5_000);
+    expect(idle.ok).toBe(true);
     expect(sliceOf(h.value)?.loopLevel).toBe("hard");
 
-    // Turn 3: identical action under hard loop → denied (via wm readModel).
+    // Identical action in a hard scene: the turn MUST commit (the player is
+    // not punished) and the draft is regenerated once by the narrative critic.
+    const before = narrativeCalls(requests);
     const t3 = await h.value.turn("атакую стражу");
-    expectRejected(t3, "SCENE_REPEAT_CAP");
+    expectCommitted(t3);
+    expect(t3.passage.prose).toBe("четвёртый бой"); // rewrite landed
+    expect(narrativeCalls(requests) - before).toBe(2); // round 0 draft + rewrite
 
-    // Turn 4: a new action is allowed even in the same state.
-    const t4 = await h.value.turn("отступаю к воротам");
-    expectCommitted(t4);
-    const idle4 = await h.value.waitIdle(5_000);
-    expect(idle4.ok).toBe(true);
+    idle = await h.value.waitIdle(5_000);
+    expect(idle.ok).toBe(true);
+  });
+
+  test("critic: repair round feeds back the failed draft + conclusion mandate; fresh draft accepted", async () => {
+    const requests: LlmCompletionRequest[] = [];
+    const llm = criticLlm(
+      [
+        verdict({
+          sameScene: false,
+          label: "Стычка у ворот",
+          type: "conflict",
+          loop: "soft",
+          stall: true,
+        }),
+        verdict({
+          sameScene: true,
+          loop: "hard",
+          urgency: 3,
+          stall: true,
+          progress: 0.3,
+        }),
+      ],
+      ["бой первый", "бой второй", "повторный бой", "финал: противник отступает"],
+      requests,
+    );
+    const h = await testModules(
+      [createWorkingMemoryModule(), createSceneControllerModule()],
+      { llm, agentsMode: "llm" },
+    );
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+
+    await h.value.turn("атакую стражу");
+    let idle = await h.value.waitIdle(5_000);
+    expect(idle.ok).toBe(true);
+    await h.value.turn("атакую стражу");
+    idle = await h.value.waitIdle(5_000);
+    expect(idle.ok).toBe(true);
+    expect(sliceOf(h.value)?.loopLevel).toBe("hard");
+
+    const t3 = await h.value.turn("атакую стражу");
+    expectCommitted(t3);
+    expect(t3.passage.prose).toBe("финал: противник отступает");
+
+    // The rewrite request carries the failed draft (last assistant message) and
+    // the critic's conclusion mandate inside the repair user message.
+    const narrative = requests.filter((r) => (r.tools?.length ?? 0) === 0);
+    const rewrite = narrative[narrative.length - 1]!;
+    const roles = rewrite.messages.map((m) => m.role);
+    expect(roles[roles.length - 2]).toBe("assistant");
+    expect(String(rewrite.messages[roles.length - 2]!.content)).toContain("повторный бой");
+    expect(roles[roles.length - 1]).toBe("user");
+    expect(String(rewrite.messages[roles.length - 1]!.content)).toContain(
+      "жёстком пределе",
+    );
+  });
+
+  test("critic: non-hard scenes are written once (no regeneration)", async () => {
+    const requests: LlmCompletionRequest[] = [];
+    const llm = criticLlm(
+      [
+        verdict({ sameScene: false, label: "Бар", type: "social", progress: 0.3 }),
+        verdict({ sameScene: true, progress: 0.6, urgency: 1 }),
+      ],
+      ["входишь в бар", "садишься за стойку"],
+      requests,
+    );
+    const h = await testModules(
+      [createWorkingMemoryModule(), createSceneControllerModule()],
+      { llm, agentsMode: "llm" },
+    );
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+
+    const t1 = await h.value.turn("захожу в бар");
+    expectCommitted(t1);
+    let idle = await h.value.waitIdle(5_000);
+    expect(idle.ok).toBe(true);
+
+    const t2 = await h.value.turn("сажусь за стойку");
+    expectCommitted(t2);
+    expect(t2.passage.prose).toBe("садишься за стойку");
+    idle = await h.value.waitIdle(5_000);
+    expect(idle.ok).toBe(true);
+
+    expect(narrativeCalls(requests)).toBe(2); // exactly one draft per turn
+    expect(sliceOf(h.value)?.loopLevel).toBe("none");
   });
 
   test("edge: probe disabled → bookkeeping only, no probes", async () => {

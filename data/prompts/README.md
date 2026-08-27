@@ -30,9 +30,9 @@
   "systemCore": "… {{locale}} … {{lengthGuidance}} … «{{playerActionLabel}} …» …",
   "rulesReminder": "---\nСлужебная памятка рассказчику …",
   "repair": {
-    "title": "Предыдущий JSON не прошёл проверку схемы.",
-    "instructions": ["Исправь и верни ТОЛЬКО валидный JSON…",
-                     "Проблемы валидации: {{issues}}"],
+    "title": "Предыдущий ответ отклонён.",
+    "instructions": ["Исправь ответ и верни ТОЛЬКО валидный JSON…",
+                     "Причины отклонения: {{issues}}"],
     "hintsTitle": "Дополнительные подсказки:"
   },
   "constraints": {                              // optional

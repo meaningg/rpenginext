@@ -1,9 +1,8 @@
-import { defineModule, deny } from "@rpengineext/module-sdk";
+import { defineModule } from "@rpengineext/module-sdk";
 import type { AgentTask, JsonObject, WorldState } from "@rpengineext/contracts";
 import { z } from "zod";
 
 import {
-  FAILURE_REPEAT_CAP,
   MODULE_ID,
   READ_MODEL_HISTORY,
   READ_MODEL_STATUS,
@@ -25,7 +24,6 @@ import {
   buildSceneControlSection,
   deriveGuidanceMode,
   effectiveUrgency,
-  shouldDenyRepeatedAction,
 } from "./guidance.ts";
 import { buildProbeMessages } from "./probe-messages.ts";
 import {
@@ -48,7 +46,6 @@ import { applyProbeReport, applyRecordTurn, toVerdict } from "./transitions.ts";
 
 export {
   CONFIG_KEY,
-  FAILURE_REPEAT_CAP,
   MODULE_ID,
   NARRATIVE_SECTION_ID,
   NARRATIVE_SECTION_PRIORITY,
@@ -75,7 +72,6 @@ export {
   DEFAULT_RESOLUTION_HINTS,
   effectiveUrgency,
   resolveResolutionHint,
-  shouldDenyRepeatedAction,
 } from "./guidance.ts";
 export { buildProbeMessages } from "./probe-messages.ts";
 export { applyProbeReport, applyRecordTurn, nextHighProgressBeats } from "./transitions.ts";
@@ -86,8 +82,11 @@ export { applyProbeReport, applyRecordTurn, nextHighProgressBeats } from "./tran
  * Requires `capability:working-memory`: recent-pairs context comes from the
  * `working_memory.window` readModel — the module keeps no pair buffer of its
  * own. After every player turn a background LLM probe runs; its verdict is
- * the single source of truth for scene state, escalation and the hard-stop
- * guard. The module itself has no content heuristics.
+ * the single source of truth for scene state and escalation. In `hard` mode
+ * (probe-judged recycling or saturated progress clock) the narrative critic
+ * (ADR 0008) enforces the conclusion mandate: the first draft is rejected and
+ * regenerated with a rewrite instruction — the player is never denied, the
+ * narrator is rewritten. The module itself has no content heuristics.
  *
  * @param options - factory options (validated; defaults in constants)
  */
@@ -102,7 +101,7 @@ export function createSceneControllerModule(
       version: "1.0.0",
       title: "Scene Controller",
       description:
-        "Per-turn LLM scene judge: tracks scene progression, escalates resolution guidance, hard-stops recycled scenes",
+        "Per-turn LLM scene judge: tracks scene progression, escalates resolution guidance, regenerates recycled narratives",
       priority: 30,
       requires: [REQUIRES_WORKING_MEMORY],
 
@@ -177,33 +176,6 @@ export function createSceneControllerModule(
         },
       },
 
-      rules: {
-        guard(ctx) {
-          const cfg = ctx.config as SceneControllerConfig;
-          const text =
-            (ctx.normalizedAction as { text?: string } | undefined)?.text ??
-            "";
-          const slice = ctx.slice as SceneControllerSlice;
-          // The previous turn's player text, from working-memory (declared via
-          // requires). Last message with role "user" is the newest action.
-          const wm = ctx.readModel<{
-            history?: readonly {
-              role: string;
-              content: string;
-            }[];
-          }>(WORKING_MEMORY_WINDOW_MODEL);
-          const lastUserText = [...(wm.history ?? [])]
-            .reverse()
-            .find((m) => m.role === "user")?.content;
-          if (shouldDenyRepeatedAction(slice, text, lastUserText, cfg.hardStopEnabled)) {
-            deny(
-              FAILURE_REPEAT_CAP,
-              "Это действие повторяет предыдущее, а текущая сцена уже исчерпана. История ждёт нового шага — опиши другой способ продвинуть её.",
-            );
-          }
-        },
-      },
-
       narrative: {
         system: ({ slice, config }) =>
           buildSceneControlSection(
@@ -215,6 +187,33 @@ export function createSceneControllerModule(
             slice as SceneControllerSlice,
             config as SceneControllerConfig,
           ),
+        /**
+         * Post-generation enforcement of the conclusion mandate (ADR 0008).
+         * Never touches the player: it rejects only a *narrative draft* when the
+         * scene is `hard`. "Hard" is LLM-derived — the probe's loop/urgency
+         * verdicts (persistent `loopLevel`) or the saturated progress clock
+         * (the model's own `progress` plateaus near-done without resolving).
+         * The first draft of such a turn is replaced: core reruns narrative.write
+         * with the same context + the failed draft + the conclusion mandate,
+         * so the narrator must actually write the finale. Later attempts pass
+         * (budget `maxNarrativeCriticRetries` guards the loop).
+         */
+        critic(ctx) {
+          const slice = ctx.slice as SceneControllerSlice;
+          const cfg = ctx.config as SceneControllerConfig;
+          const meta = ctx.meta as { attempt?: number; prose?: string } | undefined;
+          // Only the first draft is gated; the rewrite itself is allowed through
+          // so the turn cannot spin (and core's accept|fail policy still applies).
+          if ((meta?.attempt ?? 0) !== 0) return null;
+          if (deriveGuidanceMode(slice, cfg) !== "hard") return null;
+          const draft = (meta?.prose ?? "").trim();
+          if (!draft) return null;
+          return {
+            ok: false,
+            reason:
+              "Сцена в жёстком пределе: она повторяет одни и те же биты без прогресса, и развязка обязательна в ЭТОМ ходе. Напиши финал — окончательный итоговый исход, который закрывает сцену и не продолжает уже сыгранные биты.",
+          };
+        },
       },
 
       ai: {
