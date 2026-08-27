@@ -76,6 +76,8 @@ export type EngineEvent =
       readonly taskId: string;
       readonly taskType: string;
       readonly text: string;
+      /** 0-based critic round (ADR 0008); newer round ⇒ reset preview. */
+      readonly round?: number;
       readonly at: string;
     }
   | {

@@ -83,10 +83,21 @@ export interface TurnContext {
    * Enqueues or executes an agent task per stage policy.
    *
    * @param task - agent task request
+   * @param opts - optional per-call overrides (round marker / streaming)
    */
-  requestAgent(task: AgentTask): Promise<AgentResult>;
+  requestAgent(task: AgentTask, opts?: AgentRequestOptions): Promise<AgentResult>;
   readonly log: TurnLogger;
   readonly trace: TurnTraceApi;
   /** Namespaced bag for stage-local data (not persistence truth). */
   readonly extras: JsonObject;
+}
+
+/**
+ * Per-call requestAgent options (ADR 0008 critic loop).
+ */
+export interface AgentRequestOptions {
+  /** 0-based critic round; newer round ⇒ hosts reset the stream preview. */
+  readonly round?: number;
+  /** Per-call streaming override; default = host/config preference. */
+  readonly stream?: boolean;
 }

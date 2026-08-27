@@ -123,11 +123,19 @@ Failure → discard draft, `S0` unchanged.
 
 - gather `NarrativeContextProvider` slices;
 - build `NarrativeBrief` from **draft state** (как будет после успеха) + turn outcomes;
-- `narrative.write` agent;
-- validate prose payload schema.
+- `narrative.write` agent (schema-repair цикл внутри adapter);
+- validate prose payload schema;
+- **Critic sub-loop (ADR 0008):** `NarrativeCritic` порты читают черновик
+  (`{ prose, brief, draft, attempt }`, read-only); все `ok` → prose принята;
+  есть режект → `task.repairRounds += { prose, issues: причины }` и повторный
+  `requestAgent` (тот же контекст + неудачный пример + причины);
+  бюджет `agents.maxNarrativeCriticRetries` (default 2), при исчерпании —
+  `criticPolicy`: `accept` (default, ход живёт + warn) или `fail` →
+  `AGENT_FAILED` (rollback).
 
-Failure (LLM down, invalid schema, timeout after repairs) → **reject turn, full rollback**.
-Fallback-passage-with-kept-state **запрещён** в v1.
+Failure (LLM down, invalid schema, timeout after repairs, criticPolicy=“fail”)
+→ **reject turn, full rollback**. Fallback-passage-with-kept-state **запрещён** в v1.
+Пустая prose — аппаратный `AGENT_FAILED` (не переписывается критиками).
 
 #### 8. PRESENT
 

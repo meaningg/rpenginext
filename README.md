@@ -62,6 +62,7 @@ bun run smoke:play:mock
 | [docs/adr/0005-moments-native-core.md](./docs/adr/0005-moments-native-core.md) | ADR: moments-native core (deferred) |
 | [docs/adr/0006-local-module-discovery.md](./docs/adr/0006-local-module-discovery.md) | ADR: local module discovery (zero-wiring pool, implemented, host-bootstrap) |
 | [docs/adr/0007-narrative-prompt-profiles.md](./docs/adr/0007-narrative-prompt-profiles.md) | ADR: versioned narrative prompt profiles (JSON packs, model-mapped, implemented) |
+| [docs/adr/0008-narrative-critic-retry-loop.md](./docs/adr/0008-narrative-critic-retry-loop.md) | ADR: NarrativeCritic rewrite loop (reject + retry, not turn-kill, implemented) |
 
 ## Архитектура в одном абзаце
 

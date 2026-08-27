@@ -74,6 +74,16 @@ export interface ToolInvokeRecord {
 }
 
 /**
+ * Per-call execution options (ADR 0008 critic loop).
+ */
+export interface AgentExecuteOptions {
+  /** 0-based critic round; published on stream deltas. */
+  readonly round?: number;
+  /** Per-call streaming override; default = orchestrator config. */
+  readonly stream?: boolean;
+}
+
+/**
  * Single door for agent/LLM tasks and allowlisted tools.
  */
 export class AgentOrchestrator {
@@ -377,7 +387,11 @@ export class AgentOrchestrator {
    * @param task - agent task
    * @param ctx - optional turn context
    */
-  async execute(task: AgentTask, ctx?: TurnContext): Promise<AgentResult> {
+  async execute(
+    task: AgentTask,
+    ctx?: TurnContext,
+    opts?: AgentExecuteOptions,
+  ): Promise<AgentResult> {
     if (ctx) this.activeCtx = ctx;
     const started = this.clock.nowMs();
     this.log.info(
@@ -386,6 +400,7 @@ export class AgentOrchestrator {
         type: task.type,
         mode: this.mode,
         requester: task.requester,
+        ...(opts?.round !== undefined ? { round: opts.round } : {}),
       },
       "agent task start",
     );
@@ -414,7 +429,7 @@ export class AgentOrchestrator {
 
     this.activeTaskId = task.taskId;
     try {
-      const raw = await this.invoke(task);
+      const raw = await this.invoke(task, opts);
       if (!raw.ok) {
         this.emitFinished(task, false);
         this.logAgentFinished(task, raw, started);
@@ -424,7 +439,7 @@ export class AgentOrchestrator {
       const validated = this.validateOutput(task, raw.data);
       if (!validated.ok) {
         if (this.mode === "mock" && this.maxRepairAttempts > 0) {
-          const retry = await this.invoke(task);
+          const retry = await this.invoke(task, opts);
           if (retry.ok) {
             const again = this.validateOutput(task, retry.data);
             if (again.ok) {
@@ -543,7 +558,10 @@ export class AgentOrchestrator {
     );
   }
 
-  private async invoke(task: AgentTask): Promise<AgentResult> {
+  private async invoke(
+    task: AgentTask,
+    opts?: AgentExecuteOptions,
+  ): Promise<AgentResult> {
     const repairOpts = {
       getRepairHints: async (taskType: string, schemaError: string) => {
         if (!this.activeCtx) return [] as string[];
@@ -553,16 +571,18 @@ export class AgentOrchestrator {
 
     const streamOpts = {
       ...repairOpts,
-      streaming: this.streaming,
-      onDelta: (text: string) => this.emitStreamDelta(task, text),
+      streaming: opts?.stream ?? this.streaming,
+      onDelta: (text: string) =>
+        this.emitStreamDelta(task, text, opts?.round),
+      ...(opts?.round !== undefined ? { round: opts.round } : {}),
     };
 
     if (this.mode === "mock") {
       const mock = this.mockScript.get(task.type);
       if (mock) {
         const result = await mock(task);
-        if (result.ok && this.streaming) {
-          await this.emitMockStream(task, result.data);
+        if (result.ok && streamOpts.streaming) {
+          await this.emitMockStream(task, result.data, opts?.round);
         }
         return this.withMockAuditMeta(task, result);
       }
@@ -726,8 +746,9 @@ export class AgentOrchestrator {
    *
    * @param task - agent task
    * @param text - delta fragment
+   * @param round - 0-based critic round (ADR 0008), when known
    */
-  emitStreamDelta(task: AgentTask, text: string): void {
+  emitStreamDelta(task: AgentTask, text: string, round?: number): void {
     if (!text) return;
 
     let out = text;
@@ -746,6 +767,7 @@ export class AgentOrchestrator {
       taskId: task.taskId,
       taskType: task.type,
       text: out,
+      ...(round !== undefined ? { round } : {}),
       at: this.clock.nowIso(),
     });
   }
@@ -757,12 +779,13 @@ export class AgentOrchestrator {
   private async emitMockStream(
     task: AgentTask,
     data: JsonObject,
+    round?: number,
   ): Promise<void> {
     const prose =
       typeof data.prose === "string" ? data.prose : JSON.stringify(data);
     const chunkSize = 28;
     for (let i = 0; i < prose.length; i += chunkSize) {
-      this.emitStreamDelta(task, prose.slice(i, i + chunkSize));
+      this.emitStreamDelta(task, prose.slice(i, i + chunkSize), round);
       // Yield so SSE clients can paint progressive draft text.
       await sleep(16);
     }

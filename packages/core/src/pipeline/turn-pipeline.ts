@@ -266,7 +266,7 @@ export class TurnPipeline {
         scratch.proposedCommands.push(...commands);
         return ok(undefined);
       },
-      requestAgent: async (task) => {
+      requestAgent: async (task, opts) => {
         if (!scratch.agentOpen) {
           return {
             ok: false,
@@ -303,7 +303,7 @@ export class TurnPipeline {
             },
           };
         }
-        const result = await this.orchestrator.execute(task);
+        const result = await this.orchestrator.execute(task, undefined, opts);
         this.tracer.recordAgent(this.toTraceAgentRecord(task, result));
         for (const tool of this.orchestrator.drainToolCalls()) {
           this.tracer.recordTool(this.toTraceToolRecord(tool));
@@ -1520,38 +1520,80 @@ export class TurnPipeline {
       requester: { kind: "core", id: "turn-pipeline" },
     };
 
-    const result = await ctx.requestAgent(task);
-    if (!result.ok) {
-      return err(
-        failure("AGENT_FAILED", result.error.message, {
-          details: result.error,
-        }),
-      );
-    }
-
-    const prose = String(result.data.prose ?? "");
-    if (!prose) {
-      return err(failure("AGENT_FAILED", "narrative.write returned empty prose"));
-    }
-
-    for (const owned of this.index.narrativeCritics) {
-      const critique = await owned.value.critique(
-        { prose, brief, draft },
-        this.moduleCtx(owned.moduleId, ctx),
-      );
-      if (!critique.ok) return critique;
-      if (!critique.value.ok) {
+    // NarrativeCritic loop (ADR 0008): reject + retry (rewrite with the same
+    // context + failed example + reasons), never an instant turn-kill.
+    const maxRetries = this.config.agents.maxNarrativeCriticRetries;
+    const criticPolicy = this.config.agents.criticPolicy;
+    const criticResults: { round: number; reasons: string[] }[] = [];
+    let currentTask = task;
+    let prose = "";
+    let lastRound = 0;
+    let acceptedAfterRetries = false;
+    for (let round = 0; round <= maxRetries; round++) {
+      lastRound = round;
+      const result = await ctx.requestAgent(currentTask, { round });
+      if (!result.ok) {
         return err(
-          failure("AGENT_FAILED", critique.value.reason, {
-            causedBy: [owned.moduleId],
+          failure("AGENT_FAILED", result.error.message, {
+            details: result.error,
           }),
         );
       }
+
+      prose = String(result.data.prose ?? "");
+      if (!prose) {
+        return err(failure("AGENT_FAILED", "narrative.write returned empty prose"));
+      }
+
+      const reasons: string[] = [];
+      let causedBy: string | undefined;
+      for (const owned of this.index.narrativeCritics) {
+        const critique = await owned.value.critique(
+          { prose, brief, draft, attempt: round },
+          this.moduleCtx(owned.moduleId, ctx),
+        );
+        // draft в critique = stateView сцены (read-only); brief = тот же, что у задачи
+        if (!critique.ok) return critique;
+        if (!critique.value.ok) {
+          reasons.push(critique.value.reason);
+          causedBy ??= owned.moduleId;
+        }
+      }
+
+      if (reasons.length === 0) break; // принято
+      criticResults.push({ round, reasons });
+      if (round < maxRetries) {
+        currentTask = {
+          ...currentTask,
+          repairRounds: [
+            ...(currentTask.repairRounds ?? []),
+            { prose, issues: reasons.join("\n") },
+          ],
+        };
+        continue;
+      }
+      if (criticPolicy === "fail") {
+        return err(
+          failure("AGENT_FAILED", reasons.join("; "), {
+            causedBy: causedBy ? [causedBy] : undefined,
+          }),
+        );
+      }
+      this.log.warn(
+        { causes: reasons },
+        "narrative critic budget exhausted — accepting draft",
+      );
+      acceptedAfterRetries = true;
+      break;
     }
 
     scratch.narrativeBrief = brief;
     scratch.narrativeProse = prose;
-    this.tracer.recordNarrative(brief, prose);
+    this.tracer.recordNarrative(brief, prose, {
+      criticRounds: lastRound,
+      criticAccepted: acceptedAfterRetries,
+      results: criticResults,
+    });
     return ok(undefined);
   }
 

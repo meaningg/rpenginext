@@ -157,6 +157,13 @@ export interface NarrativeSectionInput {
   readonly channel?: "system" | "user";
 }
 
+/**
+ * Verdict of a `narrative.critic` run (mirrors the NarrativeCritic port result).
+ */
+export type NarrativeCritique =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: string };
+
 export interface NarrativeCapability<TSlice = unknown, TConfig = unknown> {
   readonly kind: "narrative";
   readonly system?: (
@@ -213,6 +220,19 @@ export interface NarrativeCapability<TSlice = unknown, TConfig = unknown> {
     readonly voice?: string;
     readonly constraints?: readonly string[];
   };
+  /**
+   * Post-LLM semantic gate (ADR 0008): rejects a bad narrative draft with a
+   * reason → core reruns narrative.write with the same context + failed example
+   * + reasons. Read-only moment (op/proposeOp/emit/deny → fail-loud).
+   * `null`/`undefined` result is treated as ok (critic "did not notice").
+   */
+  readonly critic?: (
+    ctx: ModuleCtx<TSlice, TConfig>,
+  ) =>
+    | NarrativeCritique
+    | null
+    | undefined
+    | Promise<NarrativeCritique | null | undefined>;
 }
 
 /**
