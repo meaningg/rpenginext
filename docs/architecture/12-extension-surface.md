@@ -150,11 +150,17 @@ Named ports (слой C) остаются для мест, где нужен **t
 |------|-------|------|-------|
 | `NarrativeContextProvider` | narrate | brief slices | merge object by ns keys |
 | `NarrativeStyleProvider` | narrate | tone/rating/voice constraints | merge; deny overrides |
-| `NarrativeCritic` | narrate | post-LLM structured QA (continuity) | any hard fail → turn fail (rollback) |
+| `NarrativeCritic` | narrate | post-LLM structured QA (continuity); reject + retry loop (ADR 0008) | all reasons collected per round; budget `maxNarrativeCriticRetries`; `criticPolicy` accept \| fail |
 | `PostNarrativeContributor` | present→commit (materialize) | emit StateCommands after passage prose is known | concat commands; progressive dry-apply |
 | `PassageAssembler` | present | contribute sections to passage body model | ordered sections by slot/priority |
 | `StatusPanelProvider` | present | sidebar/status lines for CLI/UI | concat by slot |
 | `LocalizationContributor` | present | string tables for module UI bits | merge by locale key |
+
+> `NarrativeCritic` **read-only** момент (`narrative.critic`): `op`/`proposeOp`/`emit`/`deny`
+> → fail-loud со стабильным кодом (`MODULE_MOMENT_OP_FORBIDDEN` и др.), как `rules.soft`.
+> Жёсткий отказ хода больше не жёсткий: режект → переписывание (тот же контекст +
+> неудачный пример + причины); только `criticPolicy: "fail"` при исчерпанном бюджете
+> роняет ход (ADR 0008). `attempt` в входе порта — 0-based номер раунда.
 
 ### 4.6 Turn/session lifecycle (typed)
 

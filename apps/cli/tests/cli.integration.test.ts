@@ -10,6 +10,21 @@ afterAll(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
+/**
+ * Module-composition env keys (specs/04 §4.1.1 precedence, ADR 0006).
+ * Bun loads the repo `.env` into spawned `bun run` children, so ambient
+ * values from the developer machine (e.g. RP_MODULES from discovery
+ * experiments) would override the test's explicit profile. Override them
+ * with empty strings so Bun does not re-inject .env values and
+ * `parseCommaList` treats them as unset (empty → undefined).
+ */
+const SCRUBBED_ENV_OVERRIDES: Record<string, string> = {
+  RP_MODULES: "",
+  RP_DISABLE_MODULES: "",
+  RP_MODULE_PROFILE: "",
+  RP_MODULE_DIRS: "",
+};
+
 function runCli(
   args: string[],
   extraEnv: Record<string, string> = {},
@@ -20,6 +35,7 @@ function runCli(
       ...process.env,
       RP_DATA_DIR: dataDir,
       NO_COLOR: "1",
+      ...SCRUBBED_ENV_OVERRIDES,
       ...extraEnv,
     },
     stdout: "pipe",

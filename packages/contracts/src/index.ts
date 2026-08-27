@@ -146,6 +146,7 @@ export {
   type TurnTraceApi,
   type TurnRng,
   type TurnContext,
+  type AgentRequestOptions,
 } from "./turn/context.ts";
 
 export {

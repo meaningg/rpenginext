@@ -348,8 +348,13 @@ export interface NarrativeStyleProvider {
 
 export interface NarrativeCritic {
   critique: PortHandler<
-    { prose: string; brief: JsonObject; draft: WorldState },
-    { ok: true } | { ok: false; reason: string }
+    {
+      prose: string; // current draft (after the schema-repair cycle)
+      brief: JsonObject; // same brief as the task (incl. narrativePromptSections)
+      draft: WorldState; // current world draft (read-only)
+      attempt: number; // 0-based round number — critic may loosen/tighten
+    },
+    { ok: true } | { ok: false; reason: string } // reason → repair message
   >;
 }
 

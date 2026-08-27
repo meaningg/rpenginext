@@ -110,6 +110,7 @@ export function buildManifestAndIr(
     narrativeBrief: narrativeCaps.some((n) => Boolean(n.brief)),
     narrativeHistory: narrativeCaps.some((n) => Boolean(n.history)),
     narrativeStyle: narrativeCaps.some((n) => Boolean(n.style)),
+    narrativeCritic: narrativeCaps.some((n) => Boolean(n.critic)),
     hostStatus: hostCaps.some((h) => Boolean(h.status)),
     hostHelp: hostCaps.some((h) => Boolean(h.help?.length)),
     hostReadModels: hostCaps.flatMap((h) => Object.keys(h.readModels ?? {})),
@@ -136,6 +137,7 @@ export function buildManifestAndIr(
     contributes.push("NarrativeContextProvider");
   }
   if (moments.narrativeStyle) contributes.push("NarrativeStyleProvider");
+  if (moments.narrativeCritic) contributes.push("NarrativeCritic");
   if (moments.hostStatus) contributes.push("StatusPanelProvider");
   if (moments.hostHelp) contributes.push("HelpProvider");
   for (const rmId of moments.hostReadModels) {

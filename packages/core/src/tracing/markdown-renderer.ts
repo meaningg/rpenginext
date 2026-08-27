@@ -444,6 +444,33 @@ function renderNarrativeSection(
     lines.push("```");
     lines.push("");
   }
+  if (doc.criticResults && doc.criticResults.length > 0) {
+    lines.push("### Critic results");
+    lines.push("");
+    const meta: string[] = [];
+    if (doc.criticRounds !== undefined) {
+      meta.push(`criticRounds: ${doc.criticRounds}`);
+    }
+    if (doc.criticAccepted !== undefined) {
+      meta.push(`criticAccepted: ${doc.criticAccepted}`);
+    }
+    if (meta.length > 0) {
+      lines.push(`> ${meta.join(" · ")}`);
+      lines.push("");
+    }
+    for (const result of doc.criticResults) {
+      lines.push(`**Round ${result.round}**`);
+      lines.push("");
+      for (const reason of result.reasons) {
+        lines.push(`- ${String(trunc(reason))}`);
+      }
+      lines.push("");
+    }
+    if (doc.criticAccepted) {
+      lines.push("_Budget exhausted — last draft accepted._");
+      lines.push("");
+    }
+  }
 }
 
 function renderPassageSection(

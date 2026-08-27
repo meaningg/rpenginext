@@ -28,6 +28,8 @@ export interface CreateTestEngineOptions {
   readonly llm?: import("@rpengineext/contracts").LlmPort;
   readonly agentsMode?: "mock" | "llm";
   readonly defaultModel?: string;
+  /** Additional agents.* config overrides (e.g. critic loop, ADR 0008). */
+  readonly agents?: Partial<import("../config/types.ts").EngineConfig["agents"]>;
   /** Host moduleConfig sections validated against registerConfigSchema. */
   readonly moduleConfig?: Readonly<
     Record<string, import("@rpengineext/contracts").JsonObject>
@@ -82,6 +84,7 @@ export async function createTestEngine(
       agents: {
         mode: options.agentsMode ?? (options.llm ? "llm" : "mock"),
         defaultModel: options.defaultModel ?? "test-model",
+        ...(options.agents ?? {}),
       },
       tracing: {
         directory: "memory://traces",
