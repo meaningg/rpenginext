@@ -1,5 +1,6 @@
 import {
   createPermissionChecker,
+  type AgentRequestOptions,
   type AgentResult,
   type AgentTask,
   type Failure,
@@ -27,7 +28,10 @@ export interface TurnContextHost {
   readonly sessionId: string;
   getStateView(): WorldState;
   propose(commands: readonly StateCommand[]): Result<void, Failure>;
-  requestAgent(task: AgentTask): Promise<AgentResult>;
+  requestAgent(
+    task: AgentTask,
+    opts?: AgentRequestOptions,
+  ): Promise<AgentResult>;
   /** Resolves a registered readModel (fail-loud unknown → MODULE_READ_MODEL_UNKNOWN). */
   readModel?(name: string, args?: JsonObject): Result<unknown, Failure>;
   note(note: TraceNote): void;
@@ -61,8 +65,8 @@ export function createTurnContext(host: TurnContextHost): TurnContext {
     propose(commands) {
       return host.propose(commands);
     },
-    requestAgent(task) {
-      return host.requestAgent(task);
+    requestAgent(task, opts) {
+      return host.requestAgent(task, opts);
     },
     log: host.log,
     trace: {
@@ -138,8 +142,8 @@ export function withPermissions(
     propose(commands) {
       return ctx.propose(commands);
     },
-    requestAgent(task) {
-      return ctx.requestAgent(task);
+    requestAgent(task, opts) {
+      return ctx.requestAgent(task, opts);
     },
     log: ctx.log,
     trace: ctx.trace,

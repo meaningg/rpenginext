@@ -57,6 +57,7 @@ export interface CompiledMomentsIr {
   readonly narrativeBrief: boolean;
   readonly narrativeHistory: boolean;
   readonly narrativeStyle: boolean;
+  readonly narrativeCritic: boolean;
   readonly hostStatus: boolean;
   readonly hostHelp: boolean;
   readonly hostReadModels: readonly string[];

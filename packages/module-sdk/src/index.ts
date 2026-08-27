@@ -45,6 +45,7 @@ export type {
   HostReadModelDef,
   HostStatusLine,
   NarrativeCapability,
+  NarrativeCritique,
   NarrativeSectionInput,
   RulesCapability,
   SeedCapability,

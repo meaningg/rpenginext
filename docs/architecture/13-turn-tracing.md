@@ -137,7 +137,9 @@ Always show:
 
 - NarrativeBrief (merged, by namespace)
 - style/policy fragments summary
-- critic results if any
+- critic results if any (ADR 0008): каждый отклонённый раунд — `**Round N**` + причины;
+  строка `criticRounds` (индекс последнего раунда) / `criticAccepted`
+  (бюджет исчерпан и последний черновик принят)
 - final Passage prose
 - on reject: brief/prose partials if stage reached
 

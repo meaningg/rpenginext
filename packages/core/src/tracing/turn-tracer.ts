@@ -87,6 +87,12 @@ export interface TraceFollowUpRecord {
   stateDiff: StateDiffEntry[];
   narrativeBrief?: JsonObject;
   narrativeProse?: string;
+  /** Critic loop audit (ADR 0008): last round index spent on this turn. */
+  criticRounds?: number;
+  /** True when the budget was exhausted and the last draft was accepted. */
+  criticAccepted?: boolean;
+  /** Per-round rejected critic reasons (for the markdown trace block). */
+  criticResults?: readonly { readonly round: number; readonly reasons: readonly string[] }[];
   passage?: Passage;
   persistenceNote?: string;
   moduleNotes: TraceNote[];
@@ -115,6 +121,12 @@ export interface TurnTraceDocument {
   stateDiff: StateDiffEntry[];
   narrativeBrief?: JsonObject;
   narrativeProse?: string;
+  /** Critic loop audit (ADR 0008): last round index spent on this turn. */
+  criticRounds?: number;
+  /** True when the budget was exhausted and the last draft was accepted. */
+  criticAccepted?: boolean;
+  /** Per-round rejected critic reasons (for the markdown trace block). */
+  criticResults?: readonly { readonly round: number; readonly reasons: readonly string[] }[];
   passage?: Passage;
   persistenceNote?: string;
   moduleNotes: TraceNote[];
@@ -131,6 +143,12 @@ type ActiveBucket = {
   stateDiff: StateDiffEntry[];
   narrativeBrief?: JsonObject;
   narrativeProse?: string;
+  /** Critic loop audit (ADR 0008): last round index spent on this turn. */
+  criticRounds?: number;
+  /** True when the budget was exhausted and the last draft was accepted. */
+  criticAccepted?: boolean;
+  /** Per-round rejected critic reasons (for the markdown trace block). */
+  criticResults?: readonly { readonly round: number; readonly reasons: readonly string[] }[];
   passage?: Passage;
   persistenceNote?: string;
   moduleNotes: TraceNote[];
@@ -331,16 +349,33 @@ export class TurnTracer {
   }
 
   /**
-   * Records narrative artifacts.
+   * Records narrative artifacts + critic loop audit (ADR 0008).
    */
   recordNarrative(
     brief: JsonObject | undefined,
     prose: string | undefined,
+    critic?: {
+      readonly criticRounds?: number;
+      readonly criticAccepted?: boolean;
+      readonly results?: readonly {
+        readonly round: number;
+        readonly reasons: readonly string[];
+      }[];
+    },
   ): void {
     const bucket = this.activeBucket();
     if (!bucket) return;
     bucket.narrativeBrief = brief;
     bucket.narrativeProse = prose;
+    if (critic?.criticRounds !== undefined) {
+      bucket.criticRounds = critic.criticRounds;
+    }
+    if (critic?.criticAccepted !== undefined) {
+      bucket.criticAccepted = critic.criticAccepted;
+    }
+    if (critic?.results && critic.results.length > 0) {
+      bucket.criticResults = critic.results;
+    }
   }
 
   /**
@@ -460,6 +495,9 @@ export class TurnTracer {
       stateDiff: fu.bucket.stateDiff,
       narrativeBrief: fu.bucket.narrativeBrief,
       narrativeProse: fu.bucket.narrativeProse,
+      criticRounds: fu.bucket.criticRounds,
+      criticAccepted: fu.bucket.criticAccepted,
+      criticResults: fu.bucket.criticResults,
       passage: fu.bucket.passage,
       persistenceNote: fu.bucket.persistenceNote,
       moduleNotes: fu.bucket.moduleNotes,

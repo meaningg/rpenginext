@@ -104,6 +104,7 @@ describe("stress E-codes (errors.test.ts)", () => {
         narrativeBrief: false,
         narrativeHistory: false,
         narrativeStyle: false,
+        narrativeCritic: false,
         hostStatus: false,
         hostHelp: false,
         hostReadModels: [],

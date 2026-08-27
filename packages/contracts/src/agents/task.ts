@@ -24,6 +24,21 @@ export const AgentTaskConstraintsSchema = z.object({
 export type AgentTaskConstraints = z.infer<typeof AgentTaskConstraintsSchema>;
 
 /**
+ * External repair round (ADR 0008): a rejected narrative draft plus the
+ * critic reasons, rendered into the prompt before the schema-repair cycle.
+ */
+export const AgentRepairRoundSchema = z.object({
+  /** Failed output of the previous attempt («example»). */
+  prose: z.string(),
+  /** Reasons (join of negative critic verdicts). */
+  issues: z.string(),
+  /** Optional hints. */
+  hints: z.array(z.string()).optional(),
+});
+
+export type AgentRepairRound = z.infer<typeof AgentRepairRoundSchema>;
+
+/**
  * Orchestrator task request. Modules never call LLM SDKs directly.
  */
 export const AgentTaskSchema = z.object({
@@ -35,6 +50,8 @@ export const AgentTaskSchema = z.object({
   outputSchemaId: z.string().min(1).optional(),
   constraints: AgentTaskConstraintsSchema,
   requester: AgentRequesterSchema,
+  /** External semantic repair rounds (critic loop, ADR 0008). */
+  repairRounds: z.array(AgentRepairRoundSchema).optional(),
 });
 
 export type AgentTask = z.infer<typeof AgentTaskSchema>;

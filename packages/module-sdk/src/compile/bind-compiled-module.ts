@@ -179,6 +179,7 @@ export function bindCompiledModule(
     narrativeBrief: bindings.narratives.some((n) => Boolean(n.brief)),
     narrativeHistory: bindings.narratives.some((n) => Boolean(n.history)),
     narrativeStyle: bindings.narratives.some((n) => Boolean(n.style)),
+    narrativeCritic: bindings.narratives.some((n) => Boolean(n.critic)),
     hostStatus: bindings.host.some((h) => Boolean(h.status)),
     hostHelp: bindings.host.some((h) => Boolean(h.help?.length)),
   };
@@ -206,6 +207,7 @@ export function bindCompiledModule(
   requireMoment("narrativeBrief", "narrativeBrief");
   requireMoment("narrativeHistory", "narrativeHistory");
   requireMoment("narrativeStyle", "narrativeStyle");
+  requireMoment("narrativeCritic", "narrativeCritic");
   requireMoment("hostStatus", "hostStatus");
   requireMoment("hostHelp", "hostHelp");
 
@@ -809,6 +811,40 @@ export function bindCompiledModule(
         });
       },
     });
+  }
+
+  if (m.narrativeCritic) {
+    for (const nar of bindings.narratives) {
+      if (!nar.critic) continue;
+      ctx.addNarrativeCritic({
+        async critique({ prose, brief, draft, attempt }, turnCtx) {
+          try {
+            const { ctx: mctx } = baseCtx({
+              turnCtx,
+              world: draft,
+              opMode: "collect",
+              momentName: "narrative.critic",
+              writeAllowed: false,
+              // Port inputs surface to the author via ctx.meta (the draft prose
+              // is not part of WorldState; brief = the same brief as the task).
+              meta: { prose, brief, attempt },
+            });
+            const verdict = (await nar.critic!(mctx)) ?? { ok: true as const };
+            if (verdict === null || verdict === undefined || verdict.ok) {
+              return ok({ ok: true as const });
+            }
+            return ok({ ok: false as const, reason: verdict.reason });
+          } catch (e) {
+            // deny()/violations in narrative.critic fail loud with a stable code
+            // (read-only moment, like rules.soft) — never an opaque INTERNAL.
+            if (isModuleDenial(e)) return err(failure(e.code, e.message));
+            const violation = violationToFailure(e);
+            if (violation) return err(violation);
+            throw e;
+          }
+        },
+      });
+    }
   }
 
   // AI catalogs + handlers from IR lists
