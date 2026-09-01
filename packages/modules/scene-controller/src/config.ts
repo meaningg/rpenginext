@@ -23,8 +23,6 @@ export const SceneControllerConfigObjectSchema = z
     historyCap: z.number().int().positive().default(DEFAULT_HISTORY_CAP),
     /** Schedule the per-turn LLM probe (off = module inert except bookkeeping). */
     probeEnabled: z.boolean().default(true),
-    /** Hard-stop guard: deny an action identical to the previous one when the LLM judged the scene loop "hard". */
-    hardStopEnabled: z.boolean().default(true),
     /** Progress-clock saturation threshold: probe `progress >= this` counts as "scene nearly done". */
     saturatedProgress: z.number().min(0).max(1).default(DEFAULT_PROGRESS_HIGH),
     /** Saturated probes before guidance escalates to climax (urgency floor 2). */
@@ -52,7 +50,6 @@ export const SceneControllerConfigSchema =
 export type SceneControllerConfig = {
   readonly historyCap: number;
   readonly probeEnabled: boolean;
-  readonly hardStopEnabled: boolean;
   readonly saturatedProgress: number;
   readonly climaxSaturatedBeats: number;
   readonly hardSaturatedBeats: number;
@@ -70,7 +67,6 @@ export function resolveSceneControllerConfig(
   const parsed = SceneControllerConfigObjectSchema.safeParse({
     historyCap: options.historyCap,
     probeEnabled: options.probeEnabled,
-    hardStopEnabled: options.hardStopEnabled,
     saturatedProgress: options.saturatedProgress,
     climaxSaturatedBeats: options.climaxSaturatedBeats,
     hardSaturatedBeats: options.hardSaturatedBeats,
@@ -86,7 +82,6 @@ export function resolveSceneControllerConfig(
 export interface SceneControllerModuleFactoryOptions {
   readonly historyCap?: number;
   readonly probeEnabled?: boolean;
-  readonly hardStopEnabled?: boolean;
   readonly saturatedProgress?: number;
   readonly climaxSaturatedBeats?: number;
   readonly hardSaturatedBeats?: number;

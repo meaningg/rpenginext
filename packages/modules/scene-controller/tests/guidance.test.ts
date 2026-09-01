@@ -8,7 +8,6 @@ import {
   deriveGuidanceMode,
   effectiveUrgency,
   resolveResolutionHint,
-  shouldDenyRepeatedAction,
 } from "../src/guidance.ts";
 import type { GuidanceMode, Urgency } from "../src/constants.ts";
 import type { SceneControllerConfig } from "../src/config.ts";
@@ -63,7 +62,6 @@ function verdict(partial: Partial<Verdict>): Verdict {
 const CONFIG: SceneControllerConfig = {
   historyCap: 10,
   probeEnabled: true,
-  hardStopEnabled: true,
   saturatedProgress: 0.85,
   climaxSaturatedBeats: 3,
   hardSaturatedBeats: 6,
@@ -201,15 +199,6 @@ describe("progress clock (deterministic escalation)", () => {
       highProgressBeats: 3,
     });
   });
-
-  test("progress clock never sways the hard-stop guard (loop-level only)", () => {
-    const s = makeSlice({
-      loopLevel: "none",
-      current: SCENE,
-      highProgressBeats: 9,
-    });
-    expect(shouldDenyRepeatedAction(s, "продолжаю", "продолжаю", true)).toBe(false);
-  });
 });
 
 describe("resolveResolutionHint", () => {
@@ -338,39 +327,5 @@ describe("buildSceneBrief", () => {
     expect(brief?.scene).toMatchObject({ id: "scene-001", beat: 4 });
     expect(brief?.tempo).toMatchObject({ mode: "climax", loopLevel: "soft" });
     expect(brief?.resolutionHint).toBe(DEFAULT_RESOLUTION_HINTS.social);
-  });
-});
-
-describe("shouldDenyRepeatedAction", () => {
-  test("false when loop is not hard", () => {
-    const s = makeSlice({});
-    expect(shouldDenyRepeatedAction(s, "продолжаю погоню", "иду к двери", true)).toBe(false);
-  });
-
-  test("true on exact identical action under hard loop", () => {
-    const s = makeSlice({ loopLevel: "hard" });
-    expect(shouldDenyRepeatedAction(s, "продолжаю погоню", "продолжаю погоню", true)).toBe(true);
-  });
-
-  test("trims both sides before comparing", () => {
-    const s = makeSlice({ loopLevel: "hard" });
-    expect(shouldDenyRepeatedAction(s, "  продолжаю погоню  ", " продолжаю погоню ", true)).toBe(true);
-  });
-
-  test("false on a different action (semantic repetition is LLM's call)", () => {
-    const s = makeSlice({ loopLevel: "hard" });
-    expect(shouldDenyRepeatedAction(s, "отступаю в переулок", "продолжаю погоню", true)).toBe(false);
-  });
-
-  test("false when hard stop disabled", () => {
-    const s = makeSlice({ loopLevel: "hard" });
-    expect(shouldDenyRepeatedAction(s, "продолжаю погоню", "продолжаю погоню", false)).toBe(false);
-  });
-
-  test("false without action text or last user text", () => {
-    const s = makeSlice({ loopLevel: "hard" });
-    expect(shouldDenyRepeatedAction(s, undefined, "x", true)).toBe(false);
-    expect(shouldDenyRepeatedAction(s, "x", undefined, true)).toBe(false);
-    expect(shouldDenyRepeatedAction(s, "", "", true)).toBe(false);
   });
 });

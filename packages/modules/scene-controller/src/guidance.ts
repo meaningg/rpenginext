@@ -225,29 +225,3 @@ export function buildSceneBrief(
     resolutionHint: resolveResolutionHint(slice, config),
   };
 }
-
-/**
- * Hard-stop guard decision — LLM-driven.
- *
- * Blocks only when the probe judged the scene loop `hard` AND the player
- * action text is exactly identical (after trim) to the previous turn's.
- * Semantic repetition is the LLM's call; this is a plain anti-spam rule.
- * The last player text comes from the `working_memory.window` readModel.
- *
- * @param slice - scene-controller slice
- * @param actionText - current normalized player text
- * @param lastUserText - previous turn's player text (working-memory)
- * @param hardStopEnabled - config toggle
- */
-export function shouldDenyRepeatedAction(
-  slice: SceneControllerSlice,
-  actionText: string | undefined,
-  lastUserText: string | undefined,
-  hardStopEnabled: boolean,
-): boolean {
-  if (!hardStopEnabled) return false;
-  if (slice.loopLevel !== "hard") return false;
-  const text = actionText?.trim();
-  if (!text || !lastUserText) return false;
-  return text === lastUserText.trim();
-}

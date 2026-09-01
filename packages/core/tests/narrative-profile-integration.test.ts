@@ -100,8 +100,8 @@ describe("narrative profile integration", () => {
       ["hint"],
     );
     const last = repaired[repaired.length - 1];
-    expect(last?.content).toContain("Предыдущий JSON не прошёл проверку схемы.");
-    expect(last?.content).toContain("Проблемы валидации: prose must be non-empty");
+    expect(last?.content).toContain("Предыдущий ответ отклонён.");
+    expect(last?.content).toContain("Причины отклонения: prose must be non-empty");
     expect(last?.content).toContain("Дополнительные подсказки:\n- hint");
   });
 

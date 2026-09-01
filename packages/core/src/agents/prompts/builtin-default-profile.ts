@@ -110,11 +110,11 @@ export const BUILTIN_DEFAULT_PROFILE = Object.freeze({
     '- Ответ — один JSON-объект: { "prose": string, "meta"?: object }, без markdown-ограждений. prose — только текст истории.',
   ].join("\n"),
   repair: {
-    title: "Предыдущий JSON не прошёл проверку схемы.",
+    title: "Предыдущий ответ отклонён.",
     instructions: [
-      "Исправь и верни ТОЛЬКО валидный JSON для narrative.write.",
+      "Исправь ответ и верни ТОЛЬКО валидный JSON для narrative.write.",
       'Требуемая форма: { "prose": string (non-empty), "meta"?: object }.',
-      "Проблемы валидации: {{issues}}",
+      "Причины отклонения: {{issues}}",
     ],
     hintsTitle: "Дополнительные подсказки:",
   },
